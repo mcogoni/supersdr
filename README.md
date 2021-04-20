@@ -20,6 +20,15 @@ to connect to a remote kiwi AND to a local CAT radio for which ```rigctld``` is 
 
 Just use ```--help``` to show all available command line options.
 
+Main key commands during use are:
+
+- LEFT/RIGHT: move freq +/- 1kHz (+SHIFT: X10)
+- UP/DOWN: zoom in/out by a factor 2X
+- U/L/C: switches to USB, LSB, CW
+- F: enter frequency with keyboard
+- H: displays this help window
+- SHIFT+ESC: quits
+
 When connected to both a kiwisdr and to a CAT radio any click on the waterfall synchronizes the radio and, vice versa, moving the VFO on the radio, changes the center of the waterfall.
 
 Have fun!
