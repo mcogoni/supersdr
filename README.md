@@ -14,7 +14,7 @@ To launch the program:
 to just explore a local kiwisdr, or:
 
 ```
-./supersdr.py --kiwiserver http://on5kq.ddns.net --kiwiport 8075 -S 192.168.1.89 -P 4532 -z 9 -f 14060
+./supersdr.py --kiwiserver http://on5kq.ddns.net --kiwiport 8073 -S 192.168.1.89 -P 4532 -z 9 -f 14060
 ```
 to connect to a remote kiwi AND to a local CAT radio for which ```rigctld``` is running on the server located at ```192.168.1.89```.
 
