@@ -180,7 +180,7 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
         cnt, actual_freq = kiwi_start_frequency_to_counter(start_f_khz_)
     msg = "SET zoom=%d start=%d" % (zoom_,cnt)
     mystream.send_message(msg)
-    if s_ and req_ >= 100:
+    if s_ and freq_ >= 100:
         s_.send("F %d\n" % (freq_*1000))
         out = s_.recv(512)
     return freq_
