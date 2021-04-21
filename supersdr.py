@@ -131,11 +131,11 @@ def kiwi_bins_to_khz(freq, bins, zoom):
     return (1./bins_per_khz) * (bins) + start_freq
 
 def kiwi_receive_spectrum(wf_data, white_flag=False):
-    tmp = mystream.receive_message()
+    msg = mystream.receive_message()
     if bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
-        tmp = tmp[16:] # remove some header from each msg
+        msg = msg[16:] # remove some header from each msg
         
-        spectrum = np.ndarray(len(tmp), dtype='B', buffer=tmp).astype(np.float32) # convert from binary data to uint8
+        spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data to uint8
         wf = spectrum
         wf = -(255 - wf)  # dBm
         wf_db = wf - 13 # typical Kiwi wf cal
