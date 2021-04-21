@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import pygame
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string
-
+from matplotlib import cm
 import numpy as np
 
 import sys
@@ -16,27 +16,23 @@ else:
         return str(b)
 
 import random
-import socket
-
 import array
 import socket
 import time
 from datetime import datetime
 
 from kiwi import wsclient
-
 import mod_pywebsocket.common
 from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 
 from optparse import OptionParser
 
-from matplotlib import cm
-
-
+# predefined RGB colors
 GREY = (200,200,200)
 WHITE = (255,255,255)
 BLACK = (0,0,0)
+D_GREY = (50,50,50)
 D_RED = (200,0,0)
 D_BLUE = (0,0,200)
 D_GREEN = (0,200,0)
@@ -45,11 +41,12 @@ BLUE = (0,0,255)
 GREEN = (0,255,0)
 
 allowed_sym = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
-allowed_sym += [K_BACKSPACE, K_RETURN]
+allowed_sym += [K_BACKSPACE, K_RETURN, K_ESCAPE]
 
 HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "- LEFT/RIGHT: move freq +/- 1kHz (+SHIFT: X10)",
+        "- PAGE UP/DOWN: move freq +/- 1MHz",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C: switches to USB, LSB, CW",
         "- F: enter frequency with keyboard",
@@ -95,7 +92,6 @@ def display_help_box(screen, message_list):
                     screen.get_height() / 2-window_size/2 + ii*font_size + font_size))
     pygame.display.flip()
 
-
 def kiwi_zoom_to_span(zoom):
     """return frequency span in kHz for a given zoom level"""
     assert(zoom >=0 and zoom <= MAX_ZOOM)
@@ -131,21 +127,27 @@ def kiwi_bins_to_khz(freq, bins, zoom):
     return (1./bins_per_khz) * (bins) + start_freq
 
 def kiwi_receive_spectrum(wf_data, white_flag=False):
-    tmp = mystream.receive_message()
+    msg = mystream.receive_message()
     if bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
-        tmp = tmp[16:] # remove some header from each msg
+        msg = msg[16:] # remove some header from each msg
         
-        spectrum = np.ndarray(len(tmp), dtype='B', buffer=tmp).astype(np.float32) # convert from binary data to uint8
+        spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data to uint8
         wf = spectrum
         wf = -(255 - wf)  # dBm
         wf_db = wf - 13 # typical Kiwi wf cal
-        wf_db -= zoom * 6 # subtract 6dB for each zoom doubling (voltage/2 in each wf bin)
-        
-        wf_db = np.clip(wf_db, np.percentile(wf_db,45), np.percentile(wf_db, 100))
-
+        dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
         wf_color =  (wf_db - np.min(wf_db[1:-1]))
+        # standardize the distribution between 0 and 1
         wf_color /= np.max(wf_color[1:-1])
-        wf_color *= 255.
+        # clip extreme values
+        wf_color = np.clip(wf_color, np.percentile(wf_color,CLIP_LOWP), np.percentile(wf_color, CLIP_HIGHP))
+        # standardize again between 0 and 255
+        wf_color -= np.min(wf_color[1:-1])
+        # expand between 0 and 255
+        wf_color /= (np.max(wf_color[1:-1])/255.)
+        # avoid too bright colors with no signals
+        wf_color *= (min(dyn_range, MIN_DYN_RANGE)/MIN_DYN_RANGE)
+        # insert a full signal line to see freq/zoom changes
         if white_flag:
             wf_color = np.ones_like(wf_color)*255
         wf_data[-1,:] = wf_color
@@ -153,13 +155,11 @@ def kiwi_receive_spectrum(wf_data, white_flag=False):
     
     return wf_data 
 
-
 def cat_get_freq():
     s.send("+f\n")
     out = s.recv(512)
     freq_ = int(out.split(" ")[1].split("\n")[0])/1000.
     return freq_
-
 
 def cat_get_mode():
     s.send("m\n")
@@ -167,13 +167,13 @@ def cat_get_mode():
     radio_mode_ = out.split("\n")[0]
     return radio_mode_
 
-
 def kiwi_set_freq_zoom(freq_, zoom_, s_):
     start_f_khz_ = kiwi_start_freq(freq_, zoom_)
     end_f_khz_ = kiwi_end_freq(freq_, zoom_)
     if zoom_ == 0:
+        print("zoom 0 detected!")
         freq_ = 15000
-        start_f_khz_ = 0.0
+        start_f_khz_ = kiwi_start_freq(freq_, zoom_)
     else:
         if start_f_khz_<0:
             freq_ -= start_f_khz_
@@ -183,37 +183,51 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
             freq_ -= end_f_khz_ - MAX_FREQ
             start_f_khz_ = kiwi_start_freq(freq_, zoom_)
     cnt, actual_freq = kiwi_start_frequency_to_counter(start_f_khz_)
-    if actual_freq<=0:
+    if zoom_>0 and actual_freq<=0:
         freq_ = kiwi_zoom_to_span(zoom_)
         start_f_khz_ = kiwi_start_freq(freq_, zoom_)
         cnt, actual_freq = kiwi_start_frequency_to_counter(start_f_khz_)
     msg = "SET zoom=%d start=%d" % (zoom_,cnt)
     mystream.send_message(msg)
-    if s_ and req_ >= 100:
+    if s_ and freq_ >= 100:
         s_.send("F %d\n" % (freq_*1000))
         out = s_.recv(512)
     return freq_
 
 def update_textsurfaces(freq, zoom, radio_mode):
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"freq": (GREY, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-50,0)),
-            "left": (GREY, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0)),
-            "right": (GREY, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0))}
+    ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0)),
+            "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0)),
+            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0))}
 
     draw_dict = {}
     for k in ts_dict:
         draw_dict[k] = smallfont.render(ts_dict[k][1], False, ts_dict[k][0])
     return draw_dict, ts_dict
 
-
 def draw_textsurfaces(draw_dict, ts_dict, sdrdisplay):
     for k in draw_dict:
         size = len(ts_dict[k][1])
         x_r, y_r = ts_dict[k][2]
-        pygame.draw.rect(sdrdisplay, BLACK, (x_r, y_r, size*11, 19), 0)
+        pygame.draw.rect(sdrdisplay, D_GREY, (x_r, y_r, size*11, 19), 0)
         #pygame.draw.rect(sdrdisplay, GREY, (x_r, y_r, size*11, 19), 1)
         sdrdisplay.blit(draw_dict[k], (x_r, y_r))
 
+def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse):
+    pygame.draw.line(surface, (250,250,250), (center_freq_bin, 0), (center_freq_bin, wf_height), 1)
+    if "USB" in radio_mode:
+        freq_bin = kiwi_offset_to_bin(freq, 3, zoom)
+        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+    elif "LSB" in radio_mode:
+        freq_bin = kiwi_offset_to_bin(freq, -3, zoom)
+        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+    elif "CW" in radio_mode:
+        freq_bin = kiwi_offset_to_bin(freq, -0.35, zoom)
+        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+        freq_bin = kiwi_offset_to_bin(freq, 0.35, zoom)
+        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+
+    pygame.draw.line(surface, (250,100,50), (mouse[0], 0), (mouse[0], wf_height), 1)
 
 
 parser = OptionParser()
@@ -231,11 +245,16 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=14060)
                   
 options = vars(parser.parse_args()[0])
-MAX_FREQ = 30000.
+
+# Hardcoded values for most kiwis
+MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
 MAX_ZOOM = 14.
 WF_BINS  = 1024.
 DISPLAY_WIDTH = int(WF_BINS)
 DISPLAY_HEIGHT = 400
+
+MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
+CLIP_LOWP, CLIP_HIGHP = 40., 100
 
 # kiwi hostname and port
 kiwihost = options['kiwiserver']
@@ -312,6 +331,7 @@ icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
 pygame.display.set_caption("KIWISDR WATERFALL")
 clock = pygame.time.Clock()
+pygame.key.set_repeat(100, 200)
 
 # setup colormap from matplotlib
 palRGB = cm.jet(range(256))[:,:3]*255
@@ -398,12 +418,12 @@ while not wf_quit:
                         except:
                             pass
                         input_freq_flag = False
+                    elif inkey == pygame.K_ESCAPE:
+                        input_freq_flag = False
+                        print("ESCAPE!")
                     else:
                         current_string.append(chr(inkey))
                 display_box(sdrdisplay, question + ": " + "".join(current_string))
-
-                #inputbox.display_box(sdrdisplay, 'Freq (kHz)') 
-                
 
         if event.type == pygame.QUIT:
             wf_quit = True
@@ -412,7 +432,7 @@ while not wf_quit:
 
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
-   
+        print(freq) 
     if cat_flag:
         new_freq = cat_get_freq()
         radio_mode = cat_get_mode()
@@ -428,26 +448,13 @@ while not wf_quit:
 #   plot horiz line to show time of freq change
     wf_data = kiwi_receive_spectrum(wf_data, True if click_freq or change_zoom_flag else False)
 
-
     surface = pygame.surfarray.make_surface(wf_data.T)
 
     surface.set_palette(palRGB)
     center_freq_bin = kiwi_offset_to_bin(freq, 0, zoom)
-    pygame.draw.line(surface, (250,250,250), (center_freq_bin, 0), (center_freq_bin, wf_height), 1)
-    if "USB" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, 3, zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-    elif "LSB" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, -3, zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-    elif "CW" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, -0.35, zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-        freq_bin = kiwi_offset_to_bin(freq, 0.35, zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-
-    pygame.draw.line(surface, (250,100,50), (mouse[0], 0), (mouse[0], wf_height), 1)
-
+    
+    draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse)
+    
     sdrdisplay.blit(surface, (0, 0))
     draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
     if input_freq_flag:
@@ -456,7 +463,7 @@ while not wf_quit:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
 
     pygame.display.update()
-    clock.tick(200)
+    clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
 pygame.quit()
