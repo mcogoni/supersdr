@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import pygame
 from pygame.locals import *
@@ -45,11 +45,12 @@ BLUE = (0,0,255)
 GREEN = (0,255,0)
 
 allowed_sym = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
-allowed_sym += [K_BACKSPACE, K_RETURN]
+allowed_sym += [K_BACKSPACE, K_RETURN, K_ESCAPE]
 
 HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "- LEFT/RIGHT: move freq +/- 1kHz (+SHIFT: X10)",
+        "- PAGE UP/DOWN: move freq +/- 1MHz",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C: switches to USB, LSB, CW",
         "- F: enter frequency with keyboard",
@@ -139,10 +140,10 @@ def kiwi_receive_spectrum(wf_data, white_flag=False):
         wf = spectrum
         wf = -(255 - wf)  # dBm
         wf_db = wf - 13 # typical Kiwi wf cal
-        wf_db -= zoom * 6 # subtract 6dB for each zoom doubling (voltage/2 in each wf bin)
+        #wf_db -= zoom * 6 # subtract 6dB for each zoom doubling (voltage/2 in each wf bin)
         
         wf_db = np.clip(wf_db, np.percentile(wf_db,45), np.percentile(wf_db, 100))
-
+        #print ("MIN dB:", np.percentile(wf_db,45), "MAX dB", np.percentile(wf_db, 100),  max(np.percentile(wf_db, 100), -zoom*6))
         wf_color =  (wf_db - np.min(wf_db[1:-1]))
         wf_color /= np.max(wf_color[1:-1])
         wf_color *= 255.
@@ -172,8 +173,9 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
     start_f_khz_ = kiwi_start_freq(freq_, zoom_)
     end_f_khz_ = kiwi_end_freq(freq_, zoom_)
     if zoom_ == 0:
+        print("zoom 0 detected!")
         freq_ = 15000
-        start_f_khz_ = 0.0
+        start_f_khz_ = kiwi_start_freq(freq_, zoom_)
     else:
         if start_f_khz_<0:
             freq_ -= start_f_khz_
@@ -183,7 +185,7 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
             freq_ -= end_f_khz_ - MAX_FREQ
             start_f_khz_ = kiwi_start_freq(freq_, zoom_)
     cnt, actual_freq = kiwi_start_frequency_to_counter(start_f_khz_)
-    if actual_freq<=0:
+    if zoom_>0 and actual_freq<=0:
         freq_ = kiwi_zoom_to_span(zoom_)
         start_f_khz_ = kiwi_start_freq(freq_, zoom_)
         cnt, actual_freq = kiwi_start_frequency_to_counter(start_f_khz_)
@@ -398,6 +400,9 @@ while not wf_quit:
                         except:
                             pass
                         input_freq_flag = False
+                    elif inkey == pygame.K_ESCAPE:
+                        input_freq_flag = False
+                        print("ESCAPE!")
                     else:
                         current_string.append(chr(inkey))
                 display_box(sdrdisplay, question + ": " + "".join(current_string))
@@ -412,7 +417,7 @@ while not wf_quit:
 
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
-   
+        print(freq) 
     if cat_flag:
         new_freq = cat_get_freq()
         radio_mode = cat_get_mode()
@@ -456,7 +461,7 @@ while not wf_quit:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
 
     pygame.display.update()
-    clock.tick(200)
+    clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
 pygame.quit()
