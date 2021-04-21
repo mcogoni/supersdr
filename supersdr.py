@@ -5,7 +5,16 @@ from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string
 
 import numpy as np
+
 import sys
+if sys.version_info > (3,):
+    buffer = memoryview
+    def bytearray2str(b):
+        return b.decode('ascii')
+else:
+    def bytearray2str(b):
+        return str(b)
+
 import random
 import socket
 
@@ -123,7 +132,7 @@ def kiwi_bins_to_khz(freq, bins, zoom):
 
 def kiwi_receive_spectrum(wf_data, white_flag=False):
     tmp = mystream.receive_message()
-    if tmp and "W/F" in tmp: # this is one waterfall line
+    if bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
         tmp = tmp[16:] # remove some header from each msg
         
         spectrum = np.ndarray(len(tmp), dtype='B', buffer=tmp).astype(np.float32) # convert from binary data to uint8
