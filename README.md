@@ -4,7 +4,7 @@ SuperSDR allows a realtime view of the spectrum waterfall of any KiwiSDR around 
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/supersdr_screenshot.png)
 
 ## Prerequisites:
-Install Python 3 along with PYGAME, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;)
+Install Python 3 along with PYGAME, PYAUDIO, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;)
 
 ## Use:
 To launch the program:
