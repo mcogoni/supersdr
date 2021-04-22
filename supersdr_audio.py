@@ -520,6 +520,8 @@ while not wf_quit:
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
+                if zoom>=12:
+                    shift_mult /= 10.
                 if keys[pygame.K_v]:
                     if VOLUME<1.2:
                         VOLUME += 0.1
