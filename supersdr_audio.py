@@ -30,6 +30,38 @@ from mod_pywebsocket.stream import StreamOptions
 
 from optparse import OptionParser
 
+import pyaudio
+
+
+# Pyaudio options
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+AUDIO_RATE = 48000
+KIWI_RATE = 12000
+SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
+CHUNKS = 12
+KIWI_SAMPLES_PER_FRAME = 512
+
+# Hardcoded values for most kiwis
+MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
+MAX_ZOOM = 14.
+WF_BINS  = 1024.
+DISPLAY_WIDTH = int(WF_BINS)
+DISPLAY_HEIGHT = 400
+MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
+CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels
+
+# Initial KIWI receiver parameters
+on=True
+hang=False
+thresh=-75
+slope=6
+decay=4000
+gain=50
+lc=30
+hc=3000
+cwc=300
+
 # predefined RGB colors
 GREY = (200,200,200)
 WHITE = (255,255,255)
@@ -42,8 +74,8 @@ RED = (255,0,0)
 BLUE = (0,0,255)
 GREEN = (0,255,0)
 
-allowed_sym = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
-allowed_sym += [K_BACKSPACE, K_RETURN, K_ESCAPE]
+ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
+ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE]
 
 HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
@@ -58,6 +90,51 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "   --- 73 de marco/IS0KYB ---   "]
 
+def callback_old(in_data, frame_count, time_info, status):
+    global audio_buffer
+    print("CALLBACK",end=" ")
+    for k in range(20):
+        snd_buf = process_audio_stream()
+        if snd_buf is not None:
+            audio_buffer.append(snd_buf)
+        else:
+            print(k, end=' ')
+            break
+     
+    while len(audio_buffer)<CHUNKS+1:
+        audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
+        print("!",end="")
+    popped = audio_buffer.pop(0)
+    for _ in range(CHUNKS-1):
+        popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
+    n  = len(popped)
+    xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
+    xp = np.arange(n)
+    pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
+    print(len(audio_buffer),"\n")
+    return (pyaudio_buffer, pyaudio.paContinue)
+
+
+def callback(in_data, frame_count, time_info, status):
+    global audio_buffer
+    while len(audio_buffer)<CHUNKS*3+1:
+        snd_buf = process_audio_stream()
+        if snd_buf is not None:
+            audio_buffer.append(snd_buf)
+        else:
+            break
+        
+    while len(audio_buffer)<CHUNKS:
+        audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
+        
+    popped = audio_buffer.pop(0)
+    for _ in range(CHUNKS-1):
+        popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
+    n  = len(popped)
+    xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
+    xp = np.arange(n)
+    pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
+    return (pyaudio_buffer, pyaudio.paContinue)
 
 def process_audio_stream():
     data = snd_stream.receive_message()
@@ -67,7 +144,8 @@ def process_audio_stream():
         count = len(data) // 2
         samples = np.ndarray(count, dtype='>h', buffer=data).astype(np.int16)
         return samples
-
+    else:
+        return None
 
 def display_box(screen, message):
     fontobject = pygame.font.SysFont('Mono',12)
@@ -164,7 +242,7 @@ def kiwi_receive_spectrum(wf_data, white_flag=False):
         if white_flag:
             wf_color = np.ones_like(wf_color)*255
         wf_data[-1,:] = wf_color
-        wf_data[0:length-1,:] = wf_data[1:length,:]
+        wf_data[0:DISPLAY_HEIGHT-1,:] = wf_data[1:DISPLAY_HEIGHT,:]
     
     return wf_data 
 
@@ -207,6 +285,14 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
         out = s_.recv(512)
     return freq_
 
+def kiwi_set_audio_freq(s_, mod_, lc_, hc_, freq_):
+    if mod_ == "lsb":
+        tmp = lc_
+        lc_ = -hc_
+        hc_ = -tmp
+    msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (mod_, lc_, hc_, freq_)
+    snd_stream.send_message(msg)
+    
 def update_textsurfaces(freq, zoom, radio_mode):
     #           Label   Color   Freq/Mode                       Screen position
     ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0)),
@@ -259,16 +345,6 @@ parser.add_option("-f", "--freq", type=int,
                   
 options = vars(parser.parse_args()[0])
 
-# Hardcoded values for most kiwis
-MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
-MAX_ZOOM = 14.
-WF_BINS  = 1024.
-DISPLAY_WIDTH = int(WF_BINS)
-DISPLAY_HEIGHT = 400
-
-MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
-CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels
-
 # kiwi hostname and port
 kiwihost = options['kiwiserver']
 kiwiport = options['kiwiport']
@@ -289,7 +365,6 @@ freq = options['freq'] # this is the central freq in kHz
 start_f_khz = kiwi_start_freq(freq, zoom)
 cnt, actual_freq = kiwi_start_frequency_to_counter(start_f_khz)
 print ("Actual frequency:", actual_freq, "kHz")
-
 
 ########################## W/F connection
 # connect to kiwi server
@@ -346,30 +421,8 @@ stream_option_snd.unmask_receive = False
 snd_stream = Stream(request_snd, stream_option_snd)
 print ("Audio data stream active...")
 
-on=True
-hang=False
-thresh=-70
-slope=6
-decay=1000
-gain=50
-mod="usb"
-lc=30
-hc=3000
-freq=7074
-
-msg_list = ["SET auth t=kiwi p=sibamanna", "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" % (mod, lc, hc, freq),
-"SET compression=0", "SET ident_user=pippo","SET OVERRIDE inactivity_timeout=1000",
-"SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
-"SET AR OK in=%d out=%d" % (12000, 48000)]
-print (msg_list)
-for msg in msg_list:
-    snd_stream.send_message(msg)
-
-
-length = DISPLAY_HEIGHT
-
 # create a numpy array to contain the waterfall data
-wf_data = np.zeros((length, int(WF_BINS)))
+wf_data = np.zeros((DISPLAY_HEIGHT, int(WF_BINS)))
 
 # create a socket to communicate with rigctld
 if cat_flag:
@@ -379,6 +432,16 @@ if cat_flag:
 else:
     s = None
     radio_mode = "USB"
+
+msg_list = ["SET auth t=kiwi p=sibamanna", "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
+(radio_mode.lower(), lc, hc, freq),
+"SET compression=0", "SET ident_user=pippo","SET OVERRIDE inactivity_timeout=1000",
+"SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
+"SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
+print (msg_list)
+for msg in msg_list:
+    snd_stream.send_message(msg)
+time.sleep(0)
 
 # init pygame basic objects
 pygame.init()
@@ -404,51 +467,34 @@ show_help_flag =  False
 question = "Freq (kHz)"
 current_string = []
 
-import pyaudio
 
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 48000
+audio_buffer = []
+for k in range(100):
+   snd_stream.send_message('SET keepalive')
+   snd_buf = process_audio_stream()
+   if snd_buf is not None:
+       audio_buffer.append(snd_buf)
 
 play = pyaudio.PyAudio()
-audio_buffer = []
-for i in range(200):
-    audio_buffer.append(np.zeros((512)))
 
-# define callback (2)
-def callback(in_data, frame_count, time_info, status):
-    global audio_buffer
-    factor = 48000/12000.
-    popped = audio_buffer.pop(0)
-    for _ in range(19):
-        popped_ = audio_buffer.pop(0)
-        popped = np.concatenate((popped, popped_), axis=0)
-    n  = len(popped)
-    xa = np.arange(round(n*factor))/factor
-    xp = np.arange(n)
-    pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
-    #print("LEN",len(pyaudio_buffer), 512*10*4)
-    return (pyaudio_buffer, pyaudio.paContinue)
+for i in range(play.get_device_count()):
+    print(play.get_device_info_by_index(i))
+    if play.get_device_info_by_index(i)['name'] == "pulse":
+        CARD_INDEX = i
 
 # open stream using callback (3)
-stream = play.open(format=FORMAT,
+kiwi_audio_stream = play.open(format=FORMAT,
                 channels=CHANNELS,
-                rate=RATE,
+                rate=AUDIO_RATE,
                 output=True,
-                output_device_index=4,
-                frames_per_buffer=512*20*4,
+                output_device_index=CARD_INDEX,
+                frames_per_buffer=int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
                 stream_callback=callback)
 
-stream.start_stream()
 
-# fill buffer with silence at the beginning
-
+kiwi_audio_stream.start_stream()
 
 while not wf_quit:
-    #print(stream.is_active())
-    print(len(audio_buffer))
-    #print([np.sum(el) for el in audio_buffer])
-
     mouse = pygame.mouse.get_pos()
     click_freq = None
     change_zoom_flag = False
@@ -490,18 +536,21 @@ while not wf_quit:
                         out = cat_socket.recv(512)
                     else:
                         radio_mode = "USB"
+                        click_freq = freq
                 elif keys[pygame.K_l]:
                     if s:
                         cat_socket.send("+M LSB 2400\n")
                         out = cat_socket.recv(512)
                     else:
                         radio_mode = "LSB"
+                        click_freq = freq
                 elif keys[pygame.K_c]:
                     if s:
                         cat_socket.send("+M CW 500\n")
                         out = cat_socket.recv(512)
                     else:
                         radio_mode = "CW"
+                        click_freq = freq
                 elif keys[pygame.K_f]:
                     input_freq_flag = True
                     current_string = []
@@ -511,8 +560,9 @@ while not wf_quit:
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
             else:
+                pygame.key.set_repeat(0, 200)
                 inkey = event.key
-                if inkey in allowed_sym:
+                if inkey in ALLOWED_KEYS:
                     if inkey == pygame.K_BACKSPACE:
                         current_string = current_string[0:-1]
                     elif inkey == pygame.K_RETURN:
@@ -522,8 +572,10 @@ while not wf_quit:
                         except:
                             pass
                         input_freq_flag = False
+                        pygame.key.set_repeat(100, 200)
                     elif inkey == pygame.K_ESCAPE:
                         input_freq_flag = False
+                        pygame.key.set_repeat(100, 200)
                         print("ESCAPE!")
                     else:
                         current_string.append(chr(inkey))
@@ -536,6 +588,8 @@ while not wf_quit:
 
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
+        print(snd_stream, radio_mode.lower(), lc, hc, freq)
+        kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq) 
     if cat_flag:
         new_freq = cat_get_freq()
@@ -543,6 +597,9 @@ while not wf_quit:
         if freq != new_freq:
             freq = new_freq
             freq = kiwi_set_freq_zoom(freq, zoom, s)
+            kiwi_set_audio_freq(
+                snd_stream, radio_mode.lower(), -cwc if radio_mode=="CW" else lc, 
+                cwc if radio_mode=="CW" else hc, freq)
      
     draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode)
 
@@ -550,12 +607,6 @@ while not wf_quit:
         wf_stream.send_message('SET keepalive')
         snd_stream.send_message('SET keepalive')
     
-    snd_buf = process_audio_stream()
-    if snd_buf is not None:
-        audio_buffer.append(snd_buf)
-        #print(snd_buf)
-    else:
-        print("!")
 
 #   plot horiz line to show time of freq change
     wf_data = kiwi_receive_spectrum(wf_data, True if click_freq or change_zoom_flag else False)
