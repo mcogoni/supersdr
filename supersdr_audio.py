@@ -17,6 +17,7 @@ else:
         return str(b)
 
 import random
+import struct
 import array
 import socket
 import time
@@ -118,9 +119,14 @@ def callback(in_data, frame_count, time_info, status):
     return (pyaudio_buffer, pyaudio.paContinue)
 
 def process_audio_stream():
+    global rssi
     data = snd_stream.receive_message()
+    #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
+
     #samples = np.zeros((1024))
     if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
+        s_meter, = struct.unpack('>H',  buffer(data[8:10]))
+        rssi = 0.1 * s_meter - 127
         data = data[10:]
         count = len(data) // 2
         samples = np.ndarray(count, dtype='>h', buffer=data).astype(np.int16)
@@ -145,9 +151,9 @@ def display_box(screen, message):
     pygame.display.flip()
 
 def display_help_box(screen, message_list):
-    font_size = 10
-    fontobject = pygame.font.SysFont('Mono',font_size)
-    window_size = 300
+    font_size = 11
+    fontobject = pygame.font.SysFont('Sans',font_size)
+    window_size = 350
     pygame.draw.rect(screen, (0,0,0),
                    ((screen.get_width() / 2) - window_size/2,
                     (screen.get_height() / 2) - window_size/2,
@@ -162,6 +168,22 @@ def display_help_box(screen, message_list):
             screen.blit(fontobject.render(msg, 1, WHITE),
                     (screen.get_width() / 2 - window_size/2 + font_size, 
                     screen.get_height() / 2-window_size/2 + ii*font_size + font_size))
+    pygame.display.flip()
+
+def display_msg_box(screen, message, pos=None):
+    font_size = 20
+    msg_len = len(message)
+    fontobject = pygame.font.SysFont('Sans',font_size)
+    if not pos:
+        pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
+    # pygame.draw.rect(screen, BLACK,
+    #                ((screen.get_width() / 2) - msg_len/2,
+    #                 (screen.get_height() / 2) - 10, msg_len,20), 0)
+    # pygame.draw.rect(screen, WHITE,
+    #                ((screen.get_width() / 2) - msg_len/2+2,
+    #                 (screen.get_height() / 2) - 12, msg_len+4,24), 1)
+    if len(message) != 0:
+        screen.blit(fontobject.render(message, 1, WHITE), pos)
     pygame.display.flip()
 
 def kiwi_zoom_to_span(zoom):
@@ -435,7 +457,7 @@ icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
 pygame.display.set_caption("KIWISDR WATERFALL")
 clock = pygame.time.Clock()
-pygame.key.set_repeat(100, 200)
+pygame.key.set_repeat(200, 200)
 
 # setup colormap from matplotlib
 palRGB = cm.jet(range(256))[:,:3]*255
@@ -445,12 +467,14 @@ wf_quit = False
 new_freq = freq
 input_freq_flag = False
 show_help_flag =  False
+show_volume_flag =  False
+rssi = 0
 question = "Freq (kHz)"
 current_string = []
 
 
 audio_buffer = []
-for k in range(100):
+for k in range(FULL_BUFF_LEN*5):
    snd_stream.send_message('SET keepalive')
    snd_buf = process_audio_stream()
    if snd_buf is not None:
@@ -475,7 +499,9 @@ kiwi_audio_stream = play.open(format=FORMAT,
 
 kiwi_audio_stream.start_stream()
 
+run_index = 0
 while not wf_quit:
+    run_index += 1
     mouse = pygame.mouse.get_pos()
     click_freq = None
     change_zoom_flag = False
@@ -483,21 +509,27 @@ while not wf_quit:
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
             show_help_flag = False
+            show_volume_flag = False
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
-                print(VOLUME)
                 if keys[pygame.K_v]:
                     if VOLUME<1.2:
                         VOLUME += 0.1
+                    show_volume_flag = True
+                    run_index_volume = run_index
                 if keys[pygame.K_b]:
                     if VOLUME>0.0:
                         VOLUME -= 0.1
+                    show_volume_flag = True
+                    run_index_volume = run_index
                 if keys[pygame.K_m]:
                     if VOLUME>0.0:
                         VOLUME = 0.0
                     else:
-                        VOLUME = 1.0    
+                        VOLUME = 1.0   
+                    show_volume_flag = True
+                    run_index_volume = run_index
                 if keys[pygame.K_DOWN]:
                     if zoom>0:
                         zoom -= 1
@@ -571,10 +603,10 @@ while not wf_quit:
                         except:
                             pass
                         input_freq_flag = False
-                        pygame.key.set_repeat(100, 200)
+                        pygame.key.set_repeat(200, 200)
                     elif inkey == pygame.K_ESCAPE:
                         input_freq_flag = False
-                        pygame.key.set_repeat(100, 200)
+                        pygame.key.set_repeat(200, 200)
                         print("ESCAPE!")
                     else:
                         current_string.append(chr(inkey))
@@ -647,9 +679,15 @@ while not wf_quit:
         display_box(sdrdisplay, question + ": " + "".join(current_string))
     elif show_help_flag:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
+    elif show_volume_flag:
+        if run_index - run_index_volume > 10:
+            show_volume_flag = False
+        display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
+
+    display_msg_box(sdrdisplay, "RSSI: %ddBm"%rssi, pos=(200,0))
 
     pygame.display.update()
-    clock.tick(1000)
+    clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
 pygame.quit()
