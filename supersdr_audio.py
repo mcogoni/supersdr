@@ -62,6 +62,7 @@ gain=50
 lc=30
 hc=3000
 cwc=300
+amc=6000
 
 # predefined RGB colors
 GREY = (200,200,200)
@@ -529,6 +530,13 @@ while not wf_quit:
                     else:
                         radio_mode = "CW"
                         click_freq = freq
+                elif keys[pygame.K_a]:
+                    if s:
+                        cat_socket.send("+M AM 6000\n")
+                        out = cat_socket.recv(512)
+                    else:
+                        radio_mode = "AM"
+                        click_freq = freq
                 elif keys[pygame.K_f]:
                     input_freq_flag = True
                     current_string = []
@@ -575,9 +583,21 @@ while not wf_quit:
         if freq != new_freq:
             freq = new_freq
             freq = kiwi_set_freq_zoom(freq, zoom, s)
+            if radio_mode=="AM":
+                lc=-6000
+                hc=6000
+            elif radio_mode=="USB":
+                lc=30
+                hc=3000
+            if radio_mode=="LSB":
+                lc=-3000
+                hc=-30
+            elif radio_mode=="CW":
+                lc=cwc-200
+                hc=cwc+200
+
             kiwi_set_audio_freq(
-                snd_stream, radio_mode.lower(), -cwc if radio_mode=="CW" else lc, 
-                cwc if radio_mode=="CW" else hc, freq)
+                snd_stream, radio_mode.lower(), lc, hc, freq)
      
     draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode)
 
