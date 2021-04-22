@@ -486,7 +486,13 @@ while not wf_quit:
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
-
+                print(VOLUME)
+                if keys[pygame.K_v]:
+                    if VOLUME<1.2:
+                        VOLUME += 0.1
+                if keys[pygame.K_b]:
+                    if VOLUME>0.0:
+                        VOLUME -= 0.1
                 if keys[pygame.K_m]:
                     if VOLUME>0.0:
                         VOLUME = 0.0
