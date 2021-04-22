@@ -316,7 +316,7 @@ def draw_textsurfaces(draw_dict, ts_dict, sdrdisplay):
         sdrdisplay.blit(draw_dict[k], (x_r, y_r))
 
 def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse):
-    pygame.draw.line(surface, (250,250,250), (center_freq_bin, 0), (center_freq_bin, wf_height), 1)
+    pygame.draw.line(surface, RED, (center_freq_bin, 0), (center_freq_bin, wf_height), 1)
     if "USB" in radio_mode:
         freq_bin = kiwi_offset_to_bin(freq, 3, zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
@@ -324,9 +324,9 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
         freq_bin = kiwi_offset_to_bin(freq, -3, zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
     elif "CW" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, -0.35, zoom)
+        freq_bin = kiwi_offset_to_bin(freq, cwc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-        freq_bin = kiwi_offset_to_bin(freq, 0.35, zoom)
+        freq_bin = kiwi_offset_to_bin(freq, cwc*2/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
 
     pygame.draw.line(surface, (250,100,50), (mouse[0], 0), (mouse[0], wf_height), 1)
@@ -615,6 +615,8 @@ while not wf_quit:
         if event.type == pygame.QUIT:
             wf_quit = True
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if radio_mode == "CW":
+                freq -= 500./1000
             click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
     if click_freq or change_zoom_flag:
@@ -630,8 +632,8 @@ while not wf_quit:
             lc=-3000
             hc=-30
         elif radio_mode=="CW":
-            lc=cwc-200
-            hc=cwc+200
+            lc=cwc
+            hc=cwc*2
 
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq) 
@@ -651,8 +653,8 @@ while not wf_quit:
                 lc=-3000
                 hc=-30
             elif radio_mode=="CW":
-                lc=cwc-200
-                hc=cwc+200
+                lc=cwc
+                hc=cwc*2
 
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
      
