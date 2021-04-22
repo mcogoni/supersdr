@@ -41,6 +41,7 @@ KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
 CHUNKS = 12
 KIWI_SAMPLES_PER_FRAME = 512
+FULL_BUFF_LEN = 20
 
 # Hardcoded values for most kiwis
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
@@ -90,45 +91,22 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "   --- 73 de marco/IS0KYB ---   "]
 
-def callback_old(in_data, frame_count, time_info, status):
-    global audio_buffer
-    print("CALLBACK",end=" ")
-    for k in range(20):
-        snd_buf = process_audio_stream()
-        if snd_buf is not None:
-            audio_buffer.append(snd_buf)
-        else:
-            print(k, end=' ')
-            break
-     
-    while len(audio_buffer)<CHUNKS+1:
-        audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
-        print("!",end="")
-    popped = audio_buffer.pop(0)
-    for _ in range(CHUNKS-1):
-        popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
-    n  = len(popped)
-    xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
-    xp = np.arange(n)
-    pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
-    print(len(audio_buffer),"\n")
-    return (pyaudio_buffer, pyaudio.paContinue)
-
-
 def callback(in_data, frame_count, time_info, status):
     global audio_buffer
-    while len(audio_buffer)<CHUNKS*3+1:
+    while len(audio_buffer)<FULL_BUFF_LEN:
         snd_buf = process_audio_stream()
         if snd_buf is not None:
             audio_buffer.append(snd_buf)
         else:
             break
+    delta_buff = FULL_BUFF_LEN - len(audio_buffer)
         
+    # emergency buffer fillup with silence
     while len(audio_buffer)<CHUNKS:
         audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
         
     popped = audio_buffer.pop(0)
-    for _ in range(CHUNKS-1):
+    for _ in range(CHUNKS-1-delta_buff):
         popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
     n  = len(popped)
     xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
