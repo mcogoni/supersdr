@@ -4,17 +4,17 @@ SuperSDR allows a realtime view of the spectrum waterfall of any KiwiSDR around 
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/supersdr_screenshot.png)
 
 ## Prerequisites:
-Install Python 3 along with PYGAME, MATPLOTLIB and NUMPY, or whatever it asks when breaking apart upon launch ;)
+Install Python 3 along with PYGAME, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;)
 
 ## Use:
 To launch the program:
 ```
-./supersdr.py --kiwiserver 192.168.1.82 --kiwiport 8073 -z 9 -f 14060 -w password
+./supersdr_audio.py --kiwiserver 192.168.1.82 --kiwiport 8073 -z 9 -f 14060 -w password
 ```
 to just explore a local kiwisdr, or:
 
 ```
-./supersdr.py --kiwiserver on5kq.ddns.net --kiwiport 8073 -S 192.168.1.89 -P 4532 -z 9 -f 14060
+./supersdr_audio.py --kiwiserver on5kq.ddns.net --kiwiport 8073 -S 192.168.1.89 -P 4532 -z 9 -f 14060
 ```
 to connect to a remote kiwi AND to a local CAT radio for which ```rigctld``` is running on the server located at ```192.168.1.89```.
 
