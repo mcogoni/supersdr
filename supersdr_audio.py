@@ -42,6 +42,7 @@ SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
 CHUNKS = 12
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 20
+VOLUME = 1.0
 
 # Hardcoded values for most kiwis
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
@@ -109,6 +110,7 @@ def callback(in_data, frame_count, time_info, status):
     popped = audio_buffer.pop(0)
     for _ in range(CHUNKS-1-delta_buff):
         popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
+    popped = popped.astype(np.float64) * VOLUME
     n  = len(popped)
     xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
     xp = np.arange(n)
@@ -485,6 +487,11 @@ while not wf_quit:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
 
+                if keys[pygame.K_m]:
+                    if VOLUME>0.0:
+                        VOLUME = 0.0
+                    else:
+                        VOLUME = 1.0    
                 if keys[pygame.K_DOWN]:
                     if zoom>0:
                         zoom -= 1
@@ -575,6 +582,19 @@ while not wf_quit:
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
         print(snd_stream, radio_mode.lower(), lc, hc, freq)
+        if radio_mode=="AM":
+            lc=-6000
+            hc=6000
+        elif radio_mode=="USB":
+            lc=30
+            hc=3000
+        if radio_mode=="LSB":
+            lc=-3000
+            hc=-30
+        elif radio_mode=="CW":
+            lc=cwc-200
+            hc=cwc+200
+
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq) 
     if cat_flag:
@@ -596,8 +616,7 @@ while not wf_quit:
                 lc=cwc-200
                 hc=cwc+200
 
-            kiwi_set_audio_freq(
-                snd_stream, radio_mode.lower(), lc, hc, freq)
+            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
      
     draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode)
 
