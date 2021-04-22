@@ -40,7 +40,7 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 12
+CHUNKS = 14
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 20
 VOLUME = 1.0
@@ -88,6 +88,8 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C: switches to USB, LSB, CW",
         "- F: enter frequency with keyboard",
+        "- V/B: up/down volume",
+        "- M: mute/unmute",
         "- H: displays this help window",
         "- SHIFT+ESC: quits",
         "",
@@ -327,6 +329,11 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
         freq_bin = kiwi_offset_to_bin(freq, cwc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
         freq_bin = kiwi_offset_to_bin(freq, cwc*2/1000., zoom)
+        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+    elif "AM" in radio_mode:
+        freq_bin = kiwi_offset_to_bin(freq, amc/1000., zoom)
+        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+        freq_bin = kiwi_offset_to_bin(freq, -amc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
 
     pygame.draw.line(surface, (250,100,50), (mouse[0], 0), (mouse[0], wf_height), 1)
