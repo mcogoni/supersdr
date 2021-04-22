@@ -8,6 +8,7 @@ import numpy as np
 from scipy import signal
 
 import sys
+print (sys.version_info)
 if sys.version_info > (3,):
     buffer = memoryview
     def bytearray2str(b):
@@ -40,9 +41,9 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 12
+CHUNKS = 20
 KIWI_SAMPLES_PER_FRAME = 512
-FULL_BUFF_LEN = 30
+FULL_BUFF_LEN = 50
 VOLUME = 1.0
 
 # Hardcoded values for most kiwis
@@ -89,6 +90,9 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- PAGE UP/DOWN: move freq +/- 1MHz",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C: switches to USB, LSB, CW",
+        "- J/K: change passband (SHIFT inverts increment)",
+        "- O: resets passband to defaults",
+        "- U/L/C: switches to USB, LSB, CW",
         "- F: enter frequency with keyboard",
         "- V/B: up/down volume",
         "- M: mute/unmute",
@@ -111,7 +115,6 @@ def change_passband(radio_mode_, delta_low_, delta_high_):
     elif radio_mode_ == "CW":
         lc_ = LOW_CUT_CW+delta_low_
         hc_ = HIGH_CUT_CW+delta_high_
-    print(lc_, hc_)
     return lc_, hc_
 
 
@@ -127,6 +130,7 @@ def callback(in_data, frame_count, time_info, status):
     print(delta_buff)
     # emergency buffer fillup with silence
     while len(audio_buffer)<CHUNKS:
+        print("!", end=' ')
         audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
         
     popped = audio_buffer.pop(0)
@@ -410,7 +414,6 @@ print ("Waterfall data stream active...")
 
 # send a sequence of messages to the server, hardcoded for now
 # max wf speed, no compression
-print(kiwi_password)
 msg_list = ['SET auth t=kiwi p=%s'%kiwi_password, 'SET zoom=%d start=%d'%(zoom,cnt),\
 'SET maxdb=0 mindb=-100', 'SET wf_speed=4', 'SET wf_comp=0', 'SET maxdb=-10 mindb=-110']
 for msg in msg_list:
@@ -457,7 +460,7 @@ lc, hc = change_passband(radio_mode, delta_low, delta_high)
 
 msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
 (radio_mode.lower(), lc, hc, freq),
-"SET compression=0", "SET ident_user=pippo","SET OVERRIDE inactivity_timeout=1000",
+"SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
 "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
 "SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
 print (msg_list)
@@ -474,7 +477,7 @@ smallfont = pygame.font.SysFont('Mono',18)
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
-pygame.display.set_caption("KIWISDR WATERFALL")
+pygame.display.set_caption("SuperSDR 0.0")
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 200)
 
@@ -519,7 +522,6 @@ kiwi_audio_stream.start_stream()
 
 run_index = 0
 while not wf_quit:
-#    print (delta_low, delta_high, lc, hc)
     run_index += 1
     mouse = pygame.mouse.get_pos()
     click_freq = None
@@ -659,12 +661,12 @@ while not wf_quit:
             if event.button == 4: # mouse scroll up
                 if zoom<MAX_ZOOM:
                         zoom += 1
-                        click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
+                        click_freq = freq #kiwi_bins_to_khz(freq, mouse[0], zoom)
                         change_zoom_flag = True
             elif event.button == 5: # mouse scroll down
                 if zoom>0:
                         zoom -= 1
-                        click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
+                        click_freq = freq #kiwi_bins_to_khz(freq, mouse[0], zoom)
                         change_zoom_flag = True
             elif event.button == 1:
                 if radio_mode == "CW":
