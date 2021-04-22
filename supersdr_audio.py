@@ -340,6 +340,8 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
 
 
 parser = OptionParser()
+parser.add_option("-w", "--password", type=str,
+                  help="KiwiSDR password", dest="kiwi_password", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
                   help="KiwiSDR server name", dest="kiwiserver", default='192.168.1.82')
 parser.add_option("-p", "--kiwiport", type=int,
@@ -358,6 +360,8 @@ options = vars(parser.parse_args()[0])
 # kiwi hostname and port
 kiwihost = options['kiwiserver']
 kiwiport = options['kiwiport']
+kiwi_password = options['kiwi_password']
+
 print ("KiwiSDR Server: %s:%d" % (kiwihost, kiwiport))
 
 #rigctld hostname and port
@@ -401,7 +405,8 @@ print ("Waterfall data stream active...")
 
 # send a sequence of messages to the server, hardcoded for now
 # max wf speed, no compression
-msg_list = ['SET auth t=kiwi p=', 'SET zoom=%d start=%d'%(zoom,cnt),\
+print(kiwi_password)
+msg_list = ['SET auth t=kiwi p=%s'%kiwi_password, 'SET zoom=%d start=%d'%(zoom,cnt),\
 'SET maxdb=0 mindb=-100', 'SET wf_speed=4', 'SET wf_comp=0', 'SET maxdb=-10 mindb=-110']
 for msg in msg_list:
     wf_stream.send_message(msg)
@@ -443,7 +448,7 @@ else:
     s = None
     radio_mode = "USB"
 
-msg_list = ["SET auth t=kiwi p=sibamanna", "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
+msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
 (radio_mode.lower(), lc, hc, freq),
 "SET compression=0", "SET ident_user=pippo","SET OVERRIDE inactivity_timeout=1000",
 "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
