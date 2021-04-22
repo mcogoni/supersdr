@@ -40,7 +40,7 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 16
+CHUNKS = 12
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 30
 VOLUME = 1.0
@@ -98,7 +98,7 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "   --- 73 de marco/IS0KYB ---   "]
 
-def change_passaband(radio_mode_, delta_low_, delta_high_):
+def change_passband(radio_mode_, delta_low_, delta_high_):
     if radio_mode_ == "USB":
         lc_ = LOW_CUT_SSB+delta_low_
         hc_ = HIGH_CUT_SSB+delta_high_
@@ -336,25 +336,13 @@ def draw_textsurfaces(draw_dict, ts_dict, sdrdisplay):
         sdrdisplay.blit(draw_dict[k], (x_r, y_r))
 
 def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse):
-    pygame.draw.line(surface, RED, (center_freq_bin, 0), (center_freq_bin, wf_height), 1)
-    if "USB" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, 3, zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-    elif "LSB" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, -3, zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-    elif "CW" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, lc/1000., zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-        freq_bin = kiwi_offset_to_bin(freq, hc/1000., zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-    elif "AM" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, hc/1000., zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-        freq_bin = kiwi_offset_to_bin(freq, -hc/1000., zoom)
-        pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
+    pygame.draw.line(surface, RED, (center_freq_bin, 0), (center_freq_bin, wf_height), 2)
+    freq_bin = kiwi_offset_to_bin(freq, lc/1000., zoom)
+    pygame.draw.line(surface, (0,200,200), (freq_bin, wf_height/20), (freq_bin, wf_height), 1)
+    freq_bin = kiwi_offset_to_bin(freq, hc/1000, zoom)
+    pygame.draw.line(surface, (0,200,0), (freq_bin, wf_height/20), (freq_bin, wf_height), 1)
 
-    pygame.draw.line(surface, (250,100,50), (mouse[0], 0), (mouse[0], wf_height), 1)
+    pygame.draw.line(surface, (250,0,0), (mouse[0], wf_height-20), (mouse[0], wf_height), 1)
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -465,7 +453,7 @@ else:
     s = None
     radio_mode = "USB"
 
-lc, hc = change_passaband(radio_mode, delta_low, delta_high)
+lc, hc = change_passband(radio_mode, delta_low, delta_high)
 
 msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
 (radio_mode.lower(), lc, hc, freq),
@@ -531,8 +519,6 @@ kiwi_audio_stream.start_stream()
 
 run_index = 0
 while not wf_quit:
-    lc, hc = change_passaband(radio_mode, delta_low, delta_high)
-
 #    print (delta_low, delta_high, lc, hc)
     run_index += 1
     mouse = pygame.mouse.get_pos()
@@ -548,20 +534,22 @@ while not wf_quit:
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
                 if zoom>=12:
                     shift_mult /= 10.
+                if keys[pygame.K_o]:
+                    click_freq = freq
+                    delta_low = 0
+                    delta_high = 0
                 if keys[pygame.K_j]:
-                    if shift_mult>1:
-                        delta_low += 100
-                    else:
-                        delta_low -= 100
+                    click_freq = freq
+                    delta = -100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 100
+                    delta_low += delta
                     if abs(delta_low) > 3000:
                         delta_low = 3000
                     elif abs(delta_low) < 0:
                         delta_low = 0.
                 if keys[pygame.K_k]:
-                    if shift_mult>1:
-                        delta_high += 100
-                    else:
-                        delta_high -= 100
+                    click_freq = freq
+                    delta = -100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 100
+                    delta_high += delta
                     if abs(delta_high) > 3000:
                         delta_high = 3000
                     elif abs(delta_high) < 0:
@@ -686,16 +674,16 @@ while not wf_quit:
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
         print(snd_stream, radio_mode.lower(), lc, hc, freq)
-        lc, hc = change_passaband(radio_mode, delta_low, delta_high)
+        lc, hc = change_passband(radio_mode, delta_low, delta_high)
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
-        print(freq) 
+        print(freq)
     if cat_flag:
         new_freq = cat_get_freq()
         radio_mode = cat_get_mode()
         if freq != new_freq:
             freq = new_freq
             freq = kiwi_set_freq_zoom(freq, zoom, s)
-            lc, hc = change_passaband(radio_mode, delta_low, delta_high)
+            lc, hc = change_passband(radio_mode, delta_low, delta_high)
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
      
     draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode)
