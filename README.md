@@ -1,7 +1,7 @@
 # SuperSDR
 
 SuperSDR allows a realtime view of the spectrum waterfall of any KiwiSDR around the world along with a local or remotely controlled CAT transceiver.
-![SuperSDR in action](https://raw.githubusercontent.com/mcogoni/supersdr/main/supersdr_screenshot.png)
+![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/supersdr_screenshot.png)
 
 ## Prerequisites:
 Install Python 3 along with PYGAME, MATPLOTLIB and NUMPY, or whatever it asks when breaking apart upon launch ;)
