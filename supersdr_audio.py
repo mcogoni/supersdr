@@ -40,9 +40,9 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 14
+CHUNKS = 16
 KIWI_SAMPLES_PER_FRAME = 512
-FULL_BUFF_LEN = 20
+FULL_BUFF_LEN = 30
 VOLUME = 1.0
 
 # Hardcoded values for most kiwis
@@ -61,10 +61,12 @@ thresh=-75
 slope=6
 decay=4000
 gain=50
-lc=30
-hc=3000
-cwc=300
-amc=6000
+LOW_CUT_SSB=30
+HIGH_CUT_SSB=3000
+LOW_CUT_CW=300
+HIGH_CUT_CW=800
+HIGHLOW_CUT_AM=6000
+delta_low, delta_high = 0., 0.
 
 # predefined RGB colors
 GREY = (200,200,200)
@@ -96,6 +98,23 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "   --- 73 de marco/IS0KYB ---   "]
 
+def change_passaband(radio_mode_, delta_low_, delta_high_):
+    if radio_mode_ == "USB":
+        lc_ = LOW_CUT_SSB+delta_low_
+        hc_ = HIGH_CUT_SSB+delta_high_
+    elif radio_mode_ == "LSB":
+        lc_ = -HIGH_CUT_SSB-delta_high_
+        hc_ = -LOW_CUT_SSB-delta_low_
+    elif radio_mode_ == "AM":
+        lc_ = -HIGHLOW_CUT_AM-delta_high_
+        hc_ = HIGHLOW_CUT_AM+delta_high_
+    elif radio_mode_ == "CW":
+        lc_ = LOW_CUT_CW+delta_low_
+        hc_ = HIGH_CUT_CW+delta_high_
+    print(lc_, hc_)
+    return lc_, hc_
+
+
 def callback(in_data, frame_count, time_info, status):
     global audio_buffer
     while len(audio_buffer)<FULL_BUFF_LEN:
@@ -105,7 +124,7 @@ def callback(in_data, frame_count, time_info, status):
         else:
             break
     delta_buff = FULL_BUFF_LEN - len(audio_buffer)
-        
+    print(delta_buff)
     # emergency buffer fillup with silence
     while len(audio_buffer)<CHUNKS:
         audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
@@ -139,7 +158,7 @@ def process_audio_stream():
         return None
 
 def display_box(screen, message):
-    fontobject = pygame.font.SysFont('Mono',12)
+    fontobject = pygame.font.SysFont('Terminus',20)
 
     pygame.draw.rect(screen, BLACK,
                    ((screen.get_width() / 2) - 100,
@@ -293,10 +312,7 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
     return freq_
 
 def kiwi_set_audio_freq(s_, mod_, lc_, hc_, freq_):
-    if mod_ == "lsb":
-        tmp = lc_
-        lc_ = -hc_
-        hc_ = -tmp
+    #print(mod_,lc_, hc_)
     msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (mod_, lc_, hc_, freq_)
     snd_stream.send_message(msg)
     
@@ -328,18 +344,17 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
         freq_bin = kiwi_offset_to_bin(freq, -3, zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
     elif "CW" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, cwc/1000., zoom)
+        freq_bin = kiwi_offset_to_bin(freq, lc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-        freq_bin = kiwi_offset_to_bin(freq, cwc*2/1000., zoom)
+        freq_bin = kiwi_offset_to_bin(freq, hc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
     elif "AM" in radio_mode:
-        freq_bin = kiwi_offset_to_bin(freq, amc/1000., zoom)
+        freq_bin = kiwi_offset_to_bin(freq, hc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
-        freq_bin = kiwi_offset_to_bin(freq, -amc/1000., zoom)
+        freq_bin = kiwi_offset_to_bin(freq, -hc/1000., zoom)
         pygame.draw.line(surface, (200,200,200), (freq_bin, 0), (freq_bin, wf_height), 1)
 
     pygame.draw.line(surface, (250,100,50), (mouse[0], 0), (mouse[0], wf_height), 1)
-
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -450,6 +465,8 @@ else:
     s = None
     radio_mode = "USB"
 
+lc, hc = change_passaband(radio_mode, delta_low, delta_high)
+
 msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
 (radio_mode.lower(), lc, hc, freq),
 "SET compression=0", "SET ident_user=pippo","SET OVERRIDE inactivity_timeout=1000",
@@ -486,7 +503,6 @@ rssi = 0
 question = "Freq (kHz)"
 current_string = []
 
-
 audio_buffer = []
 for k in range(FULL_BUFF_LEN*5):
    snd_stream.send_message('SET keepalive')
@@ -515,6 +531,9 @@ kiwi_audio_stream.start_stream()
 
 run_index = 0
 while not wf_quit:
+    lc, hc = change_passaband(radio_mode, delta_low, delta_high)
+
+#    print (delta_low, delta_high, lc, hc)
     run_index += 1
     mouse = pygame.mouse.get_pos()
     click_freq = None
@@ -529,6 +548,24 @@ while not wf_quit:
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
                 if zoom>=12:
                     shift_mult /= 10.
+                if keys[pygame.K_j]:
+                    if shift_mult>1:
+                        delta_low += 100
+                    else:
+                        delta_low -= 100
+                    if abs(delta_low) > 3000:
+                        delta_low = 3000
+                    elif abs(delta_low) < 0:
+                        delta_low = 0.
+                if keys[pygame.K_k]:
+                    if shift_mult>1:
+                        delta_high += 100
+                    else:
+                        delta_high -= 100
+                    if abs(delta_high) > 3000:
+                        delta_high = 3000
+                    elif abs(delta_high) < 0:
+                        delta_high = 0.
                 if keys[pygame.K_v]:
                     if VOLUME<1.2:
                         VOLUME += 0.1
@@ -631,26 +668,25 @@ while not wf_quit:
         if event.type == pygame.QUIT:
             wf_quit = True
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if radio_mode == "CW":
-                freq -= 500./1000
-            click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
+            if event.button == 4: # mouse scroll up
+                if zoom<MAX_ZOOM:
+                        zoom += 1
+                        click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
+                        change_zoom_flag = True
+            elif event.button == 5: # mouse scroll down
+                if zoom>0:
+                        zoom -= 1
+                        click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
+                        change_zoom_flag = True
+            elif event.button == 1:
+                if radio_mode == "CW":
+                    freq -= 500./1000
+                click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
         print(snd_stream, radio_mode.lower(), lc, hc, freq)
-        if radio_mode=="AM":
-            lc=-6000
-            hc=6000
-        elif radio_mode=="USB":
-            lc=30
-            hc=3000
-        if radio_mode=="LSB":
-            lc=-3000
-            hc=-30
-        elif radio_mode=="CW":
-            lc=cwc
-            hc=cwc*2
-
+        lc, hc = change_passaband(radio_mode, delta_low, delta_high)
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq) 
     if cat_flag:
@@ -659,19 +695,7 @@ while not wf_quit:
         if freq != new_freq:
             freq = new_freq
             freq = kiwi_set_freq_zoom(freq, zoom, s)
-            if radio_mode=="AM":
-                lc=-6000
-                hc=6000
-            elif radio_mode=="USB":
-                lc=30
-                hc=3000
-            if radio_mode=="LSB":
-                lc=-3000
-                hc=-30
-            elif radio_mode=="CW":
-                lc=cwc
-                hc=cwc*2
-
+            lc, hc = change_passaband(radio_mode, delta_low, delta_high)
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
      
     draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode)
@@ -703,6 +727,9 @@ while not wf_quit:
         display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
 
     display_msg_box(sdrdisplay, "RSSI: %ddBm"%rssi, pos=(200,0))
+    mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)
+    display_msg_box(sdrdisplay, "f: %dkHz"%mouse_khz, pos=(680,0))
+
 
     pygame.display.update()
     clock.tick(30)
