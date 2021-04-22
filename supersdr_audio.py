@@ -123,6 +123,8 @@ def callback(in_data, frame_count, time_info, status):
 def process_audio_stream():
     global rssi
     data = snd_stream.receive_message()
+    if data is None:
+        return None
     #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
 
     #samples = np.zeros((1024))
