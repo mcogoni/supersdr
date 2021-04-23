@@ -170,6 +170,8 @@ def process_audio_stream():
         return None
 
 def display_box(screen, message):
+    smallfont = pygame.freetype.SysFont('Mono', 12)
+
     pygame.draw.rect(screen, BLACK,
                    ((screen.get_width() / 2) - 100,
                     (screen.get_height() / 2) - 10,
@@ -184,6 +186,9 @@ def display_box(screen, message):
 
 
 def display_help_box(screen, message_list):
+    font_size = font_size_dict["small"]
+    smallfont = pygame.freetype.SysFont('Mono', font_size)
+
     window_size = 350
     pygame.draw.rect(screen, (0,0,0),
                    ((screen.get_width() / 2) - window_size/2,
@@ -201,6 +206,7 @@ def display_help_box(screen, message_list):
             smallfont.render_to(sdrdisplay, pos, msg, WHITE)
 
 def display_msg_box(screen, message, pos=None):
+    smallfont = pygame.freetype.SysFont('Mono', 12)
     if not pos:
         pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
     # pygame.draw.rect(screen, BLACK,
@@ -340,8 +346,10 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
         if k == "p_freq" and not pygame.mouse.get_focused():
             continue
         if "small" in ts_dict[k][3]:
+            smallfont = pygame.freetype.SysFont('Mono', 12)
             render_ = smallfont.render_to
         elif "big" in ts_dict[k][3]:
+            bigfont = pygame.freetype.SysFont('Mono', 16)
             render_ = bigfont.render_to
         fontsize_ = font_size_dict[ts_dict[k][3]]
 
@@ -349,16 +357,7 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
         x_r, y_r = ts_dict[k][2]
         if ts_dict[k][4]:
             pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len+0.5)*7, 14), 0)
-        smallfont.render_to(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
-
-def draw_textsurfaces(draw_dict, ts_dict, sdrdisplay):
-    for k in draw_dict:
-        size = len(ts_dict[k][1])
-        x_r, y_r = ts_dict[k][2]
-
-        pygame.draw.rect(sdrdisplay, D_GREY, (x_r, y_r, size*fontsize_, fontsize_), 0)
-        #pygame.draw.rect(sdrdisplay, GREY, (x_r, y_r, size*11, 19), 1)
-        sdrdisplay.blit(draw_dict[k], (x_r, y_r))
+        render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
 
 def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse):
     pygame.draw.line(surface, RED, (center_freq_bin, 0), (center_freq_bin, wf_height), 2)
@@ -494,8 +493,6 @@ pygame.init()
 sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT))
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
-smallfont = pygame.freetype.SysFont('Mono', 12)
-bigfont = pygame.freetype.SysFont('Mono', 20)
 
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
