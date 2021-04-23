@@ -121,13 +121,12 @@ def s_meter_draw(rssi):
     pygame.draw.rect(sdrdisplay, BLACK,
                    (s_meter_center[0]-60, s_meter_center[1]-55, 2*s_meter_radius+20,s_meter_radius+20), 3)
     
-    pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 4)
+    pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
     str_rssi = "%ddBm"%rssi
     smallfont = pygame.freetype.SysFont('Mono', 10)
     str_len = len(str_rssi)
     pos = (s_meter_center[0]+13, s_meter_center[1])
     smallfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
-            
 
 
 def change_passband(radio_mode_, delta_low_, delta_high_):
@@ -566,8 +565,11 @@ kiwi_audio_stream = play.open(format=FORMAT,
 
 kiwi_audio_stream.start_stream()
 
+rssi_maxlen = 10
+rssi_smooth = deque(rssi_maxlen*[0], rssi_maxlen)
 run_index = 0
 while not wf_quit:
+    rssi_smooth.append(rssi)
     run_index += 1
     mouse = pygame.mouse.get_pos()
     click_freq = None
@@ -764,7 +766,8 @@ while not wf_quit:
             show_volume_flag = False
         display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
 
-    s_meter_draw(rssi)
+    s_meter_draw(np.mean(rssi_smooth))
+    rssi_smooth.popleft()
 
     pygame.display.update()
     clock.tick(30)
