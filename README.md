@@ -39,6 +39,8 @@ Main key commands during use are:
 - PAGE UP/DOWN: shift freq by 1MHz
 - U/L/C/A: switches to USB, LSB, CW, AM
 - J/K/O: increase low(J)/high(K) cut passband (SHIFT decreases), O resets defaults
+- V/B/M: volume up/down 10% or Mute
+- X: AUTO MODE Switch above/below 10 MHz
 - F: enter frequency with keyboard
 - H: displays this help window
 - SHIFT+ESC: quits
