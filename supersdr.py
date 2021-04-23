@@ -45,7 +45,7 @@ SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
 CHUNKS = 16
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 20
-VOLUME = 1.0
+VOLUME = 100
 
 # Hardcoded values for most kiwis
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
@@ -55,6 +55,7 @@ DISPLAY_WIDTH = int(WF_BINS)
 DISPLAY_HEIGHT = 400
 MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels
+TENMHZ = 10000
 
 # Initial KIWI receiver parameters
 on=True
@@ -96,8 +97,9 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- O: resets passband to defaults",
         "- U/L/C: switches to USB, LSB, CW",
         "- F: enter frequency with keyboard",
-        "- V/B: up/down volume",
+        "- V/B: up/down volume 10%",
         "- M: mute/unmute",
+        "- X: AUTO MODE ON/OFF (10 MHz mode switch)",
         "- H: displays this help window",
         "- SHIFT+ESC: quits",
         "",
@@ -190,7 +192,7 @@ def callback(in_data, frame_count, time_info, status):
     popped = audio_buffer.pop(0)
     for _ in range(CHUNKS-1):
         popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
-    popped = popped.astype(np.float64) * VOLUME
+    popped = popped.astype(np.float64) * (VOLUME/100)
     n = len(popped)
     xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
     xp = np.arange(n)
@@ -252,8 +254,8 @@ def display_help_box(screen, message_list):
                     screen.get_height() / 2-window_size/2 + ii*font_size + font_size)
             smallfont.render_to(sdrdisplay, pos, msg, WHITE)
 
-def display_msg_box(screen, message, pos=None):
-    smallfont = pygame.freetype.SysFont('Mono', 12)
+def display_msg_box(screen, message, pos=None, fontsize=12, color=WHITE):
+    smallfont = pygame.freetype.SysFont('Mono', fontsize)
     if not pos:
         pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
     # pygame.draw.rect(screen, BLACK,
@@ -263,7 +265,7 @@ def display_msg_box(screen, message, pos=None):
     #                ((screen.get_width() / 2) - msg_len/2+2,
     #                 (screen.get_height() / 2) - 12, msg_len+4,24), 1)
     if len(message) != 0:
-        smallfont.render_to(sdrdisplay, pos, message, WHITE)
+        smallfont.render_to(sdrdisplay, pos, message, color)
 
 def kiwi_zoom_to_span(zoom):
     """return frequency span in kHz for a given zoom level"""
@@ -386,7 +388,7 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
             "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-50,0), "small", True),
             "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_zoom_to_span(zoom))), (wf_width-180,0), "small", True),
             "filter": (GREEN, "FILT %.1fkHz"%((hc-lc)/1000.), (wf_width-290,0), "small", True),
-            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, 30), "small", True)
+            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", True)
     }
     
     draw_dict = {}
@@ -554,10 +556,13 @@ palRGB = cm.jet(range(256))[:,:3]*255
 
 wf_quit = False
 
+auto_mode = True
 new_freq = freq
 input_freq_flag = False
 show_help_flag =  False
 show_volume_flag =  False
+show_automode_flag = False
+
 rssi = 0
 question = "Freq (kHz)"
 current_string = []
@@ -592,6 +597,7 @@ kiwi_audio_stream.start_stream()
 rssi_maxlen = FULL_BUFF_LEN*2
 rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
 run_index = 0
+run_index_automode = 0
 while not wf_quit:
     rssi_hist.append(rssi)
     run_index += 1
@@ -618,40 +624,40 @@ while not wf_quit:
                     delta_low += delta
                     if abs(delta_low) > 3000:
                         delta_low = 3000
-                    elif abs(delta_low) < 0:
-                        delta_low = 0.
+                    elif delta_low < -3000:
+                        delta_low = 3000
                 if keys[pygame.K_k]:
                     click_freq = freq
                     delta = -100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 100
                     delta_high += delta
                     if abs(delta_high) > 3000:
                         delta_high = 3000
-                    elif abs(delta_high) < 0:
-                        delta_high = 0.
+                    elif delta_high < -3000:
+                        delta_high = -3000.
                 if keys[pygame.K_v]:
-                    if VOLUME<1.2:
-                        VOLUME += 0.1
+                    if VOLUME < 150:
+                        VOLUME += 10
                     show_volume_flag = True
                     run_index_volume = run_index
                 if keys[pygame.K_b]:
-                    if VOLUME>0.0:
-                        VOLUME -= 0.1
+                    if VOLUME > 0:
+                        VOLUME -= 10
                     show_volume_flag = True
                     run_index_volume = run_index
                 if keys[pygame.K_m]:
-                    if VOLUME>0.0:
-                        VOLUME = 0.0
+                    if VOLUME > 0:
+                        VOLUME = 0
                     else:
-                        VOLUME = 1.0   
+                        VOLUME = 100
                     show_volume_flag = True
                     run_index_volume = run_index
                 if keys[pygame.K_DOWN]:
-                    if zoom>0:
+                    if zoom > 0:
                         zoom -= 1
                         click_freq = freq
                         change_zoom_flag = True
                 elif keys[pygame.K_UP]:
-                    if zoom<MAX_ZOOM:
+                    if zoom < MAX_ZOOM:
                         zoom += 1
                         click_freq = freq
                         change_zoom_flag = True
@@ -672,6 +678,7 @@ while not wf_quit:
                 elif keys[pygame.K_PAGEUP]:
                     click_freq = freq + 1000
                 elif keys[pygame.K_u]:
+                    auto_mode = False
                     if s:
                         cat_socket.send("+M USB 2400\n")
                         out = cat_socket.recv(512)
@@ -679,6 +686,7 @@ while not wf_quit:
                         radio_mode = "USB"
                         click_freq = freq
                 elif keys[pygame.K_l]:
+                    auto_mode = False
                     if s:
                         cat_socket.send("+M LSB 2400\n")
                         out = cat_socket.recv(512)
@@ -686,6 +694,7 @@ while not wf_quit:
                         radio_mode = "LSB"
                         click_freq = freq
                 elif keys[pygame.K_c]:
+                    auto_mode = False
                     if s:
                         cat_socket.send("+M CW 500\n")
                         out = cat_socket.recv(512)
@@ -693,6 +702,7 @@ while not wf_quit:
                         radio_mode = "CW"
                         click_freq = freq
                 elif keys[pygame.K_a]:
+                    auto_mode = False
                     if s:
                         cat_socket.send("+M AM 6000\n")
                         out = cat_socket.recv(512)
@@ -705,6 +715,11 @@ while not wf_quit:
                     #click_freq = int(inputbox.ask(sdrdisplay, 'Freq (kHz)'))
                 elif keys[pygame.K_h]:
                     show_help_flag = True
+                elif keys[pygame.K_x]:
+                    show_automode_flag = True
+                    run_index_automode = run_index
+                    auto_mode = True
+                    click_freq = freq
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
             else:
@@ -752,6 +767,7 @@ while not wf_quit:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
         #print(snd_stream, radio_mode.lower(), lc, hc, freq)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
+
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq)
     if cat_flag:
@@ -789,9 +805,16 @@ while not wf_quit:
     elif show_help_flag:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_volume_flag:
-        if run_index - run_index_volume > 10:
+        if run_index - run_index_volume > 20:
             show_volume_flag = False
-        display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
+        vol_color = WHITE if VOLUME <= 100 else RED
+        display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME)+'%',pos=None, fontsize=40, color=vol_color)
+    elif show_automode_flag:
+        if run_index - run_index_automode > 20:
+            show_automode_flag = False
+        else:
+            str_auto = "ON" if auto_mode else "OFF"
+            display_msg_box(sdrdisplay, "AUTO MODE "+str_auto,pos=None, fontsize=40, color=WHITE)
 
     rssi_smooth = np.mean(list(rssi_hist)[15:20])
     s_meter_draw(rssi_smooth)
@@ -800,6 +823,15 @@ while not wf_quit:
     pygame.display.update()
     clock.tick(30)
     mouse = pygame.mouse.get_pos()
+
+    if auto_mode: 
+        if freq < TENMHZ:
+            radio_mode = "LSB"
+        else:
+            radio_mode = "USB"
+        show_automode_flag = True
+
+
 
 pygame.quit()
 try:
