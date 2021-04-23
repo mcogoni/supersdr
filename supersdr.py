@@ -102,6 +102,7 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "   --- 73 de marco/IS0KYB ---   "]
 
+
 def change_passband(radio_mode_, delta_low_, delta_high_):
     if radio_mode_ == "USB":
         lc_ = LOW_CUT_SSB+delta_low_
@@ -132,8 +133,9 @@ def callback(in_data, frame_count, time_info, status):
             break
     delta_buff = max(0, FULL_BUFF_LEN - len(audio_buffer))
     print(FULL_BUFF_LEN, len(audio_buffer), samples_got)
+
     # emergency buffer fillup with silence
-    while len(audio_buffer)<CHUNKS:
+    while len(audio_buffer) <= FULL_BUFF_LEN:
         print("!", end=' ')
         audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
         
@@ -325,11 +327,14 @@ def kiwi_set_audio_freq(s_, mod_, lc_, hc_, freq_):
     msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (mod_, lc_, hc_, freq_)
     snd_stream.send_message(msg)
     
-def update_textsurfaces(freq, zoom, radio_mode):
+def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse):
     #           Label   Color   Freq/Mode                       Screen position
     ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0)),
             "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0)),
-            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0))}
+            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0)),
+            "rssi": (GREY, "RSSI: %ddBm"%rssi ,(200,0)),
+            "p_freq": (GREY, "f: %dkHz"%mouse_khz, (680,0))
+    }
 
     draw_dict = {}
     for k in ts_dict:
@@ -693,8 +698,9 @@ while not wf_quit:
             freq = kiwi_set_freq_zoom(freq, zoom, s)
             lc, hc = change_passband(radio_mode, delta_low, delta_high)
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
-     
-    draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode)
+
+    mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)     
+    draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode, rssi, mouse)
 
     if random.random()>0.95:
         wf_stream.send_message('SET keepalive')
@@ -721,11 +727,6 @@ while not wf_quit:
         if run_index - run_index_volume > 10:
             show_volume_flag = False
         display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
-
-    #display_msg_box(sdrdisplay, "RSSI: %ddBm"%rssi, pos=(200,0))
-    #mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)
-    #display_msg_box(sdrdisplay, "f: %dkHz"%mouse_khz, pos=(680,0))
-
 
     pygame.display.update()
     clock.tick(30)
