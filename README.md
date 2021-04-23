@@ -1,6 +1,6 @@
 # SuperSDR
 
-SuperSDR allows a realtime view of the spectrum waterfall of any KiwiSDR around the world along with a local or remotely controlled CAT transceiver.
+SuperSDR allows a realtime view of the spectrum waterfall and audio playback of any KiwiSDR around the world along with a local or remotely controlled CAT transceiver.
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/supersdr_screenshot.png)
 
 ## Prerequisites:
