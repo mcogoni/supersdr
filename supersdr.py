@@ -221,14 +221,14 @@ def display_box(screen, message):
 
     pygame.draw.rect(screen, BLACK,
                    ((screen.get_width() / 2) - 100,
-                    (screen.get_height() / 2) - 10,
-                    200,20), 0)
+                    (screen.get_height() / 2) - 12,
+                    200,18), 0)
     pygame.draw.rect(screen, WHITE,
                    ((screen.get_width() / 2) - 102,
-                    (screen.get_height() / 2) - 12,
-                    204,24), 1)
+                    (screen.get_height() / 2) - 14,
+                    204,20), 1)
     if len(message) != 0:
-        pos = ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10)
+        pos = ((screen.get_width() / 2) - 70, (screen.get_height() / 2) - 10)
         smallfont.render_to(sdrdisplay, pos, message, WHITE)
 
 
@@ -724,7 +724,8 @@ while not wf_quit:
                         pygame.key.set_repeat(200, 200)
                         print("ESCAPE!")
                     else:
-                        current_string.append(chr(inkey))
+                        if len(current_string)<10:
+                            current_string.append(chr(inkey))
                 display_box(sdrdisplay, question + ": " + "".join(current_string))
 
         if event.type == pygame.QUIT:
