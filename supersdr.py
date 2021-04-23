@@ -108,7 +108,7 @@ font_size_dict = {"small": 12, "big": 18}
 
 def s_meter_draw(rssi):
     s_meter_radius = 50.
-    s_meter_center = (100,s_meter_radius+10)
+    s_meter_center = (140,s_meter_radius+8)
     alpha_rssi = rssi+127
     alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
 
