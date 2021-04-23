@@ -656,15 +656,17 @@ while not wf_quit:
                         click_freq = freq
                         change_zoom_flag = True
                 elif keys[pygame.K_LEFT]:
-                    if radio_mode!="CW":
-                        click_freq = round(freq - 1*shift_mult)
-                    else:
-                        click_freq = (freq - 0.1*shift_mult)
+                    if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):                    
+                        if radio_mode!="CW":
+                            click_freq = round(freq - 1*shift_mult)
+                        else:
+                            click_freq = (freq - 0.1*shift_mult)
                 elif keys[pygame.K_RIGHT]:
-                    if radio_mode!="CW":
-                        click_freq = round(freq + 1*shift_mult)
-                    else:
-                        click_freq = (freq + 0.1*shift_mult)
+                    if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):                    
+                        if radio_mode!="CW":
+                            click_freq = round(freq + 1*shift_mult)
+                        else:
+                            click_freq = (freq + 0.1*shift_mult)
                 elif keys[pygame.K_PAGEDOWN]:
                     click_freq = freq - 1000
                 elif keys[pygame.K_PAGEUP]:
