@@ -81,6 +81,7 @@ D_GREEN = (0,200,0)
 RED = (255,0,0)
 BLUE = (0,0,255)
 GREEN = (0,255,0)
+YELLOW = (200,180,0)
 
 ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE]
@@ -104,6 +105,30 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "   --- 73 de marco/IS0KYB ---   "]
 
 font_size_dict = {"small": 12, "big": 18}
+
+def s_meter_draw(rssi):
+    s_meter_radius = 50.
+    s_meter_center = (100,s_meter_radius+10)
+    alpha_rssi = rssi+127
+    alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
+
+    x_rssi = s_meter_radius * math.cos(alpha_rssi)
+    y_rssi = s_meter_radius * math.sin(alpha_rssi)
+    s_meter_x = s_meter_center[0] + x_rssi
+    s_meter_y = s_meter_center[1] - y_rssi
+    pygame.draw.rect(sdrdisplay, YELLOW,
+                   (s_meter_center[0]-60, s_meter_center[1]-55, 2*s_meter_radius+20,s_meter_radius+20), 0)
+    pygame.draw.rect(sdrdisplay, BLACK,
+                   (s_meter_center[0]-60, s_meter_center[1]-55, 2*s_meter_radius+20,s_meter_radius+20), 3)
+    
+    pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 4)
+    str_rssi = "%ddBm"%rssi
+    smallfont = pygame.freetype.SysFont('Mono', 10)
+    str_len = len(str_rssi)
+    pos = (s_meter_center[0]+13, s_meter_center[1])
+    smallfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
+            
+
 
 def change_passband(radio_mode_, delta_low_, delta_high_):
     if radio_mode_ == "USB":
@@ -338,7 +363,6 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
     ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0), "big", True),
             "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0), "small", True),
             "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0), "small", True),
-            "rssi": (GREY, "RSSI: %ddBm"%rssi ,(200,0), "small", True),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, 30), "small", True)
     }
     
@@ -740,16 +764,7 @@ while not wf_quit:
             show_volume_flag = False
         display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
 
-    s_meter_radius = 50.
-    s_meter_center = (100,100)
-    alpha_rssi = rssi+127
-    alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
-
-    x_rssi = s_meter_radius * math.cos(alpha_rssi)
-    y_rssi = s_meter_radius * math.sin(alpha_rssi)
-    s_meter_x = s_meter_center[0] + x_rssi
-    s_meter_y = s_meter_center[1] - y_rssi
-    pygame.draw.line(sdrdisplay, WHITE, s_meter_center, (s_meter_x, s_meter_y), 2)
+    s_meter_draw(rssi)
 
     pygame.display.update()
     clock.tick(30)
