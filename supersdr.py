@@ -2,7 +2,7 @@
 
 import pygame
 from pygame.locals import *
-import pygame, pygame.font, pygame.event, pygame.draw, string
+import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 from matplotlib import cm
 import numpy as np
 from scipy import signal
@@ -102,6 +102,7 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
         "   --- 73 de marco/IS0KYB ---   "]
 
+font_size_dict = {"small": 12, "big": 18}
 
 def change_passband(radio_mode_, delta_low_, delta_high_):
     if radio_mode_ == "USB":
@@ -132,7 +133,7 @@ def callback(in_data, frame_count, time_info, status):
         else:
             break
     delta_buff = max(0, FULL_BUFF_LEN - len(audio_buffer))
-    print(FULL_BUFF_LEN, len(audio_buffer), samples_got)
+    #print(FULL_BUFF_LEN, len(audio_buffer), samples_got)
 
     # emergency buffer fillup with silence
     while len(audio_buffer) <= FULL_BUFF_LEN:
@@ -169,7 +170,8 @@ def process_audio_stream():
         return None
 
 def display_box(screen, message):
-    fontobject = pygame.font.SysFont('Terminus',20)
+    #fontobject = pygame.font.SysFont('Terminus',20)
+    fontobject = pygame.freetype.SysFont('Sans', 20)
 
     pygame.draw.rect(screen, BLACK,
                    ((screen.get_width() / 2) - 100,
@@ -180,13 +182,15 @@ def display_box(screen, message):
                     (screen.get_height() / 2) - 12,
                     204,24), 1)
     if len(message) != 0:
-        screen.blit(fontobject.render(message, 1, WHITE),
-                ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10))
-    pygame.display.flip()
+        pos = ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10)
+        smallfont.render_to(sdrdisplay, pos, message, WHITE)
+
 
 def display_help_box(screen, message_list):
     font_size = 11
-    fontobject = pygame.font.SysFont('Sans',font_size)
+    #fontobject = pygame.font.SysFont('Sans',font_size)
+    fontobject = pygame.freetype.SysFont('Sans', font_size)
+
     window_size = 350
     pygame.draw.rect(screen, (0,0,0),
                    ((screen.get_width() / 2) - window_size/2,
@@ -199,15 +203,16 @@ def display_help_box(screen, message_list):
 
     if len(message_list) != 0:
         for ii, msg in enumerate(message_list):
-            screen.blit(fontobject.render(msg, 1, WHITE),
-                    (screen.get_width() / 2 - window_size/2 + font_size, 
-                    screen.get_height() / 2-window_size/2 + ii*font_size + font_size))
-    pygame.display.flip()
+            pos = (screen.get_width() / 2 - window_size/2 + font_size, 
+                    screen.get_height() / 2-window_size/2 + ii*font_size + font_size)
+            smallfont.render_to(sdrdisplay, pos, msg, WHITE)
 
 def display_msg_box(screen, message, pos=None):
     font_size = 20
     msg_len = len(message)
-    fontobject = pygame.font.SysFont('Sans',font_size)
+    #fontobject = pygame.font.SysFont('Sans',font_size)
+    fontobject = pygame.freetype.SysFont('Sans', font_size)
+
     if not pos:
         pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
     # pygame.draw.rect(screen, BLACK,
@@ -217,8 +222,7 @@ def display_msg_box(screen, message, pos=None):
     #                ((screen.get_width() / 2) - msg_len/2+2,
     #                 (screen.get_height() / 2) - 12, msg_len+4,24), 1)
     if len(message) != 0:
-        screen.blit(fontobject.render(message, 1, WHITE), pos)
-    pygame.display.flip()
+        smallfont.render_to(sdrdisplay, pos, message, WHITE)
 
 def kiwi_zoom_to_span(zoom):
     """return frequency span in kHz for a given zoom level"""
@@ -327,25 +331,37 @@ def kiwi_set_audio_freq(s_, mod_, lc_, hc_, freq_):
     msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (mod_, lc_, hc_, freq_)
     snd_stream.send_message(msg)
     
-def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse):
-    #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0)),
-            "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0)),
-            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0)),
-            "rssi": (GREY, "RSSI: %ddBm"%rssi ,(200,0)),
-            "p_freq": (GREY, "f: %dkHz"%mouse_khz, (680,0))
-    }
+def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
+    global sdrdisplay
+    mousex_pos = mouse[0]
+    if mousex_pos < 5:
+        mousex_pos = 5
+    elif mousex_pos >= DISPLAY_WIDTH - 50:
+        mousex_pos = DISPLAY_WIDTH - 50
 
+    #           Label   Color   Freq/Mode                       Screen position
+    ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0), "big"),
+            "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0), "small"),
+            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0), "small"),
+            "rssi": (GREY, "RSSI: %ddBm"%rssi ,(200,0), "small"),
+            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, 30), "small")
+    }
+    
     draw_dict = {}
     for k in ts_dict:
-        draw_dict[k] = smallfont.render(ts_dict[k][1], False, ts_dict[k][0])
-    return draw_dict, ts_dict
+        if "small" in ts_dict[k][3]:
+            render_ = smallfont.render_to
+        elif  "big" in ts_dict[k][3]:
+            render_ = bigfont.render_to
+        fontsize_ = font_size_dict[ts_dict[k][3]]
+        smallfont.render_to(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
 
 def draw_textsurfaces(draw_dict, ts_dict, sdrdisplay):
     for k in draw_dict:
         size = len(ts_dict[k][1])
         x_r, y_r = ts_dict[k][2]
-        pygame.draw.rect(sdrdisplay, D_GREY, (x_r, y_r, size*11, 19), 0)
+
+        pygame.draw.rect(sdrdisplay, D_GREY, (x_r, y_r, size*fontsize_, fontsize_), 0)
         #pygame.draw.rect(sdrdisplay, GREY, (x_r, y_r, size*11, 19), 1)
         sdrdisplay.blit(draw_dict[k], (x_r, y_r))
 
@@ -483,7 +499,11 @@ pygame.init()
 sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT))
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
-smallfont = pygame.font.SysFont('Mono',18)
+#smallfont = pygame.font.SysFont('Mono',12)
+#bigfont = pygame.font.SysFont('Mono',18)
+smallfont = pygame.freetype.SysFont('Sans', 12)
+bigfont = pygame.freetype.SysFont('Sans', 20)
+
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
@@ -686,7 +706,7 @@ while not wf_quit:
 
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, s)
-        print(snd_stream, radio_mode.lower(), lc, hc, freq)
+        #print(snd_stream, radio_mode.lower(), lc, hc, freq)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq)
@@ -700,7 +720,6 @@ while not wf_quit:
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
 
     mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)     
-    draw_dict, ts_dict = update_textsurfaces(freq, zoom, radio_mode, rssi, mouse)
 
     if random.random()>0.95:
         wf_stream.send_message('SET keepalive')
@@ -718,7 +737,9 @@ while not wf_quit:
     draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse)
     
     sdrdisplay.blit(surface, (0, 0))
-    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
+    update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width)
+
+#    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
     if input_freq_flag:
         display_box(sdrdisplay, question + ": " + "".join(current_string))
     elif show_help_flag:
