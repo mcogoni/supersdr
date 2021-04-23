@@ -679,7 +679,7 @@ while not wf_quit:
                     click_freq = freq + 1000
                 elif keys[pygame.K_u]:
                     auto_mode = False
-                    if s:
+                    if cat_socket:
                         cat_socket.send("+M USB 2400\n".encode())
                         out = cat_socket.recv(512).decode()
                     else:
@@ -687,7 +687,7 @@ while not wf_quit:
                         click_freq = freq
                 elif keys[pygame.K_l]:
                     auto_mode = False
-                    if s:
+                    if cat_socket:
                         cat_socket.send("+M LSB 2400\n".encode())
                         out = cat_socket.recv(512).decode()
                     else:
@@ -695,7 +695,7 @@ while not wf_quit:
                         click_freq = freq
                 elif keys[pygame.K_c]:
                     auto_mode = False
-                    if s:
+                    if cat_socket:
                         cat_socket.send("+M CW 500\n".encode())
                         out = cat_socket.recv(512).decode()
                     else:
@@ -703,7 +703,7 @@ while not wf_quit:
                         click_freq = freq
                 elif keys[pygame.K_a]:
                     auto_mode = False
-                    if s:
+                    if cat_socket:
                         cat_socket.send("+M AM 6000\n".encode())
                         out = cat_socket.recv(512).decode()
                     else:
@@ -764,7 +764,7 @@ while not wf_quit:
                 click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
     if click_freq or change_zoom_flag:
-        freq = kiwi_set_freq_zoom(click_freq, zoom, s)
+        freq = kiwi_set_freq_zoom(click_freq, zoom, cat_socket)
         #print(snd_stream, radio_mode.lower(), lc, hc, freq)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
 
