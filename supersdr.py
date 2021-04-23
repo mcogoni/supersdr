@@ -106,10 +106,10 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 
 font_size_dict = {"small": 12, "big": 18}
 
-def s_meter_draw(rssi):
+def s_meter_draw(rssi_smooth):
     s_meter_radius = 50.
     s_meter_center = (140,s_meter_radius+8)
-    alpha_rssi = rssi+127
+    alpha_rssi = rssi_smooth+127
     alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
 
     x_rssi = s_meter_radius * math.cos(alpha_rssi)
@@ -122,7 +122,7 @@ def s_meter_draw(rssi):
                    (s_meter_center[0]-60, s_meter_center[1]-55, 2*s_meter_radius+20,s_meter_radius+20), 3)
     
     pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
-    str_rssi = "%ddBm"%rssi
+    str_rssi = "%ddBm"%rssi_smooth
     smallfont = pygame.freetype.SysFont('Mono', 10)
     str_len = len(str_rssi)
     pos = (s_meter_center[0]+13, s_meter_center[1])
@@ -565,11 +565,11 @@ kiwi_audio_stream = play.open(format=FORMAT,
 
 kiwi_audio_stream.start_stream()
 
-rssi_maxlen = 10
-rssi_smooth = deque(rssi_maxlen*[0], rssi_maxlen)
+rssi_maxlen = FULL_BUFF_LEN*2
+rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
 run_index = 0
 while not wf_quit:
-    rssi_smooth.append(rssi)
+    rssi_hist.append(rssi)
     run_index += 1
     mouse = pygame.mouse.get_pos()
     click_freq = None
@@ -766,8 +766,9 @@ while not wf_quit:
             show_volume_flag = False
         display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
 
-    s_meter_draw(np.mean(rssi_smooth))
-    rssi_smooth.popleft()
+    rssi_smooth = np.mean(list(rssi_hist)[15:20])
+    s_meter_draw(rssi_smooth)
+
 
     pygame.display.update()
     clock.tick(30)
