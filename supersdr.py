@@ -22,6 +22,7 @@ import struct
 import array
 import socket
 import time
+import math
 from datetime import datetime
 from collections import deque
 
@@ -738,6 +739,17 @@ while not wf_quit:
         if run_index - run_index_volume > 10:
             show_volume_flag = False
         display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME*100)+'%')
+
+    s_meter_radius = 50.
+    s_meter_center = (100,100)
+    alpha_rssi = rssi+127
+    alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
+
+    x_rssi = s_meter_radius * math.cos(alpha_rssi)
+    y_rssi = s_meter_radius * math.sin(alpha_rssi)
+    s_meter_x = s_meter_center[0] + x_rssi
+    s_meter_y = s_meter_center[1] - y_rssi
+    pygame.draw.line(sdrdisplay, WHITE, s_meter_center, (s_meter_x, s_meter_y), 2)
 
     pygame.display.update()
     clock.tick(30)
