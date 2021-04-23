@@ -107,20 +107,42 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 font_size_dict = {"small": 12, "big": 18}
 
 def s_meter_draw(rssi_smooth):
+    font_size = 8
+    smallfont = pygame.freetype.SysFont('Mono', font_size)
+
     s_meter_radius = 50.
     s_meter_center = (140,s_meter_radius+8)
     alpha_rssi = rssi_smooth+127
     alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
 
-    x_rssi = s_meter_radius * math.cos(alpha_rssi)
-    y_rssi = s_meter_radius * math.sin(alpha_rssi)
-    s_meter_x = s_meter_center[0] + x_rssi
-    s_meter_y = s_meter_center[1] - y_rssi
-    pygame.draw.rect(sdrdisplay, YELLOW,
-                   (s_meter_center[0]-60, s_meter_center[1]-55, 2*s_meter_radius+20,s_meter_radius+20), 0)
-    pygame.draw.rect(sdrdisplay, BLACK,
-                   (s_meter_center[0]-60, s_meter_center[1]-55, 2*s_meter_radius+20,s_meter_radius+20), 3)
+    def _coords_from_angle(angle, s_meter_radius_):
+        x_ = s_meter_radius_ * math.cos(angle)
+        y_ = s_meter_radius_ * math.sin(angle)
+        s_meter_x = s_meter_center[0] + x_
+        s_meter_y = s_meter_center[1] - y_
+        return s_meter_x, s_meter_y
     
+    s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius* 0.95)
+    pygame.draw.rect(sdrdisplay, YELLOW,
+                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 0)
+    pygame.draw.rect(sdrdisplay, BLACK,
+                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 3)
+    
+    angle_list = np.linspace(0.4, math.pi-0.4, 9)
+    text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
+    for alpha_seg, msg in zip(angle_list, text_list[::-1]):
+        text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
+        smallfont.render_to(sdrdisplay, (text_x-6, text_y-2), msg, D_GREY)
+
+        seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
+        color_ =  BLACK
+        tick_rad = 2
+        if alpha_seg < 1.4:
+            color_ = RED
+            tick_rad = 3
+        pygame.draw.circle(sdrdisplay, color_, (seg_x, seg_y), tick_rad)
+    pygame.draw.circle(sdrdisplay, D_GREY, s_meter_center, 4)
+
     pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
     str_rssi = "%ddBm"%rssi_smooth
     smallfont = pygame.freetype.SysFont('Mono', 10)
@@ -361,7 +383,9 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
     #           Label   Color   Freq/Mode                       Screen position
     ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0), "big", True),
             "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0), "small", True),
-            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-80,0), "small", True),
+            "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-50,0), "small", True),
+            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_zoom_to_span(zoom))), (wf_width-180,0), "small", True),
+            "filter": (GREEN, "FILT %.1fkHz"%((hc-lc)/1000.), (wf_width-290,0), "small", True),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, 30), "small", True)
     }
     
