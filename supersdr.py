@@ -331,15 +331,15 @@ def kiwi_receive_spectrum(wf_data, white_flag=False):
     return wf_data 
 
 def cat_get_freq(cat_socket):
-    cat_socket.send("+f\n")
+    cat_socket.send("+f\n".encode())
     out = cat_socket.recv(512)
-    freq_ = int(out.split(" ")[1].split("\n")[0])/1000.
+    freq_ = int(out.decode().split(" ")[1].split("\n")[0])/1000.
     return freq_
 
 def cat_get_mode(cat_socket):
-    cat_socket.send("m\n")
+    cat_socket.send("m\n".encode())
     out = cat_socket.recv(512)
-    radio_mode_ = out.split("\n")[0]
+    radio_mode_ = out.decode().split("\n")[0]
     return radio_mode_
 
 def kiwi_set_freq_zoom(freq_, zoom_, s_):
@@ -365,8 +365,8 @@ def kiwi_set_freq_zoom(freq_, zoom_, s_):
     msg = "SET zoom=%d start=%d" % (zoom_,cnt)
     wf_stream.send_message(msg)
     if s_ and freq_ >= 100:
-        s_.send("F %d\n" % (freq_*1000))
-        out = s_.recv(512)
+        s_.send(("F %d\n" % (freq_*1000)).encode())
+        out = s_.recv(512).decode()
     return freq_
 
 def kiwi_set_audio_freq(s_, mod_, lc_, hc_, freq_):
@@ -521,7 +521,7 @@ wf_data = np.zeros((DISPLAY_HEIGHT, int(WF_BINS)))
 if cat_flag:
     cat_socket = socket.socket()
     cat_socket.connect((radiohost, radioport))
-    radio_mode = cat_get_mode()
+    radio_mode = cat_get_mode(cat_socket)
 else:
     s = None
     radio_mode = "USB"
@@ -680,32 +680,32 @@ while not wf_quit:
                 elif keys[pygame.K_u]:
                     auto_mode = False
                     if s:
-                        cat_socket.send("+M USB 2400\n")
-                        out = cat_socket.recv(512)
+                        cat_socket.send("+M USB 2400\n".encode())
+                        out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "USB"
                         click_freq = freq
                 elif keys[pygame.K_l]:
                     auto_mode = False
                     if s:
-                        cat_socket.send("+M LSB 2400\n")
-                        out = cat_socket.recv(512)
+                        cat_socket.send("+M LSB 2400\n".encode())
+                        out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "LSB"
                         click_freq = freq
                 elif keys[pygame.K_c]:
                     auto_mode = False
                     if s:
-                        cat_socket.send("+M CW 500\n")
-                        out = cat_socket.recv(512)
+                        cat_socket.send("+M CW 500\n".encode())
+                        out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "CW"
                         click_freq = freq
                 elif keys[pygame.K_a]:
                     auto_mode = False
                     if s:
-                        cat_socket.send("+M AM 6000\n")
-                        out = cat_socket.recv(512)
+                        cat_socket.send("+M AM 6000\n".encode())
+                        out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "AM"
                         click_freq = freq
@@ -771,11 +771,11 @@ while not wf_quit:
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq)
     if cat_flag:
-        new_freq = cat_get_freq()
-        radio_mode = cat_get_mode()
+        new_freq = cat_get_freq(cat_socket)
+        radio_mode = cat_get_mode(cat_socket)
         if freq != new_freq:
             freq = new_freq
-            freq = kiwi_set_freq_zoom(freq, zoom, s)
+            freq = kiwi_set_freq_zoom(freq, zoom, cat_socket)
             lc, hc = change_passband(radio_mode, delta_low, delta_high)
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
 
