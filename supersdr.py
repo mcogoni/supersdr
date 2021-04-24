@@ -392,6 +392,7 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
     #           Label   Color   Freq/Mode                       Screen position
     ts_dict = {"freq": (GREEN, "%.2fkHz %s"%(freq, radio_mode), (wf_width/2-60,0), "big", True),
             "left": (GREEN, "%.1f"%(kiwi_start_freq(freq, zoom)) ,(0,0), "small", True),
+            "kiwi": (GREY, ("kiwi:"+kiwihost)[:30] ,(230,0), "small", True),
             "right": (GREEN, "%.1f"%(kiwi_end_freq(freq, zoom)), (wf_width-50,0), "small", True),
             "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_zoom_to_span(zoom))), (wf_width-180,0), "small", True),
             "filter": (GREEN, "FILT %.1fkHz"%((hc-lc)/1000.), (wf_width-290,0), "small", True),
@@ -413,7 +414,7 @@ def update_textsurfaces(freq, zoom, radio_mode, rssi, mouse, wf_width):
         str_len = len(ts_dict[k][1])
         x_r, y_r = ts_dict[k][2]
         if ts_dict[k][4]:
-            pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len+0.5)*7, 14), 0)
+            pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len)*fontsize_*0.6, 14), 0)
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
 
 def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mouse):
@@ -529,7 +530,7 @@ if kiwi_audio>0:
         snd_stream = Stream(request_snd, stream_option_snd)
         print ("Audio data stream active...")
     except:
-        print ("Failed to connect")
+        print ("Failed to connect to Kiwi audio stream")
         exit()   
     print ("Socket open...")
 
@@ -538,7 +539,6 @@ wf_data = np.zeros((DISPLAY_HEIGHT, int(WF_BINS)))
 lc, hc = change_passband(radio_mode, delta_low, delta_high)
 
 if snd_stream:
-    
     msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
     (radio_mode.lower(), lc, hc, freq),
     "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
