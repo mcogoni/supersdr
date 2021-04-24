@@ -610,6 +610,7 @@ while not wf_quit:
     click_freq = None
     change_zoom_flag = False
     change_freq_flag = False
+    change_mode_flag = False
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
             show_help_flag = False
@@ -689,7 +690,7 @@ while not wf_quit:
                         out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "USB"
-                        click_freq = freq
+                        change_mode_flag = True
                 elif keys[pygame.K_l]:
                     auto_mode = False
                     if cat_socket:
@@ -697,7 +698,7 @@ while not wf_quit:
                         out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "LSB"
-                        click_freq = freq
+                        change_mode_flag = True
                 elif keys[pygame.K_c]:
                     auto_mode = False
                     if cat_socket:
@@ -705,7 +706,7 @@ while not wf_quit:
                         out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "CW"
-                        click_freq = freq
+                        change_mode_flag = True
                 elif keys[pygame.K_a]:
                     auto_mode = False
                     if cat_socket:
@@ -713,7 +714,7 @@ while not wf_quit:
                         out = cat_socket.recv(512).decode()
                     else:
                         radio_mode = "AM"
-                        click_freq = freq
+                        change_mode_flag = True
                 elif keys[pygame.K_f]:
                     input_freq_flag = True
                     current_string = []
@@ -766,7 +767,7 @@ while not wf_quit:
                         change_zoom_flag = True
             elif event.button == 1:
                 if radio_mode == "CW":
-                    freq -= 500./1000
+                    freq -= 500./1000 # tune CW signal taking into account cw offset
                 click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
     if auto_mode and radio_mode != get_auto_mode(freq):
@@ -784,7 +785,11 @@ while not wf_quit:
         freq = kiwi_set_freq_zoom(click_freq, zoom, cat_socket)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
-        print(freq)
+        
+    if change_mode_flag:
+        lc, hc = change_passband(radio_mode, delta_low, delta_high)
+        kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+
     if cat_flag:
         new_freq = cat_get_freq(cat_socket)
         radio_mode = cat_get_mode(cat_socket)
