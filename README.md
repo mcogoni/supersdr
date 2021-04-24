@@ -6,6 +6,9 @@ SuperSDR allows a realtime view of the spectrum waterfall and audio playback of 
 ## Prerequisites:
 Install Python 3 along with PYGAME, PYAUDIO, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;)
 ### On Windows:
+There is now a preliminary Windows executable https://github.com/mcogoni/supersdr/releases/download/1.0/WinSuperSDR.zip thanks to Giovanni Busonera.
+This version doesn't need any library nor Python environment.
+
 I don't personally use Windows, but a beta tester let me know that you can run it there:
 - Install miniconda (https://docs.conda.io/en/latest/miniconda.html) and the proposed version of Python (3.8)
 - Now open the miniconda powershell to install the packages as below:
@@ -41,11 +44,14 @@ Main key commands during use are:
 - J/K/O: increase low(J)/high(K) cut passband (SHIFT decreases), O resets defaults
 - V/B/M: volume up/down 10% or Mute
 - X: AUTO MODE Switch above/below 10 MHz
+- W/R: Write/Restore fast memory up to 10 frequencies
+- SHIFT+W: Deletes all stored memories 
 - F: enter frequency with keyboard
 - H: displays this help window
 - SHIFT+ESC: quits
 
 When connected to both a kiwisdr and to a CAT radio any click on the waterfall synchronizes the radio and, vice versa, moving the VFO on the radio, changes the center of the waterfall.
+
 
 Have fun!
 
