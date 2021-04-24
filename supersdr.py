@@ -54,22 +54,22 @@ WF_BINS  = 1024.
 DISPLAY_WIDTH = int(WF_BINS)
 DISPLAY_HEIGHT = 400
 MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
-CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels
-TENMHZ = 10000
+CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
+TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 
 # Initial KIWI receiver parameters
-on=True
-hang=False
-thresh=-75
-slope=6
-decay=4000
-gain=50
-LOW_CUT_SSB=30
-HIGH_CUT_SSB=3000
-LOW_CUT_CW=300
-HIGH_CUT_CW=800
-HIGHLOW_CUT_AM=6000
-delta_low, delta_high = 0., 0.
+on=True # AGC auto mode
+hang=False # AGC hang
+thresh=-75 # AGC threshold in dBm
+slope=6 # AGC slope decay
+decay=4000 # AGC decay time constant
+gain=50 # AGC manual gain
+LOW_CUT_SSB=30 # Bandpass low end SSB
+HIGH_CUT_SSB=3000 # Bandpass high end
+LOW_CUT_CW=300 # Bandpass for CW
+HIGH_CUT_CW=800 # High end CW
+HIGHLOW_CUT_AM=6000 # Bandpass AM
+delta_low, delta_high = 0., 0. # bandpass tuning
 
 # predefined RGB colors
 GREY = (200,200,200)
@@ -85,7 +85,8 @@ GREEN = (0,255,0)
 YELLOW = (200,180,0)
 
 ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
-ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE]
+ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
+ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE, K_KP_ENTER]
 
 HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "",
@@ -99,6 +100,7 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- F: enter frequency with keyboard",
         "- V/B: up/down volume 10%",
         "- M: mute/unmute",
+        "- S: SMETER show/hide",
         "- X: AUTO MODE ON/OFF (10 MHz mode switch)",
         "- H: displays this help window",
         "- SHIFT+ESC: quits",
@@ -107,6 +109,9 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "   --- 73 de marco/IS0KYB ---   "]
 
 font_size_dict = {"small": 12, "big": 18}
+
+def get_auto_mode(f):
+    return "USB" if f>10000 else "LSB"
 
 def s_meter_draw(rssi_smooth):
     font_size = 8
@@ -207,7 +212,6 @@ def process_audio_stream():
         return None
     #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
 
-    #samples = np.zeros((1024))
     if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
         s_meter, = struct.unpack('>H',  buffer(data[8:10]))
         rssi = 0.1 * s_meter - 127
@@ -523,7 +527,7 @@ if cat_flag:
     cat_socket.connect((radiohost, radioport))
     radio_mode = cat_get_mode(cat_socket)
 else:
-    s = None
+    cat_socket = None
     radio_mode = "USB"
 
 lc, hc = change_passband(radio_mode, delta_low, delta_high)
@@ -562,6 +566,7 @@ input_freq_flag = False
 show_help_flag =  False
 show_volume_flag =  False
 show_automode_flag = False
+s_meter_show_flag = True
 
 rssi = 0
 question = "Freq (kHz)"
@@ -712,18 +717,19 @@ while not wf_quit:
                 elif keys[pygame.K_f]:
                     input_freq_flag = True
                     current_string = []
-                    #click_freq = int(inputbox.ask(sdrdisplay, 'Freq (kHz)'))
                 elif keys[pygame.K_h]:
                     show_help_flag = True
+                elif keys[pygame.K_s]:
+                    s_meter_show_flag = False if s_meter_show_flag else True
                 elif keys[pygame.K_x]:
                     show_automode_flag = True
                     run_index_automode = run_index
-                    auto_mode = True
+                    auto_mode = False if auto_mode else True
                     click_freq = freq
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
-            else:
-                pygame.key.set_repeat(0, 200)
+            else: # manual frequency input
+                pygame.key.set_repeat(0, 200) # disabe key repeat
                 inkey = event.key
                 if inkey in ALLOWED_KEYS:
                     if inkey == pygame.K_BACKSPACE:
@@ -733,7 +739,7 @@ while not wf_quit:
                         try:
                             click_freq = int(current_string)
                         except:
-                            pass
+                            click_freq = freq
                         input_freq_flag = False
                         pygame.key.set_repeat(200, 200)
                     elif inkey == pygame.K_ESCAPE:
@@ -763,11 +769,20 @@ while not wf_quit:
                     freq -= 500./1000
                 click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
+    if auto_mode and radio_mode != get_auto_mode(freq):
+        if freq < TENMHZ:
+            radio_mode = "LSB"
+            lc, hc = change_passband(radio_mode, delta_low, delta_high)
+            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+        else:
+            radio_mode = "USB"
+            lc, hc = change_passband(radio_mode, delta_low, delta_high)
+            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+        show_automode_flag = True
+
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, cat_socket)
-        #print(snd_stream, radio_mode.lower(), lc, hc, freq)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
-
         kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         print(freq)
     if cat_flag:
@@ -779,7 +794,7 @@ while not wf_quit:
             lc, hc = change_passband(radio_mode, delta_low, delta_high)
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
 
-    mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)     
+    mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
     if random.random()>0.95:
         wf_stream.send_message('SET keepalive')
@@ -816,22 +831,14 @@ while not wf_quit:
             str_auto = "ON" if auto_mode else "OFF"
             display_msg_box(sdrdisplay, "AUTO MODE "+str_auto,pos=None, fontsize=40, color=WHITE)
 
-    rssi_smooth = np.mean(list(rssi_hist)[15:20])
-    s_meter_draw(rssi_smooth)
+    if s_meter_show_flag:
+        rssi_smooth = np.mean(list(rssi_hist)[15:20])
+        s_meter_draw(rssi_smooth)
 
 
     pygame.display.update()
     clock.tick(30)
     mouse = pygame.mouse.get_pos()
-
-    if auto_mode: 
-        if freq < TENMHZ:
-            radio_mode = "LSB"
-        else:
-            radio_mode = "USB"
-        show_automode_flag = True
-
-
 
 pygame.quit()
 try:
