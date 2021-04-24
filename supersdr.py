@@ -113,6 +113,23 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 
 font_size_dict = {"small": 12, "big": 18}
 
+
+class memory():
+    def __init__(self):
+        self.mem_list = deque([], 10)
+        self.index = 0
+    def write_mem(self, freq, radio_mode, lc, hc):
+        self.mem_list.append((freq, radio_mode, lc, hc))
+    def restore_mem(self):
+        if len(self.mem_list)>0:
+            self.index -= 1
+            self.index %= len(self.mem_list)
+            return self.mem_list[self.index]
+        else:
+            return None
+    def reset_all_mem(self):
+        self.mem_list = deque([], 10)
+
 def get_auto_mode(f):
     return "USB" if f>10000 else "LSB"
 
@@ -427,8 +444,8 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
     pygame.draw.line(surface, (250,0,0), (mouse[0], wf_height-20), (mouse[0], wf_height), 1)
 
 parser = OptionParser()
-parser.add_option("-a", "--audio", type=int,
-                  help="KiwiSDR soundstream", dest="kiwi_audio", default=1)
+parser.add_option("-a", "--audio-on",
+                  help="KiwiSDR soundstream", action="store_true")
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwi_password", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
@@ -512,8 +529,9 @@ print ("Starting to retrieve waterfall data...")
 # connect to kiwi server
 kiwisocket_snd = None
 snd_stream = None
-kiwi_audio = options["kiwi_audio"]
-if kiwi_audio>0:
+kiwi_audio = options["audio_on"]
+print(kiwi_audio)
+if kiwi_audio:
     print ("Trying to contact server...")
     try:
         kiwisocket_snd = socket.socket()
@@ -604,10 +622,14 @@ if snd_stream:
 
     kiwi_audio_stream.start_stream()
 
-rssi_maxlen = FULL_BUFF_LEN*2
+
+kiwi_memory = memory()
+
+rssi_maxlen = FULL_BUFF_LEN*2 # buffer length used to smoothen the smeter
 rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
 run_index = 0
 run_index_automode = 0
+show_bigmsg = None
 while not wf_quit:
     rssi_hist.append(rssi)
     run_index += 1
@@ -618,13 +640,29 @@ while not wf_quit:
     change_mode_flag = False
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
-            show_help_flag = False
-            show_volume_flag = False
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
                 if zoom>=12:
                     shift_mult /= 10.
+                if keys[pygame.K_w]:
+                    if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+                        kiwi_memory.reset_all_mem()
+                        show_bigmsg = "resetmemory"
+                        run_index_bigmsg = run_index
+                    else:
+                        kiwi_memory.write_mem(freq, radio_mode, lc, hc)
+                        show_bigmsg = "writememory"
+                        run_index_bigmsg = run_index
+                if keys[pygame.K_r]:
+                    run_index_bigmsg = run_index
+                    mem_tmp = kiwi_memory.restore_mem()
+                    if mem_tmp:
+                        freq, radio_mode, lc, hc = mem_tmp
+                        show_bigmsg = "restorememory"
+                        click_freq = freq
+                    else:
+                        show_bigmsg = "emptymemory"
                 if keys[pygame.K_o]:
                     click_freq = freq
                     delta_low = 0
@@ -648,20 +686,20 @@ while not wf_quit:
                 if keys[pygame.K_v]:
                     if VOLUME < 150:
                         VOLUME += 10
-                    show_volume_flag = True
-                    run_index_volume = run_index
+                    show_bigmsg = "VOLUME"
+                    run_index_bigmsg = run_index
                 if keys[pygame.K_b]:
                     if VOLUME > 0:
                         VOLUME -= 10
-                    show_volume_flag = True
-                    run_index_volume = run_index
+                    show_bigmsg = "VOLUME"
+                    run_index_bigmsg = run_index
                 if keys[pygame.K_m]:
                     if VOLUME > 0:
                         VOLUME = 0
                     else:
                         VOLUME = 100
-                    show_volume_flag = True
-                    run_index_volume = run_index
+                    show_bigmsg = "VOLUME"
+                    run_index_bigmsg = run_index
                 if keys[pygame.K_DOWN]:
                     if zoom > 0:
                         zoom -= 1
@@ -690,6 +728,8 @@ while not wf_quit:
                     click_freq = freq + 1000
                 elif keys[pygame.K_u]:
                     auto_mode = False
+                    show_bigmsg = "changemode"
+                    run_index_bigmsg = run_index
                     if cat_socket:
                         cat_socket.send("+M USB 2400\n".encode())
                         out = cat_socket.recv(512).decode()
@@ -698,6 +738,8 @@ while not wf_quit:
                         change_mode_flag = True
                 elif keys[pygame.K_l]:
                     auto_mode = False
+                    show_bigmsg = "changemode"
+                    run_index_bigmsg = run_index
                     if cat_socket:
                         cat_socket.send("+M LSB 2400\n".encode())
                         out = cat_socket.recv(512).decode()
@@ -706,6 +748,8 @@ while not wf_quit:
                         change_mode_flag = True
                 elif keys[pygame.K_c]:
                     auto_mode = False
+                    show_bigmsg = "changemode"
+                    run_index_bigmsg = run_index
                     if cat_socket:
                         cat_socket.send("+M CW 500\n".encode())
                         out = cat_socket.recv(512).decode()
@@ -714,6 +758,8 @@ while not wf_quit:
                         change_mode_flag = True
                 elif keys[pygame.K_a]:
                     auto_mode = False
+                    show_bigmsg = "changemode"
+                    run_index_bigmsg = run_index
                     if cat_socket:
                         cat_socket.send("+M AM 6000\n".encode())
                         out = cat_socket.recv(512).decode()
@@ -728,8 +774,8 @@ while not wf_quit:
                 elif keys[pygame.K_s]:
                     s_meter_show_flag = False if s_meter_show_flag else True
                 elif keys[pygame.K_x]:
-                    show_automode_flag = True
-                    run_index_automode = run_index
+                    show_bigmsg = "automode"
+                    run_index_bigmsg = run_index
                     auto_mode = False if auto_mode else True
                     click_freq = freq
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
@@ -835,17 +881,27 @@ while not wf_quit:
         display_box(sdrdisplay, question + ": " + "".join(current_string))
     elif show_help_flag:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
-    elif show_volume_flag:
-        if run_index - run_index_volume > 20:
-            show_volume_flag = False
-        vol_color = WHITE if VOLUME <= 100 else RED
-        display_msg_box(sdrdisplay, "VOLUME: %d"%(VOLUME)+'%',pos=None, fontsize=40, color=vol_color)
-    elif show_automode_flag:
-        if run_index - run_index_automode > 20:
-            show_automode_flag = False
-        else:
-            str_auto = "ON" if auto_mode else "OFF"
-            display_msg_box(sdrdisplay, "AUTO MODE "+str_auto,pos=None, fontsize=40, color=WHITE)
+    elif show_bigmsg:
+        msg_color = WHITE
+        if run_index - run_index_bigmsg > 50:
+            show_bigmsg = None
+        if "VOLUME" == show_bigmsg:
+            msg_color = WHITE if VOLUME <= 100 else RED
+            msg_text = "VOLUME: %d"%(VOLUME)+'%'
+        elif "automode" == show_bigmsg:
+            msg_text = "AUTO MODE "+("ON" if auto_mode else "OFF")
+        elif "changemode" == show_bigmsg:
+            msg_text = radio_mode
+        elif "writememory" == show_bigmsg:
+            msg_text = "Stored Memory %d"% (len(kiwi_memory.mem_list)-1)
+        elif "restorememory" == show_bigmsg:
+            msg_text = "Restored Memory %d"% kiwi_memory.index
+        elif "resetmemory" == show_bigmsg:
+            msg_text = "Reset All Memories!"
+        elif "emptymemory" == show_bigmsg:
+            msg_text = "No Memories!"
+
+        display_msg_box(sdrdisplay, msg_text, pos=None, fontsize=35, color=msg_color)
 
     if s_meter_show_flag:
         rssi_smooth = np.mean(list(rssi_hist)[15:20])
