@@ -84,6 +84,9 @@ BLUE = (0,0,255)
 GREEN = (0,255,0)
 YELLOW = (200,180,0)
 
+# setup colormap from matplotlib
+palRGB = cm.jet(range(256))[:,:3]*255
+
 ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
 ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE, K_KP_ENTER]
@@ -423,6 +426,8 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
     pygame.draw.line(surface, (250,0,0), (mouse[0], wf_height-20), (mouse[0], wf_height), 1)
 
 parser = OptionParser()
+parser.add_option("-a", "--audio", type=int,
+                  help="KiwiSDR soundstream", dest="kiwi_audio", default=1)
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwi_password", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
@@ -454,6 +459,14 @@ print ("RTX rigctld server: %s:%d" % (radiohost, radioport))
 cat_flag = True
 if not radiohost:
     cat_flag = False
+# create a socket to communicate with rigctld
+if cat_flag:
+    cat_socket = socket.socket()
+    cat_socket.connect((radiohost, radioport))
+    radio_mode = cat_get_mode(cat_socket)
+else:
+    cat_socket = None
+    radio_mode = "USB"
 
 # kiwi RX parameters
 zoom = options['zoom']
@@ -494,53 +507,47 @@ for msg in msg_list:
     wf_stream.send_message(msg)
 print ("Starting to retrieve waterfall data...")
 
-
 ########################### SND connection
 # connect to kiwi server
-print ("Trying to contact server...")
-try:
-    kiwisocket_snd = socket.socket()
-    kiwisocket_snd.connect((kiwihost, kiwiport))
-except:
-    print ("Failed to connect")
-    exit()   
-print ("Socket open...")
+kiwisocket_snd = None
+snd_stream = None
+kiwi_audio = options["kiwi_audio"]
+if kiwi_audio>0:
+    print ("Trying to contact server...")
+    try:
+        kiwisocket_snd = socket.socket()
+        kiwisocket_snd.connect((kiwihost, kiwiport))
 
-uri = '/%d/%s' % (int(time.time()), 'SND')
-handshake_snd = wsclient.ClientHandshakeProcessor(kiwisocket_snd, kiwihost, kiwiport)
-handshake_snd.handshake(uri)
-request_snd = wsclient.ClientRequest(kiwisocket_snd)
-request_snd.ws_version = mod_pywebsocket.common.VERSION_HYBI13
-stream_option_snd = StreamOptions()
-stream_option_snd.mask_send = True
-stream_option_snd.unmask_receive = False
-
-snd_stream = Stream(request_snd, stream_option_snd)
-print ("Audio data stream active...")
+        uri = '/%d/%s' % (int(time.time()), 'SND')
+        handshake_snd = wsclient.ClientHandshakeProcessor(kiwisocket_snd, kiwihost, kiwiport)
+        handshake_snd.handshake(uri)
+        request_snd = wsclient.ClientRequest(kiwisocket_snd)
+        request_snd.ws_version = mod_pywebsocket.common.VERSION_HYBI13
+        stream_option_snd = StreamOptions()
+        stream_option_snd.mask_send = True
+        stream_option_snd.unmask_receive = False
+        snd_stream = Stream(request_snd, stream_option_snd)
+        print ("Audio data stream active...")
+    except:
+        print ("Failed to connect")
+        exit()   
+    print ("Socket open...")
 
 # create a numpy array to contain the waterfall data
 wf_data = np.zeros((DISPLAY_HEIGHT, int(WF_BINS)))
-
-# create a socket to communicate with rigctld
-if cat_flag:
-    cat_socket = socket.socket()
-    cat_socket.connect((radiohost, radioport))
-    radio_mode = cat_get_mode(cat_socket)
-else:
-    cat_socket = None
-    radio_mode = "USB"
-
 lc, hc = change_passband(radio_mode, delta_low, delta_high)
 
-msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
-(radio_mode.lower(), lc, hc, freq),
-"SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
-"SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
-"SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
-print (msg_list)
-for msg in msg_list:
-    snd_stream.send_message(msg)
-time.sleep(0)
+if snd_stream:
+    
+    msg_list = ["SET auth t=kiwi p=%s"%kiwi_password, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
+    (radio_mode.lower(), lc, hc, freq),
+    "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
+    "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
+    "SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
+    print (msg_list)
+    for msg in msg_list:
+        snd_stream.send_message(msg)
+    time.sleep(0)
 
 # init pygame basic objects
 pygame.init()
@@ -554,9 +561,6 @@ pygame.display.set_icon(icon)
 pygame.display.set_caption("SuperSDR 0.0")
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 200)
-
-# setup colormap from matplotlib
-palRGB = cm.jet(range(256))[:,:3]*255
 
 wf_quit = False
 
@@ -572,32 +576,33 @@ rssi = 0
 question = "Freq (kHz)"
 current_string = []
 
-audio_buffer = []
-for k in range(FULL_BUFF_LEN*2):
-   snd_stream.send_message('SET keepalive')
-   snd_buf = process_audio_stream()
-   if snd_buf is not None:
-       audio_buffer.append(snd_buf)
+if snd_stream:
+    audio_buffer = []
+    for k in range(FULL_BUFF_LEN*2):
+       snd_stream.send_message('SET keepalive')
+       snd_buf = process_audio_stream()
+       if snd_buf is not None:
+           audio_buffer.append(snd_buf)
 
-play = pyaudio.PyAudio()
-for i in range(play.get_device_count()):
-    #print(play.get_device_info_by_index(i))
-    if play.get_device_info_by_index(i)['name'] == "pulse":
-        CARD_INDEX = i
-    else:
-        CARD_INDEX = None
+    play = pyaudio.PyAudio()
+    for i in range(play.get_device_count()):
+        #print(play.get_device_info_by_index(i))
+        if play.get_device_info_by_index(i)['name'] == "pulse":
+            CARD_INDEX = i
+        else:
+            CARD_INDEX = None
 
-# open stream using callback (3)
-kiwi_audio_stream = play.open(format=FORMAT,
-                channels=CHANNELS,
-                rate=AUDIO_RATE,
-                output=True,
-                output_device_index=CARD_INDEX,
-                frames_per_buffer=int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
-                stream_callback=callback)
+    # open stream using callback (3)
+    kiwi_audio_stream = play.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=AUDIO_RATE,
+                    output=True,
+                    output_device_index=CARD_INDEX,
+                    frames_per_buffer=int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
+                    stream_callback=callback)
 
 
-kiwi_audio_stream.start_stream()
+    kiwi_audio_stream.start_stream()
 
 rssi_maxlen = FULL_BUFF_LEN*2
 rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
@@ -774,21 +779,25 @@ while not wf_quit:
         if freq < TENMHZ:
             radio_mode = "LSB"
             lc, hc = change_passband(radio_mode, delta_low, delta_high)
-            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+            if snd_stream:
+                kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         else:
             radio_mode = "USB"
             lc, hc = change_passband(radio_mode, delta_low, delta_high)
-            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+            if snd_stream:
+                kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
         show_automode_flag = True
 
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, cat_socket)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
-        kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
-        
+        if snd_stream:
+            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+
     if change_mode_flag:
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
-        kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+        if snd_stream:
+            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
 
     if cat_flag:
         new_freq = cat_get_freq(cat_socket)
@@ -797,13 +806,15 @@ while not wf_quit:
             freq = new_freq
             freq = kiwi_set_freq_zoom(freq, zoom, cat_socket)
             lc, hc = change_passband(radio_mode, delta_low, delta_high)
-            kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
+            if snd_stream:
+                kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
 
     mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
     if random.random()>0.95:
         wf_stream.send_message('SET keepalive')
-        snd_stream.send_message('SET keepalive')
+        if snd_stream:
+            snd_stream.send_message('SET keepalive')
     
 
 #   plot horiz line to show time of freq change
