@@ -558,7 +558,7 @@ wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
-pygame.display.set_caption("SuperSDR 0.0")
+pygame.display.set_caption("SuperSDR 1.0")
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 200)
 
