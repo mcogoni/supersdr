@@ -6,11 +6,11 @@ SuperSDR allows a realtime view of the spectrum waterfall and audio playback of 
 ## Prerequisites:
 Install Python 3 along with PYGAME, PYAUDIO, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;)
 ### On Windows:
-There is now a preliminary Windows executable https://github.com/mcogoni/supersdr/releases/download/1.0/WinSuperSDR.zip thanks to Giovanni Busonera.
+There is now a preliminary Windows [executable](https://github.com/mcogoni/supersdr/releases/download/1.0/WinSuperSDR.zip) thanks to [Giovanni Busonera](https://github.com/Strato75).
 This version doesn't need any library nor Python environment.
 
 I don't personally use Windows, but a beta tester let me know that you can run it there:
-- Install miniconda (https://docs.conda.io/en/latest/miniconda.html) and the proposed version of Python (3.8)
+- Install [miniconda](https://docs.conda.io/en/latest/miniconda.html) and the proposed version of Python (3.8)
 - Now open the miniconda powershell to install the packages as below:
   * conda config --add channels conda-forge 
   * conda install pyaudio
