@@ -32,6 +32,7 @@ to just explore a local kiwisdr, or:
 ./supersdr.py --kiwiserver sibamanna.duckdns.org --kiwiport 8073 -S 192.168.1.89 -P 4532 -z 9 -f 198
 ```
 to connect to a remote kiwi AND to a local CAT radio for which ```rigctld``` is running on the server located at ```192.168.1.89```.
+Add the ```-a``` switch to activate the audio connection with the kiwi server.
 
 Just use ```--help``` to show all available command line options.
 
