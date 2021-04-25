@@ -101,6 +101,8 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- U/L/C: switches to USB, LSB, CW",
         "- F: enter frequency with keyboard",
         "- V/B: up/down volume 10%",
+        "- W/R: Write/Restore quick memory (up to 10)",
+        "- SHIFT+W: Deletes all stored memories",
         "- M: mute/unmute",
         "- S: SMETER show/hide",
         "- X: AUTO MODE ON/OFF (10 MHz mode switch)",
@@ -108,7 +110,7 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- SHIFT+ESC: quits",
         "",
         "",
-        "   --- 73 de marco/IS0KYB ---   "]
+        "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
 
 font_size_dict = {"small": 12, "big": 18}
 
@@ -266,7 +268,7 @@ def callback(in_data, frame_count, time_info, status):
     xp = np.arange(n)
 
     pyaudio_buffer = np.round(np.interp(xa,xp,popped))
-    pyaudio_buffer = kiwi_filter.lowpass(pyaudio_buffer)
+    #pyaudio_buffer = kiwi_filter.lowpass(pyaudio_buffer)
     return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
 def process_audio_stream():
@@ -689,8 +691,6 @@ while not wf_quit:
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
-                if zoom>=12:
-                    shift_mult /= 10.
                 if keys[pygame.K_w]:
                     if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
                         kiwi_memory.reset_all_mem()
@@ -757,15 +757,15 @@ while not wf_quit:
                         click_freq = freq
                         change_zoom_flag = True
                 elif keys[pygame.K_LEFT]:
-                    if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):                    
-                        if radio_mode!="CW":
-                            click_freq = round(freq - 1*shift_mult)
+                    if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):
+                        if radio_mode != "CW" and zoom < 11:
+                            click_freq = round(freq - 1.*shift_mult)
                         else:
                             click_freq = (freq - 0.1*shift_mult)
                 elif keys[pygame.K_RIGHT]:
                     if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):                    
-                        if radio_mode!="CW":
-                            click_freq = round(freq + 1*shift_mult)
+                        if radio_mode != "CW" and zoom < 11:
+                            click_freq = round(freq + 1.*shift_mult)
                         else:
                             click_freq = (freq + 0.1*shift_mult)
                 elif keys[pygame.K_PAGEDOWN]:
@@ -827,7 +827,7 @@ while not wf_quit:
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
             else: # manual frequency input
-                pygame.key.set_repeat(0, 200) # disabe key repeat
+                pygame.key.set_repeat(0, 100) # disabe key repeat
                 inkey = event.key
                 if inkey in ALLOWED_KEYS:
                     if inkey == pygame.K_BACKSPACE:
