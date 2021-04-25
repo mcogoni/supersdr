@@ -5,7 +5,6 @@ from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 from matplotlib import cm
 import numpy as np
-from scipy import signal
 
 import sys
 print (sys.version_info)
@@ -113,6 +112,20 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 
 font_size_dict = {"small": 12, "big": 18}
 
+class filter():
+    def __init__(self, fl, fs):
+        b = fl/fs
+        N = int(np.ceil((4 / b)))
+        if not N % 2: N += 1  # Make sure that N is odd.
+        print(N)
+        self.h = np.sinc(2. * fl / fs * (np.arange(N) - (N - 1) / 2.))
+        w = np.blackman(N)
+        # Multiply sinc filter by window.
+        self.h = self.h * w
+        # Normalize to get unity gain.
+        self.h = self.h / np.sum(self.h)
+    def lowpass(self, signal):
+        return np.convolve(signal, self.h, mode="same")
 
 class memory():
     def __init__(self):
@@ -186,7 +199,7 @@ def change_passband(radio_mode_, delta_low_, delta_high_):
         lc_ = -HIGH_CUT_SSB-delta_high_
         hc_ = -LOW_CUT_SSB-delta_low_
     elif radio_mode_ == "AM":
-        lc_ = -HIGHLOW_CUT_AM-delta_high_
+        lc_ = -HIGHLOW_CUT_AM-delta_low_
         hc_ = HIGHLOW_CUT_AM+delta_high_
     elif radio_mode_ == "CW":
         lc_ = LOW_CUT_CW+delta_low_
@@ -194,7 +207,7 @@ def change_passband(radio_mode_, delta_low_, delta_high_):
     return lc_, hc_
 
 
-def callback(in_data, frame_count, time_info, status):
+def callback_ok(in_data, frame_count, time_info, status):
     global audio_buffer
 #    play_time = CHUNKS * KIWI_SAMPLES_PER_FRAME / AUDIO_RATE
     samples_got = 0
@@ -224,6 +237,37 @@ def callback(in_data, frame_count, time_info, status):
 
     pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
     return (pyaudio_buffer, pyaudio.paContinue)
+
+def callback(in_data, frame_count, time_info, status):
+    global audio_buffer
+    samples_got = 0
+    audio_buf_start_len = len(audio_buffer)
+    while audio_buf_start_len+samples_got <= FULL_BUFF_LEN:
+        snd_buf = process_audio_stream()
+        if snd_buf is not None:
+            audio_buffer.append(snd_buf)
+            samples_got += 1
+        else:
+            break
+    delta_buff = max(0, FULL_BUFF_LEN - len(audio_buffer))
+    #print(FULL_BUFF_LEN, len(audio_buffer), samples_got)
+
+    # emergency buffer fillup with silence
+    while len(audio_buffer) <= FULL_BUFF_LEN:
+        print("!", end=' ')
+        audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
+        
+    popped = audio_buffer.pop(0)
+    for _ in range(CHUNKS-1):
+        popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
+    popped = popped.astype(np.float64) * (VOLUME/100)
+    n = len(popped)
+    xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
+    xp = np.arange(n)
+
+    pyaudio_buffer = np.round(np.interp(xa,xp,popped))
+    pyaudio_buffer = kiwi_filter.lowpass(pyaudio_buffer)
+    return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
 def process_audio_stream():
     global rssi
@@ -594,6 +638,8 @@ rssi = 0
 question = "Freq (kHz)"
 current_string = []
 
+kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
+
 if snd_stream:
     audio_buffer = []
     for k in range(FULL_BUFF_LEN*2):
@@ -668,18 +714,18 @@ while not wf_quit:
                     delta_low = 0
                     delta_high = 0
                 if keys[pygame.K_j]:
-                    click_freq = freq
+                    change_mode_flag = True
                     delta = -100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 100
                     delta_low += delta
-                    if abs(delta_low) > 3000:
+                    if delta_low > 3000:
                         delta_low = 3000
                     elif delta_low < -3000:
-                        delta_low = 3000
+                        delta_low = -3000
                 if keys[pygame.K_k]:
-                    click_freq = freq
+                    change_mode_flag = True
                     delta = -100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 100
                     delta_high += delta
-                    if abs(delta_high) > 3000:
+                    if delta_high > 3000:
                         delta_high = 3000
                     elif delta_high < -3000:
                         delta_high = -3000.
