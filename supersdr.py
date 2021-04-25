@@ -119,15 +119,19 @@ class filter():
         b = fl/fs
         N = int(np.ceil((4 / b)))
         if not N % 2: N += 1  # Make sure that N is odd.
-        print(N)
         self.h = np.sinc(2. * fl / fs * (np.arange(N) - (N - 1) / 2.))
         w = np.blackman(N)
+
         # Multiply sinc filter by window.
         self.h = self.h * w
         # Normalize to get unity gain.
         self.h = self.h / np.sum(self.h)
     def lowpass(self, signal):
-        return np.convolve(signal, self.h, mode="same")
+        filtered_sig = np.convolve(signal, self.h, mode="same")
+        #print(len(filtered_sig))
+        #filtered_sig[-100:-1]*np.linspace(1.0, 0.0, 99)
+        #filtered_sig[0:100]*np.linspace(0.0, 1.0, 100)
+        return filtered_sig
 
 class memory():
     def __init__(self):
@@ -209,7 +213,7 @@ def change_passband(radio_mode_, delta_low_, delta_high_):
     return lc_, hc_
 
 
-def callback_ok(in_data, frame_count, time_info, status):
+def callback(in_data, frame_count, time_info, status):
     global audio_buffer
 #    play_time = CHUNKS * KIWI_SAMPLES_PER_FRAME / AUDIO_RATE
     samples_got = 0
@@ -240,7 +244,7 @@ def callback_ok(in_data, frame_count, time_info, status):
     pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
     return (pyaudio_buffer, pyaudio.paContinue)
 
-def callback(in_data, frame_count, time_info, status):
+def callback_new(in_data, frame_count, time_info, status):
     global audio_buffer
     samples_got = 0
     audio_buf_start_len = len(audio_buffer)
@@ -264,11 +268,11 @@ def callback(in_data, frame_count, time_info, status):
         popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
     popped = popped.astype(np.float64) * (VOLUME/100)
     n = len(popped)
-    xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
-    xp = np.arange(n)
-
-    pyaudio_buffer = np.round(np.interp(xa,xp,popped))
-    #pyaudio_buffer = kiwi_filter.lowpass(pyaudio_buffer)
+    # oversample
+    pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
+    pyaudio_buffer[::4] = popped
+    # low pass filter
+    pyaudio_buffer = kiwi_filter.lowpass(pyaudio_buffer) * SAMPLE_RATIO
     return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
 def process_audio_stream():
@@ -636,7 +640,7 @@ show_volume_flag =  False
 show_automode_flag = False
 s_meter_show_flag = True
 
-rssi = 0
+rssi = -127
 question = "Freq (kHz)"
 current_string = []
 
@@ -667,9 +671,7 @@ if snd_stream:
                     frames_per_buffer=int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
                     stream_callback=callback)
 
-
     kiwi_audio_stream.start_stream()
-
 
 kiwi_memory = memory()
 
@@ -949,7 +951,7 @@ while not wf_quit:
 
         display_msg_box(sdrdisplay, msg_text, pos=None, fontsize=35, color=msg_color)
 
-    if s_meter_show_flag:
+    if s_meter_show_flag and kiwisocket_snd:
         rssi_smooth = np.mean(list(rssi_hist)[15:20])
         s_meter_draw(rssi_smooth)
 
