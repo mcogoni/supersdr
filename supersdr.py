@@ -129,9 +129,6 @@ class filter():
 
     def lowpass(self, signal):
         filtered_sig = np.convolve(signal, self.h, mode="valid")
-        #print(len(filtered_sig))
-        #filtered_sig[-100:-1]*np.linspace(1.0, 0.0, 99)
-        #filtered_sig[0:100]*np.linspace(0.0, 1.0, 100)
         return filtered_sig
 
 class memory():
@@ -466,7 +463,7 @@ def draw_lines(surface, center_freq_bin, freq, wf_height, radio_mode, zoom, mous
 
 parser = OptionParser()
 parser.add_option("-a", "--audio-on",
-                  help="KiwiSDR soundstream", action="store_true")
+                  help="enable KiwiSDR soundstream", action="store_true")
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwi_password", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
@@ -607,7 +604,6 @@ auto_mode = True
 new_freq = freq
 input_freq_flag = False
 show_help_flag =  False
-show_volume_flag =  False
 show_automode_flag = False
 s_meter_show_flag = True
 
@@ -665,6 +661,7 @@ while not wf_quit:
     change_mode_flag = False
     for event in pygame.event.get():
         if event.type == pygame.KEYDOWN:
+            show_help_flag =  False
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 shift_mult = 10. if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else 1.
@@ -880,7 +877,7 @@ while not wf_quit:
 
     mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
-    if random.random()>0.5:
+    if random.random()>0.95:
         wf_stream.send_message('SET keepalive')
         if snd_stream:
             snd_stream.send_message('SET keepalive')
@@ -906,7 +903,7 @@ while not wf_quit:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_bigmsg:
         msg_color = WHITE
-        if run_index - run_index_bigmsg > 50:
+        if run_index - run_index_bigmsg > 25:
             show_bigmsg = None
         if "VOLUME" == show_bigmsg:
             msg_color = WHITE if VOLUME <= 100 else RED
