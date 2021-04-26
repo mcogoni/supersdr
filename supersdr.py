@@ -33,7 +33,7 @@ from mod_pywebsocket.stream import StreamOptions
 from optparse import OptionParser
 
 import pyaudio
-
+import pickle
 
 # Pyaudio options
 FORMAT = pyaudio.paInt16
@@ -119,15 +119,16 @@ class filter():
         b = fl/fs
         N = int(np.ceil((4 / b)))
         if not N % 2: N += 1  # Make sure that N is odd.
+        self.n_tap = N
         self.h = np.sinc(2. * fl / fs * (np.arange(N) - (N - 1) / 2.))
         w = np.blackman(N)
-
         # Multiply sinc filter by window.
         self.h = self.h * w
         # Normalize to get unity gain.
         self.h = self.h / np.sum(self.h)
+
     def lowpass(self, signal):
-        filtered_sig = np.convolve(signal, self.h, mode="same")
+        filtered_sig = np.convolve(signal, self.h, mode="valid")
         #print(len(filtered_sig))
         #filtered_sig[-100:-1]*np.linspace(1.0, 0.0, 99)
         #filtered_sig[0:100]*np.linspace(0.0, 1.0, 100)
@@ -214,8 +215,7 @@ def change_passband(radio_mode_, delta_low_, delta_high_):
 
 
 def callback(in_data, frame_count, time_info, status):
-    global audio_buffer
-#    play_time = CHUNKS * KIWI_SAMPLES_PER_FRAME / AUDIO_RATE
+    global audio_buffer, buff_idx, old_buffer
     samples_got = 0
     audio_buf_start_len = len(audio_buffer)
     while audio_buf_start_len+samples_got <= FULL_BUFF_LEN:
@@ -225,54 +225,25 @@ def callback(in_data, frame_count, time_info, status):
             samples_got += 1
         else:
             break
-    delta_buff = max(0, FULL_BUFF_LEN - len(audio_buffer))
-    #print(FULL_BUFF_LEN, len(audio_buffer), samples_got)
-
     # emergency buffer fillup with silence
     while len(audio_buffer) <= FULL_BUFF_LEN:
         print("!", end=' ')
         audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
-        
-    popped = audio_buffer.pop(0)
-    for _ in range(CHUNKS-1):
-        popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
+    
+    popped = np.array(audio_buffer[:CHUNKS]).flatten()
     popped = popped.astype(np.float64) * (VOLUME/100)
-    n = len(popped)
-    xa = np.arange(round(n*SAMPLE_RATIO))/SAMPLE_RATIO
-    xp = np.arange(n)
+    audio_buffer = audio_buffer[CHUNKS:] # removed used chunks
 
-    pyaudio_buffer = np.round(np.interp(xa,xp,popped)).astype(np.int16)
-    return (pyaudio_buffer, pyaudio.paContinue)
-
-def callback_new(in_data, frame_count, time_info, status):
-    global audio_buffer
-    samples_got = 0
-    audio_buf_start_len = len(audio_buffer)
-    while audio_buf_start_len+samples_got <= FULL_BUFF_LEN:
-        snd_buf = process_audio_stream()
-        if snd_buf is not None:
-            audio_buffer.append(snd_buf)
-            samples_got += 1
-        else:
-            break
-    delta_buff = max(0, FULL_BUFF_LEN - len(audio_buffer))
-    #print(FULL_BUFF_LEN, len(audio_buffer), samples_got)
-
-    # emergency buffer fillup with silence
-    while len(audio_buffer) <= FULL_BUFF_LEN:
-        print("!", end=' ')
-        audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
-        
-    popped = audio_buffer.pop(0)
-    for _ in range(CHUNKS-1):
-        popped = np.concatenate((popped, audio_buffer.pop(0)), axis=0)
-    popped = popped.astype(np.float64) * (VOLUME/100)
     n = len(popped)
     # oversample
     pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
-    pyaudio_buffer[::4] = popped
+    pyaudio_buffer[::SAMPLE_RATIO] = popped
+    pyaudio_buffer = np.concatenate([old_buffer[-(kiwi_filter.n_tap-1):], pyaudio_buffer])
+    
     # low pass filter
+    old_buffer = np.copy(pyaudio_buffer)
     pyaudio_buffer = kiwi_filter.lowpass(pyaudio_buffer) * SAMPLE_RATIO
+
     return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
 def process_audio_stream():
@@ -647,7 +618,9 @@ current_string = []
 kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
 
 if snd_stream:
+    old_buffer = np.zeros((CHUNKS*AUDIO_RATE))
     audio_buffer = []
+
     for k in range(FULL_BUFF_LEN*2):
        snd_stream.send_message('SET keepalive')
        snd_buf = process_audio_stream()
@@ -668,12 +641,14 @@ if snd_stream:
                     rate=AUDIO_RATE,
                     output=True,
                     output_device_index=CARD_INDEX,
-                    frames_per_buffer=int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
+                    frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
                     stream_callback=callback)
 
     kiwi_audio_stream.start_stream()
 
 kiwi_memory = memory()
+
+buff_idx = 0
 
 rssi_maxlen = FULL_BUFF_LEN*2 # buffer length used to smoothen the smeter
 rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
@@ -905,7 +880,7 @@ while not wf_quit:
 
     mouse_khz = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
-    if random.random()>0.95:
+    if random.random()>0.5:
         wf_stream.send_message('SET keepalive')
         if snd_stream:
             snd_stream.send_message('SET keepalive')
