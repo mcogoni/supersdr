@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import pygame
+import pyaudio
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 from matplotlib import cm
@@ -22,7 +23,6 @@ import array
 import socket
 import time
 import math
-from datetime import datetime
 from collections import deque
 
 from kiwi import wsclient
@@ -32,8 +32,6 @@ from mod_pywebsocket.stream import StreamOptions
 
 from optparse import OptionParser
 
-import pyaudio
-import pickle
 
 # Pyaudio options
 FORMAT = pyaudio.paInt16
@@ -41,7 +39,7 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 16
+CHUNKS = 14
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 20
 VOLUME = 100
@@ -114,6 +112,16 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 
 font_size_dict = {"small": 12, "big": 18}
 
+# Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
+# and https://www.iaru-r1.org/reference/band-plans/hf-bandplan/
+automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
+                "LSB": ((1840,1850),(3600,3800),(7060,7200)),
+                "CW": ((1810, 1840),(3500,3600),(7000,7060),(10100, 10150),(14000,14100),
+                    (18068,18110),(21000,21150),(24890,24930),(28000,28190)),
+                "AM": ((148,283),(520,1720),(2300,2500),(3200,3400),(3900,4000),(4750,5060),
+                    (5900,6200),(7200,7450),(9400,9900),(11600,12100),(13570,13870),(15100,15800),
+                    (17480,17900),(18900,19020),(21450,21850),(25670,26100))}
+
 class filter():
     def __init__(self, fl, fs):
         b = fl/fs
@@ -147,7 +155,13 @@ class memory():
     def reset_all_mem(self):
         self.mem_list = deque([], 10)
 
-def get_auto_mode(f):
+def get_auto_mode(f, automode_dict):
+    f = round(f)
+    for mode_ in automode_dict:
+        for rng in automode_dict[mode_]:
+            if f in range(rng[0], rng[1]):
+                print(f, rng, mode_)
+                return mode_
     return "USB" if f>10000 else "LSB"
 
 def s_meter_draw(rssi_smooth):
@@ -604,7 +618,6 @@ auto_mode = True
 new_freq = freq
 input_freq_flag = False
 show_help_flag =  False
-show_automode_flag = False
 s_meter_show_flag = True
 
 rssi = -127
@@ -841,21 +854,10 @@ while not wf_quit:
                     freq -= 500./1000 # tune CW signal taking into account cw offset
                 click_freq = kiwi_bins_to_khz(freq, mouse[0], zoom)
 
-    if auto_mode and radio_mode != get_auto_mode(freq):
-        if freq < TENMHZ:
-            radio_mode = "LSB"
-            lc, hc = change_passband(radio_mode, delta_low, delta_high)
-            if snd_stream:
-                kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
-        else:
-            radio_mode = "USB"
-            lc, hc = change_passband(radio_mode, delta_low, delta_high)
-            if snd_stream:
-                kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
-        show_automode_flag = True
-
     if click_freq or change_zoom_flag:
         freq = kiwi_set_freq_zoom(click_freq, zoom, cat_socket)
+        if auto_mode: 
+            radio_mode = get_auto_mode(freq, automode_dict)
         lc, hc = change_passband(radio_mode, delta_low, delta_high)
         if snd_stream:
             kiwi_set_audio_freq(snd_stream, radio_mode.lower(), lc, hc, freq)
