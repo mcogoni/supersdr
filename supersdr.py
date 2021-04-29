@@ -105,7 +105,8 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- SHIFT+W: Deletes all stored memories",
         "- M: mute/unmute",
         "- S: SMETER show/hide",
-        "- X: AUTO MODE ON/OFF (10 MHz mode switch)",
+        "- Z: SYNC mode for CAT and KIWI audio ON/OFF",
+        "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- H: displays this help window",
         "- SHIFT+ESC: quits",
         "",
@@ -633,11 +634,11 @@ def draw_lines(surface, wf_height, radio_mode, mouse):
     snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
     if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
         # carrier line
-        pygame.draw.line(surface, RED, (snd_freq_bin, 0), (snd_freq_bin, wf_height), 2)
+        pygame.draw.line(surface, RED, (snd_freq_bin, wf_height-20), (snd_freq_bin, wf_height), 2)
     if not cat_snd_link_flag:
         tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
         # tune wf line
-        pygame.draw.line(surface, D_RED, (tune_freq_bin, 0), (tune_freq_bin, wf_height), 1)
+        pygame.draw.line(surface, D_RED, (tune_freq_bin, wf_height-20), (tune_freq_bin, wf_height), 1)
         
     lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
     line_bin = snd_freq_bin + lc_bin
@@ -657,13 +658,13 @@ def draw_lines(surface, wf_height, radio_mode, mouse):
         line_bin = tune_freq_bin + lc_bin + 1
         if line_bin>0 and line_bin< WF_BINS:
             # low cut line
-            pygame.draw.line(surface, (0,200,200), (line_bin, wf_height/20), (line_bin, wf_height), 1)
+            pygame.draw.line(surface, YELLOW, (line_bin, wf_height/20), (line_bin, wf_height), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
         line_bin = tune_freq_bin + hc_bin
         if line_bin>0 and line_bin< WF_BINS:
             # high cut line
-            pygame.draw.line(surface, (0,200,0), (line_bin, wf_height/20), (line_bin, wf_height), 1)
+            pygame.draw.line(surface, YELLOW, (line_bin, wf_height/20), (line_bin, wf_height), 1)
 
 
 parser = OptionParser()
