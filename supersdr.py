@@ -145,8 +145,10 @@ class memory():
     def __init__(self):
         self.mem_list = deque([], 10)
         self.index = 0
+
     def write_mem(self, freq, radio_mode, lc, hc):
         self.mem_list.append((freq, radio_mode, lc, hc))
+    
     def restore_mem(self):
         if len(self.mem_list)>0:
             self.index -= 1
@@ -154,6 +156,7 @@ class memory():
             return self.mem_list[self.index]
         else:
             return None
+    
     def reset_all_mem(self):
         self.mem_list = deque([], 10)
 
@@ -297,7 +300,7 @@ class kiwi_waterfall():
                 self.zoom_to_span()
         self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         if zoom_>0 and actual_freq<=0:
-            self.freq = zoom_to_span()
+            self.freq = self.zoom_to_span()
             self.start_freq()
             self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
@@ -383,7 +386,7 @@ class kiwi_sound():
             return None
 
     def set_mode_freq_pb(self):
-        print (self.radio_mode, self.lc, self.hc, self.freq)
+        #print (self.radio_mode, self.lc, self.hc, self.freq)
         msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (self.radio_mode.lower(), self.lc, self.hc, self.freq)
         self.stream.send_message(msg)
 
@@ -596,8 +599,9 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
 
 def draw_lines(surface, wf_height, radio_mode, mouse):
     center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
-    pygame.draw.line(surface, RED, (center_freq_bin, 0), (center_freq_bin, wf_height), 2)
-    pygame.draw.line(surface, (250,0,0), (mouse[0], wf_height-20), (mouse[0], wf_height), 1)
+    pygame.draw.line(surface, RED, (center_freq_bin, 20), (center_freq_bin, 30), 3)
+    if pygame.mouse.get_focused():
+        pygame.draw.line(surface, (250,0,0), (mouse[0], wf_height-20), (mouse[0], wf_height), 1)
 
     snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
 
@@ -635,6 +639,7 @@ parser.add_option("-f", "--freq", type=int,
 options = vars(parser.parse_args()[0])
 kiwi_audio = options["audio_on"]
 freq = options['freq'] # this is the central freq in kHz
+zoom = options['zoom'] 
 
 kiwi_wf = kiwi_waterfall(options)
 
@@ -642,11 +647,15 @@ kiwi_wf = kiwi_waterfall(options)
 radiohost = options['radioserver']
 radioport = options['radioport']
 if radiohost:
-    cat_radio = cat(radiohost, radioport)
-    if not freq:
-        freq = cat_radio.freq
-    radio_mode = cat_radio.radio_mode
+    try:
+        cat_radio = cat(radiohost, radioport)
+        if not freq:
+            freq = cat_radio.freq
+        radio_mode = cat_radio.radio_mode
+    except:
+        cat_radio = None
 else:
+    cat_radio = None
     radio_mode = "USB"
 
 
@@ -716,7 +725,17 @@ if kiwi_snd:
 
 kiwi_memory = memory()
 
-buff_idx = 0
+kiwi_wf.set_freq_zoom(freq, zoom)
+kiwi_snd.freq = freq
+kiwi_snd.radio_mode = radio_mode
+lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+kiwi_snd.set_mode_freq_pb()
+
+# print(freq, zoom, radio_mode)
+# print("W/F", kiwi_wf.freq, 
+#     "SND", kiwi_snd.freq, kiwi_snd.radio_mode,
+#     "CAT",cat_radio.freq, cat_radio.radio_mode)
+
 
 # Operating modes:
 wf_cat_link_flag = True
@@ -734,16 +753,16 @@ while not wf_quit:
     rssi_hist.append(rssi)
     run_index += 1
     mouse = pygame.mouse.get_pos()
+
     click_freq = None
     manual_freq = None
     manual_zoom = None
     manual_mode = None
-    change_zoom_flag = False
-    change_freq_flag = False
-    change_mode_flag = False
     change_passband_flag = False
 
     for event in pygame.event.get():
+        mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
+
         if event.type == pygame.KEYDOWN:
             show_help_flag =  False
             if not input_freq_flag:
@@ -940,37 +959,54 @@ while not wf_quit:
             kiwi_snd.radio_mode = manual_mode
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
             kiwi_snd.set_mode_freq_pb()
-        # if cat_radio:
-        #     cat_radio.set_mode("USB")
+        if cat_radio:
+            cat_radio.set_mode("USB")
 
 
     # Change frequency by KB or WF zoom: numbers, arrows and pgup/down, mouse scroll
     if manual_freq:
         kiwi_wf.set_freq_zoom(manual_freq, kiwi_wf.zoom)
+        if wf_snd_link_flag:
+            kiwi_snd.freq = kiwi_wf.freq
+            kiwi_snd.set_mode_freq_pb()
+
     if manual_zoom:
-        kiwi_wf.set_freq_zoom(kiwi_snd.freq, manual_zoom)
+        kiwi_wf.set_freq_zoom(kiwi_snd.freq, manual_zoom) # for now, the arrow zoom will be centered on the SND freq
+        if wf_snd_link_flag:
+            kiwi_snd.freq = kiwi_wf.freq
+            kiwi_snd.set_mode_freq_pb()
     # Change KIWI SND frequency
-    if click_freq:
+    if click_freq and kiwi_snd:
         kiwi_snd.freq = click_freq
         kiwi_snd.set_mode_freq_pb()
 
-    if cat_snd_link_flag:
-        kiwi_snd.freq = cat_radio.get_freq()
-        kiwi_snd.radio_mode = cat_radio.get_mode()
-        kiwi_snd.set_mode_freq_pb()
+        if wf_snd_link_flag:
+            kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
+
+
+    if cat_radio and cat_snd_link_flag:
+        if manual_mode:
+            cat_radio.set_mode(kiwi_snd.radio_mode)
+        if click_freq or manual_freq:
+            cat_radio.set_freq(kiwi_snd.freq + 0.5 if kiwi_snd.radio_mode=="CW" else 0.)
+        
+        cat_radio.get_freq()
+        if kiwi_snd.freq != (cat_radio.freq - 0.5 if kiwi_snd.radio_mode=="CW" else 0.):
+            kiwi_snd.freq = cat_radio.freq - 0.5 if kiwi_snd.radio_mode=="CW" else 0.
+            kiwi_snd.radio_mode = cat_radio.get_mode()
+            kiwi_snd.set_mode_freq_pb()
+            if wf_cat_link_flag:
+                kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
 
     # print("W/F", kiwi_wf.freq, 
     #     "SND", kiwi_snd.freq, kiwi_snd.radio_mode,
     #     "CAT",cat_radio.freq, cat_radio.radio_mode)
 
-
-    mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
-
     if random.random()>0.95:
         kiwi_wf.wf_stream.send_message('SET keepalive')
 
 #   plot horiz line to show time of freq change
-    kiwi_wf.receive_spectrum(True if click_freq or change_zoom_flag else False)
+    kiwi_wf.receive_spectrum(True if click_freq or manual_zoom else False)
 
     surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
 
@@ -1013,7 +1049,7 @@ while not wf_quit:
         s_meter_draw(rssi_smooth)
 
     pygame.display.update()
-    clock.tick(50)
+    clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
 pygame.quit()
