@@ -116,13 +116,6 @@ font_size_dict = {"small": 12, "big": 18}
 
 # Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
 # and https://www.iaru-r1.org/reference/band-plans/hf-bandplan/
-automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
-                "LSB": ((1840,1850),(3600,3800),(7060,7200)),
-                "CW": ((1810, 1840),(3500,3600),(7000,7060),(10100, 10150),(14000,14100),
-                    (18068,18110),(21000,21150),(24890,24930),(28000,28190)),
-                "AM": ((148,283),(520,1720),(2300,2500),(3200,3400),(3900,4000),(4750,5060),
-                    (5900,6200),(7200,7450),(9400,9900),(11600,12100),(13570,13870),(15100,15800),
-                    (17480,17900),(18900,19020),(21450,21850),(25670,26100))}
 
 class filter():
     def __init__(self, fl, fs):
@@ -427,7 +420,15 @@ class kiwi_sound():
         self.lc, self.hc = lc_, hc_
         return lc_, hc_
 
-def get_auto_mode(f, automode_dict):
+def get_auto_mode(f):
+    automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
+                "LSB": ((1840,1850),(3600,3800),(7060,7200)),
+                "CW": ((1810, 1840),(3500,3600),(7000,7060),(10100, 10150),(14000,14100),
+                    (18068,18110),(21000,21150),(24890,24930),(28000,28190)),
+                "AM": ((148,283),(520,1720),(2300,2500),(3200,3400),(3900,4000),(4750,5060),
+                    (5900,6200),(7200,7450),(9400,9900),(11600,12100),(13570,13870),(15100,15800),
+                    (17480,17900),(18900,19020),(21450,21850),(25670,26100))}
+
     f = round(f)
     for mode_ in automode_dict:
         for rng in automode_dict[mode_]:
@@ -608,12 +609,14 @@ def draw_lines(surface, wf_height, radio_mode, mouse):
     if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
         # carrier line
         pygame.draw.line(surface, RED, (snd_freq_bin, 0), (snd_freq_bin, wf_height), 2)
-        lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
-        line_bin = snd_freq_bin + lc_bin
+    lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
+    line_bin = snd_freq_bin + lc_bin
+    if line_bin>0 and line_bin< WF_BINS:
         # low cut line
         pygame.draw.line(surface, (0,200,200), (line_bin, wf_height/20), (line_bin, wf_height), 1)
-        hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
-        line_bin = snd_freq_bin + hc_bin
+    hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
+    line_bin = snd_freq_bin + hc_bin
+    if line_bin>0 and line_bin< WF_BINS:
         # high cut line
         pygame.draw.line(surface, (0,200,0), (line_bin, wf_height/20), (line_bin, wf_height), 1)
 
@@ -695,7 +698,7 @@ current_string = []
 
 kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
 
-if kiwi_snd:
+if kiwi_snd and kiwi_audio:
     old_buffer = np.zeros((kiwi_filter.n_tap))
     audio_buffer = []
 
@@ -895,7 +898,12 @@ while not wf_quit:
                     show_bigmsg = "automode"
                     run_index_bigmsg = run_index
                     auto_mode = False if auto_mode else True
-                    click_freq = kiwi_wf.freq
+                    if auto_mode:
+                        kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
+                        lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+                        kiwi_snd.set_mode_freq_pb()
+                        if cat_radio:
+                            cat_radio.set_mode(kiwi_snd.radio_mode)
 
                 # Quit SuperSDR
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
@@ -959,15 +967,15 @@ while not wf_quit:
             kiwi_snd.radio_mode = manual_mode
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
             kiwi_snd.set_mode_freq_pb()
-        if cat_radio:
-            cat_radio.set_mode("USB")
-
 
     # Change frequency by KB or WF zoom: numbers, arrows and pgup/down, mouse scroll
     if manual_freq:
         kiwi_wf.set_freq_zoom(manual_freq, kiwi_wf.zoom)
         if wf_snd_link_flag:
             kiwi_snd.freq = kiwi_wf.freq
+            if auto_mode:
+                kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
+                lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
             kiwi_snd.set_mode_freq_pb()
 
     if manual_zoom:
@@ -976,10 +984,12 @@ while not wf_quit:
             kiwi_snd.freq = kiwi_wf.freq
             kiwi_snd.set_mode_freq_pb()
     # Change KIWI SND frequency
-    if click_freq and kiwi_snd:
+    if click_freq:
         kiwi_snd.freq = click_freq
+        if auto_mode:
+            kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
+            lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
         kiwi_snd.set_mode_freq_pb()
-
         if wf_snd_link_flag:
             kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
 
@@ -987,16 +997,27 @@ while not wf_quit:
     if cat_radio and cat_snd_link_flag:
         if manual_mode:
             cat_radio.set_mode(kiwi_snd.radio_mode)
-        if click_freq or manual_freq:
-            cat_radio.set_freq(kiwi_snd.freq + 0.5 if kiwi_snd.radio_mode=="CW" else 0.)
-        
-        cat_radio.get_freq()
-        if kiwi_snd.freq != (cat_radio.freq - 0.5 if kiwi_snd.radio_mode=="CW" else 0.):
-            kiwi_snd.freq = cat_radio.freq - 0.5 if kiwi_snd.radio_mode=="CW" else 0.
+        elif click_freq or manual_freq:
+            cat_radio.set_mode(kiwi_snd.radio_mode)
+            cat_radio.set_freq(kiwi_snd.freq + (0.5 if kiwi_snd.radio_mode=="CW" else 0.))
+        else:
+            cat_radio.get_freq()
+            kiwi_snd.freq = cat_radio.freq - (0.5 if kiwi_snd.radio_mode=="CW" else 0.)
             kiwi_snd.radio_mode = cat_radio.get_mode()
+            lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
             kiwi_snd.set_mode_freq_pb()
-            if wf_cat_link_flag:
-                kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
+            if wf_cat_link_flag: # shift WF by half span when SND outside WF
+                if kiwi_snd.freq < kiwi_wf.start_f_khz:
+                    kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
+                elif kiwi_snd.freq > kiwi_wf.end_f_khz:
+                    kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+
+    if cat_radio and wf_cat_link_flag: # shift WF by half span when CAT outside WF
+        if kiwi_wf.freq < kiwi_wf.start_f_khz:
+            kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
+        elif kiwi_wf.freq > kiwi_wf.end_f_khz:
+            kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+
 
     # print("W/F", kiwi_wf.freq, 
     #     "SND", kiwi_snd.freq, kiwi_snd.radio_mode,
@@ -1044,7 +1065,7 @@ while not wf_quit:
 
         display_msg_box(sdrdisplay, msg_text, pos=None, fontsize=35, color=msg_color)
 
-    if s_meter_show_flag and kiwi_snd:
+    if s_meter_show_flag and kiwi_audio:
         rssi_smooth = np.mean(list(rssi_hist)[15:20])
         s_meter_draw(rssi_smooth)
 
