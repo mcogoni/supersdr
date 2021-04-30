@@ -5,6 +5,7 @@ There are three main items that may be independently controlled:
  - the WATERFALL, that may be linked to the CAT radio or to the mouse/keyboard tuning;
  - the RECEIVER, that may be tuned everywhere on the HF bands;
  - the CAT radio that serves as the main tuning method.
+ 
  All three may be strictly intelinked, or they may be set up separately depending on the operating mode:
  - the WF is usually tuned by the VFO on the CAT radio to serve as a panadapter and the KIWI RX may be turned off if not necessary;
  - the KIWI RX may be tuned on a secondary frequency with keyboard and mouse or with the VFO, then the CAT radio is unlinked from the RX and is free to explore other frequencies;
