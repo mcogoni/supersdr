@@ -161,8 +161,6 @@ class kiwi_waterfall():
         self.port = options['kiwiport']
         self.password = options['kiwi_password']
 
-        # kiwi working status
-
         print ("KiwiSDR Server: %s:%d" % (self.host, self.port))
 
         # kiwi RX parameters
@@ -183,8 +181,7 @@ class kiwi_waterfall():
         self.wf_stream = None
         self.wf_data = np.zeros((DISPLAY_HEIGHT, int(WF_BINS)))
 
-        ########################## W/F connection
-        # connect to kiwi server
+        # connect to kiwi WF server
         print ("Trying to contact server...")
         try:
             self.socket = socket.socket()
@@ -724,7 +721,7 @@ icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
 pygame.display.set_caption("SuperSDR 1.0")
 clock = pygame.time.Clock()
-pygame.key.set_repeat(200, 200)
+pygame.key.set_repeat(200, 50)
 
 wf_quit = False
 
@@ -791,10 +788,7 @@ run_index = 0
 run_index_automode = 0
 show_bigmsg = None
 while not wf_quit:
-    rssi = kiwi_snd.rssi
-    rssi_hist.append(rssi)
     run_index += 1
-    mouse = pygame.mouse.get_pos()
 
     click_freq = None
     manual_wf_freq = None
@@ -803,6 +797,10 @@ while not wf_quit:
     manual_mode = None
     change_passband_flag = False
     force_sync_flag = None
+
+    rssi = kiwi_snd.rssi
+    rssi_hist.append(rssi)
+    mouse = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
@@ -838,7 +836,7 @@ while not wf_quit:
                     else:
                         show_bigmsg = "emptymemory"
 
-                # KIWI SND passband change
+                # KIWI RX passband change
                 if keys[pygame.K_o]:
                     change_passband_flag = True
                     delta_low = 0
@@ -860,7 +858,7 @@ while not wf_quit:
                     elif delta_high < -3000:
                         delta_high = -3000.
                 
-                # KIWI SND volume UP/DOWN, Mute
+                # KIWI RX volume UP/DOWN, Mute
                 if keys[pygame.K_v]:
                     if VOLUME < 150:
                         VOLUME += 10
@@ -884,7 +882,6 @@ while not wf_quit:
                 if keys[pygame.K_DOWN]:
                     if kiwi_wf.zoom > 0:
                         manual_zoom = kiwi_wf.zoom - 1
-
                 elif keys[pygame.K_UP]:
                     if kiwi_wf.zoom< MAX_ZOOM:
                         manual_zoom = kiwi_wf.zoom + 1
@@ -913,7 +910,7 @@ while not wf_quit:
                 elif keys[pygame.K_PAGEUP]:
                     manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz/2
 
-                # KIWI SND mode change
+                # KIWI RX mode change
                 elif keys[pygame.K_u]:
                     auto_mode = False
                     manual_mode = "USB"
@@ -936,7 +933,7 @@ while not wf_quit:
                 elif keys[pygame.K_h]:
                     show_help_flag = True
 
-                # Smeter show/hide
+                # S-meter show/hide
                 elif keys[pygame.K_s]:
                     s_meter_show_flag = False if s_meter_show_flag else True
                 
@@ -964,7 +961,7 @@ while not wf_quit:
 
             # manual frequency input
             else:
-                pygame.key.set_repeat(0, 100) # disabe key repeat
+                pygame.key.set_repeat(0) # disabe key repeat
                 inkey = event.key
                 if inkey in ALLOWED_KEYS:
                     if inkey == pygame.K_BACKSPACE:
@@ -976,10 +973,10 @@ while not wf_quit:
                         except:
                             pass
                             #click_freq = kiwi_wf.freq
-                        pygame.key.set_repeat(200, 200)
+                        pygame.key.set_repeat(200, 50)
                     elif inkey == pygame.K_ESCAPE:
                         input_freq_flag = False
-                        pygame.key.set_repeat(200, 200)
+                        pygame.key.set_repeat(200, 50)
                         print("ESCAPE!")
                     else:
                         if len(current_string)<10:
@@ -1031,7 +1028,7 @@ while not wf_quit:
         kiwi_snd.set_mode_freq_pb()
         input_freq_flag = False
 
-    # Change KIWI SND mode
+    # Change KIWI RX mode
     if manual_mode:
         show_bigmsg = "changemode"
         run_index_bigmsg = run_index
@@ -1144,7 +1141,7 @@ while not wf_quit:
         elif "cat_snd_sync" == show_bigmsg:
             msg_text = "CAT<->SND SYNC "+("ON" if cat_snd_link_flag else "OFF")
         elif "sync" == show_bigmsg:
-            msg_text = "SYNC WF<->RX" if not cat_radio else "SYNC WF & RX -> CAT"
+            msg_text = "SYNC WF<-RX" if not cat_radio else "SYNC WF & RX -> CAT"
         elif "automode" == show_bigmsg:
             msg_text = "AUTO MODE "+("ON" if auto_mode else "OFF")
         elif "changemode" == show_bigmsg:
