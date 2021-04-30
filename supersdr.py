@@ -1162,7 +1162,7 @@ while not wf_quit:
         s_meter_draw(rssi_smooth)
 
     pygame.display.update()
-    clock.tick(100)
+    clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
 pygame.quit()
