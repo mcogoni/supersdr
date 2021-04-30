@@ -55,6 +55,7 @@ CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colo
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 
 CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radios
+CW_PITCH = 0.6
 
 # Initial KIWI receiver parameters
 on=True # AGC auto mode
@@ -701,6 +702,7 @@ if radiohost:
         radio_mode = cat_radio.radio_mode
     except:
         cat_radio = None
+        radio_mode = "USB"
 else:
     cat_radio = None
     if not freq:
@@ -750,7 +752,7 @@ if kiwi_snd and kiwi_audio:
 
     play = pyaudio.PyAudio()
     for i in range(play.get_device_count()):
-        #print(play.get_device_info_by_index(i))
+        print(play.get_device_info_by_index(i))
         if play.get_device_info_by_index(i)['name'] == "pulse":
             CARD_INDEX = i
         else:
@@ -1001,9 +1003,9 @@ while not wf_quit:
                 kiwi_wf.end_freq()
                 click_freq = kiwi_wf.bins_to_khz(mouse[0])
                 if kiwi_snd.radio_mode == "CW":
-                    click_freq -= 500./1000 # tune CW signal taking into account cw offset
+                    click_freq -= CW_PITCH # tune CW signal taking into account cw offset
                 
-    # Change KIWI SND PB: this can only affect the SND stream
+    # Change KIWI RX PB: this can only affect the SND stream
     if change_passband_flag:
         lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
         kiwi_snd.set_mode_freq_pb()
@@ -1083,24 +1085,28 @@ while not wf_quit:
         elif click_freq or manual_snd_freq:
             if cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and auto_mode:
                 cat_radio.set_mode(kiwi_snd.radio_mode)
-            cat_radio.set_freq(kiwi_snd.freq + (0.5 if kiwi_snd.radio_mode=="CW" else 0.))
+            cat_radio.set_freq(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.))
         else:
             cat_radio.get_freq()
-            kiwi_snd.freq = cat_radio.freq - (0.5 if kiwi_snd.radio_mode=="CW" else 0.)
+            kiwi_snd.freq = cat_radio.freq - (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.)
             kiwi_snd.radio_mode = cat_radio.get_mode()
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
             kiwi_snd.set_mode_freq_pb()
-            if wf_cat_link_flag: # shift WF by half span when SND outside WF
-                if kiwi_snd.freq < kiwi_wf.start_f_khz:
-                    kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-                elif kiwi_snd.freq > kiwi_wf.end_f_khz:
-                    kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+            if wf_cat_link_flag: # shift WF by half span when RX outside WF
+                delta_f = (kiwi_snd.freq - kiwi_wf.freq)
+                if abs(delta_f) < 5*kiwi_wf.span_khz:
+                    if delta_f + kiwi_wf.span_khz/2 < 0:
+                        kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
+                    elif delta_f - kiwi_wf.span_khz/2 > 0:
+                        kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+                else:
+                    kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
     if cat_radio and wf_cat_link_flag and not cat_snd_link_flag: # shift WF by half span when CAT outside WF
         cat_radio.get_freq()
         cat_radio.get_mode()
 
-        kiwi_wf.tune = cat_radio.freq - (0.5 if kiwi_wf.radio_mode=="CW" else 0.)
+        kiwi_wf.tune = cat_radio.freq - (CW_PITCH if kiwi_wf.radio_mode=="CW" else 0.)
         kiwi_wf.radio_mode = cat_radio.radio_mode
         if kiwi_wf.tune < kiwi_wf.start_f_khz:
             kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
