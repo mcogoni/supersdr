@@ -697,9 +697,12 @@ if radiohost:
     try:
         cat_radio = cat(radiohost, radioport)
         cat_radio.get_freq()
-        freq = cat_radio.freq
-        cat_radio.get_mode()
-        radio_mode = cat_radio.radio_mode
+        if cat_radio.freq > CAT_LOWEST_FREQ:
+            freq = cat_radio.freq
+            cat_radio.get_mode()
+            radio_mode = cat_radio.radio_mode
+        else:
+            del cat_radio
     except:
         cat_radio = None
         radio_mode = "USB"
