@@ -335,7 +335,7 @@ class cat:
         print ("RTX rigctld server: %s:%d" % (self.radiohost, self.radioport))
         # create a socket to communicate with rigctld
         self.socket = socket.socket()
-        try:
+        try: # if rigctld is running but the radio is off this will seem OK... TBF!
             self.socket.connect((self.radiohost, self.radioport))
         except:
             return None
@@ -703,6 +703,8 @@ if radiohost:
     except:
         cat_radio = None
         radio_mode = "USB"
+        if not freq:
+            freq = 14200
 else:
     cat_radio = None
     if not freq:
@@ -1108,10 +1110,18 @@ while not wf_quit:
 
         kiwi_wf.tune = cat_radio.freq - (CW_PITCH if kiwi_wf.radio_mode=="CW" else 0.)
         kiwi_wf.radio_mode = cat_radio.radio_mode
-        if kiwi_wf.tune < kiwi_wf.start_f_khz:
-            kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-        elif kiwi_wf.tune > kiwi_wf.end_f_khz:
-            kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+        # if kiwi_wf.tune < kiwi_wf.start_f_khz:
+        #     kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
+        # elif kiwi_wf.tune > kiwi_wf.end_f_khz:
+        #     kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+        delta_f = (cat_radio.freq - kiwi_wf.freq)
+        if abs(delta_f) < 5*kiwi_wf.span_khz:
+            if delta_f + kiwi_wf.span_khz/2 < 0:
+                kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
+            elif delta_f - kiwi_wf.span_khz/2 > 0:
+                kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+        else:
+            kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
     # print("W/F", kiwi_wf.freq, 
     #     "SND", kiwi_snd.freq, kiwi_snd.radio_mode)
