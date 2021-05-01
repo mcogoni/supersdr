@@ -702,7 +702,8 @@ if radiohost:
             cat_radio.get_mode()
             radio_mode = cat_radio.radio_mode
         else:
-            del cat_radio
+            radio_mode = "USB"
+            cat_radio = None
     except:
         cat_radio = None
         radio_mode = "USB"
