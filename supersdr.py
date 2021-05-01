@@ -1110,10 +1110,7 @@ while not wf_quit:
 
         kiwi_wf.tune = cat_radio.freq - (CW_PITCH if kiwi_wf.radio_mode=="CW" else 0.)
         kiwi_wf.radio_mode = cat_radio.radio_mode
-        # if kiwi_wf.tune < kiwi_wf.start_f_khz:
-        #     kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-        # elif kiwi_wf.tune > kiwi_wf.end_f_khz:
-        #     kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
+
         delta_f = (cat_radio.freq - kiwi_wf.freq)
         if abs(delta_f) < 5*kiwi_wf.span_khz:
             if delta_f + kiwi_wf.span_khz/2 < 0:
@@ -1122,10 +1119,6 @@ while not wf_quit:
                 kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
         else:
             kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
-
-    # print("W/F", kiwi_wf.freq, 
-    #     "SND", kiwi_snd.freq, kiwi_snd.radio_mode)
-        #"CAT",cat_radio.freq, cat_radio.radio_mode)
 
     if random.random()>0.95:
         kiwi_wf.wf_stream.send_message('SET keepalive')
