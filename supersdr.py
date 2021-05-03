@@ -53,6 +53,7 @@ WF_HEIGHT = 400
 # SuperSDR constants
 DISPLAY_WIDTH = WF_BINS
 DISPLAY_HEIGHT = 450
+V_POS_TEXT = 5
 MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
@@ -603,19 +604,19 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         mousex_pos = DISPLAY_WIDTH - 80
 
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,0), "big", False),
-            "snd_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,0), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,0), "small", False),
-            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,0), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,0), "small", False),
-            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,0), "small", False),
-            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-290,0), "small", False),
+    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,V_POS_TEXT), "big", False),
+            "snd_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,V_POS_TEXT), "small", False),
+            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,V_POS_TEXT), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,V_POS_TEXT), "small", False),
+            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,V_POS_TEXT), "small", False),
+            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-290,V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
-            "auto": ((GREEN if auto_mode else RED), "AUTO", (wf_width/2-108, 0), "big", False),
-            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2+165, 0), "big", False)
+            "auto": ((GREEN if auto_mode else RED), "AUTO", (wf_width/2-108, V_POS_TEXT), "big", False),
+            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2+165, V_POS_TEXT), "big", False)
     }
     if not s_meter_show_flag:
-        ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,0), "big", False)
+        ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
     
     draw_dict = {}
     for k in ts_dict:
@@ -1161,7 +1162,7 @@ while not wf_quit:
     kiwi_wf.receive_spectrum(True if wf_white_flag else False)
 
     # clear the background with a uniform color
-    pygame.draw.rect(sdrdisplay, (0,0,90), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
 
     surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
     surface.set_palette(palRGB)
@@ -1207,7 +1208,7 @@ while not wf_quit:
         s_meter_draw(rssi_smooth)
 
     pygame.display.update()
-    clock.tick(30)
+    clock.tick(50)
     mouse = pygame.mouse.get_pos()
 
 pygame.quit()
