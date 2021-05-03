@@ -287,22 +287,26 @@ class kiwi_waterfall():
             print("zoom 0 detected!")
             self.freq = 15000
             self.start_freq()
+            self.end_freq()
             self.span_khz = MAX_FREQ
             #self.zoom_to_span()
         else:
             if self.start_f_khz<0:
                 self.freq -= self.start_f_khz
                 self.start_freq()
+                self.end_freq()
                 self.zoom_to_span()
 
             if self.end_f_khz>MAX_FREQ:
                 self.freq -= self.end_f_khz - MAX_FREQ
                 self.start_freq()
+                self.end_freq()
                 self.zoom_to_span()
         self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         if zoom_>0 and actual_freq<=0:
             self.freq = self.zoom_to_span()
             self.start_freq()
+            self.end_freq()
             self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
@@ -604,16 +608,17 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         mousex_pos = DISPLAY_WIDTH - 80
 
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,V_POS_TEXT), "big", False),
-            "snd_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,V_POS_TEXT), "small", False),
+    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,wf_height-10), "small", False),
+            "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,wf_height-10), "small", False),
             "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,V_POS_TEXT), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,V_POS_TEXT), "small", False),
-            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,V_POS_TEXT), "small", False),
-            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-290,V_POS_TEXT), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,wf_height-10), "small", False),
+            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,wf_height-10), "small", False),
+            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,wf_height-10), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
             "auto": ((GREEN if auto_mode else RED), "AUTO", (wf_width/2-108, V_POS_TEXT), "big", False),
-            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2+165, V_POS_TEXT), "big", False)
+            "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2+210, V_POS_TEXT), "big", False),
+            "forcesync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2+165, V_POS_TEXT), "big", False)
     }
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
@@ -636,32 +641,34 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len)*fontsize_*0.6, 14), 0)
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
 
-def draw_lines(surface, wf_height, radio_mode, mouse):
+def draw_lines(surface_, wf_height, radio_mode, mouse):
     center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
-    pygame.draw.line(surface, RED, (center_freq_bin, DISPLAY_HEIGHT), (center_freq_bin, DISPLAY_HEIGHT-10), 3)
+    pygame.draw.line(surface_, RED, (center_freq_bin, DISPLAY_HEIGHT-30), (center_freq_bin, DISPLAY_HEIGHT-20), 4)
     if pygame.mouse.get_focused():
-        pygame.draw.line(surface, (250,0,0), (mouse[0], DISPLAY_HEIGHT-20), (mouse[0], DISPLAY_HEIGHT), 1)
+        pygame.draw.line(surface_, (250,0,0), (mouse[0], DISPLAY_HEIGHT-20), (mouse[0], DISPLAY_HEIGHT), 1)
 
     snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
     if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
         # carrier line
-        pygame.draw.line(surface, RED, (snd_freq_bin, DISPLAY_HEIGHT-20), (snd_freq_bin, DISPLAY_HEIGHT), 2)
+        pygame.draw.line(surface_, RED, (snd_freq_bin, DISPLAY_HEIGHT-20), (snd_freq_bin, DISPLAY_HEIGHT), 2)
     if cat_radio and not cat_snd_link_flag:
         tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
         # tune wf line
-        pygame.draw.line(surface, D_RED, (tune_freq_bin, DISPLAY_HEIGHT-20), (tune_freq_bin, DISPLAY_HEIGHT), 3)
+        pygame.draw.line(surface_, D_RED, (tune_freq_bin, DISPLAY_HEIGHT-20), (tune_freq_bin, DISPLAY_HEIGHT), 3)
         
     lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
-    line_bin = snd_freq_bin + lc_bin
-    if line_bin>0 and line_bin< WF_BINS:
+    lc_bin = snd_freq_bin + lc_bin
+    if lc_bin>0 and lc_bin< WF_BINS:
         # low cut line
-        pygame.draw.line(surface, (0,200,200), (line_bin, wf_height/20), (line_bin, wf_height), 1)
+        pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (lc_bin-5, wf_height-12), 2)
     
     hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
-    line_bin = snd_freq_bin + hc_bin
-    if line_bin>0 and line_bin< WF_BINS:
+    hc_bin = snd_freq_bin + hc_bin
+    if hc_bin>0 and hc_bin< WF_BINS:
         # high cut line
-        pygame.draw.line(surface, (0,200,0), (line_bin, wf_height/20), (line_bin, wf_height), 1)
+        pygame.draw.line(surface_, GREEN, (hc_bin, wf_height-30), (hc_bin+5, wf_height-12), 2)
+    
+    pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
 
     if cat_radio and not cat_snd_link_flag:
         lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
@@ -669,13 +676,13 @@ def draw_lines(surface, wf_height, radio_mode, mouse):
         line_bin = tune_freq_bin + lc_bin + 1
         if line_bin>0 and line_bin< WF_BINS:
             # low cut line
-            pygame.draw.line(surface, YELLOW, (line_bin, wf_height/20), (line_bin, wf_height), 1)
+            pygame.draw.line(surface_, YELLOW, (line_bin, wf_height-30), (line_bin-5, wf_height-12), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
         line_bin = tune_freq_bin + hc_bin
         if line_bin>0 and line_bin< WF_BINS:
             # high cut line
-            pygame.draw.line(surface, YELLOW, (line_bin, wf_height/20), (line_bin, wf_height), 1)
+            pygame.draw.line(surface_, YELLOW, (line_bin, wf_height-30), (line_bin+5, wf_height-12), 1)
 
 
 parser = OptionParser()
@@ -799,7 +806,7 @@ wf_cat_link_flag = True if cat_radio else False
 wf_snd_link_flag = False
 cat_snd_link_flag = True if cat_radio else False
 print("SYNC OPTIONS:")
-print("WF<>CAT", wf_cat_link_flag, "WF<>SND", wf_snd_link_flag, "CAT<>SND", cat_snd_link_flag)
+print("WF<>CAT", wf_cat_link_flag, "WF<>RX", wf_snd_link_flag, "CAT<>RX", cat_snd_link_flag)
 
 rssi_maxlen = FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
@@ -807,6 +814,7 @@ rssi_smooth = rssi
 run_index = 0
 run_index_automode = 0
 show_bigmsg = None
+
 while not wf_quit:
     run_index += 1
 
@@ -836,7 +844,7 @@ while not wf_quit:
                 # Force SYNC WF to RX freq if no CAT, else WF and RX to CAT
                 if keys[pygame.K_SPACE]:
                     force_sync_flag = True
-                    show_bigmsg = "sync"
+                    show_bigmsg = "forcesync"
                     run_index_bigmsg = run_index
 
                 # Center RX freq on WF
@@ -968,7 +976,7 @@ while not wf_quit:
                 
                 elif keys[pygame.K_s]:
                     if cat_radio:
-                        show_bigmsg = "cat_snd_sync"
+                        show_bigmsg = "cat_rx_sync"
                         run_index_bigmsg = run_index
                         cat_snd_link_flag = False if cat_snd_link_flag else True
 
@@ -1182,10 +1190,10 @@ while not wf_quit:
         if "VOLUME" == show_bigmsg:
             msg_color = WHITE if VOLUME <= 100 else RED
             msg_text = "VOLUME: %d"%(VOLUME)+'%'
-        elif "cat_snd_sync" == show_bigmsg:
-            msg_text = "CAT<->SND SYNC "+("ON" if cat_snd_link_flag else "OFF")
-        elif "sync" == show_bigmsg:
-            msg_text = "SYNC WF<-RX" if not cat_radio else "SYNC WF & RX -> CAT"
+        elif "cat_rx_sync" == show_bigmsg:
+            msg_text = "CAT<->RX SYNC "+("ON" if cat_snd_link_flag else "OFF")
+        elif "forcesync" == show_bigmsg:
+            msg_text = "Force SYNC WF<-RX" if not cat_radio else "Force SYNC WF & RX -> CAT"
         elif "automode" == show_bigmsg:
             msg_text = "AUTO MODE "+("ON" if auto_mode else "OFF")
         elif "changemode" == show_bigmsg:
