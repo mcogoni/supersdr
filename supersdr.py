@@ -673,16 +673,17 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     if cat_radio and not cat_snd_link_flag:
         lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
         lc_bin = kiwi_wf.offset_to_bin(lc_/1000.)
-        line_bin = tune_freq_bin + lc_bin + 1
-        if line_bin>0 and line_bin< WF_BINS:
+        lc_bin = tune_freq_bin + lc_bin + 1
+        if lc_bin>0 and lc_bin< WF_BINS:
             # low cut line
-            pygame.draw.line(surface_, YELLOW, (line_bin, wf_height-30), (line_bin-5, wf_height-12), 1)
+            pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (lc_bin-5, wf_height-12), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
-        line_bin = tune_freq_bin + hc_bin
-        if line_bin>0 and line_bin< WF_BINS:
+        hc_bin = tune_freq_bin + hc_bin
+        if hc_bin>0 and hc_bin< WF_BINS:
             # high cut line
-            pygame.draw.line(surface_, YELLOW, (line_bin, wf_height-30), (line_bin+5, wf_height-12), 1)
+            pygame.draw.line(surface_, YELLOW, (hc_bin, wf_height-30), (hc_bin+5, wf_height-12), 1)
+        pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
 
 
 parser = OptionParser()
