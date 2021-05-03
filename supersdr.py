@@ -608,17 +608,17 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         mousex_pos = DISPLAY_WIDTH - 80
 
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,wf_height-10), "small", False),
+    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,wf_height-12), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,wf_height-12), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,wf_height-12), "small", False),
             "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,wf_height-10), "small", False),
             "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,V_POS_TEXT), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,wf_height-10), "small", False),
-            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,wf_height-10), "small", False),
-            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,wf_height-10), "small", False),
+            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,wf_height-12), "small", False),
+            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,wf_height-12), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
-            "auto": ((GREEN if auto_mode else RED), "AUTO", (wf_width/2-108, V_POS_TEXT), "big", False),
-            "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2+210, V_POS_TEXT), "big", False),
-            "forcesync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2+165, V_POS_TEXT), "big", False)
+            "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
+            "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
+            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-108, V_POS_TEXT), "big", False)
     }
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
@@ -697,7 +697,7 @@ parser.add_option("-S", "--radioserver", type=str,
 parser.add_option("-P", "--radioport", type=int,
                   help="port number", dest="radioport", default=4532)
 parser.add_option("-z", "--zoom", type=int,
-                  help="zoom factor", dest="zoom", default=10)
+                  help="zoom factor", dest="zoom", default=8)
 parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
                   
@@ -1171,6 +1171,8 @@ while not wf_quit:
 
     # clear the background with a uniform color
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,00), (0,DISPLAY_HEIGHT-16,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
+
 
     surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
     surface.set_palette(palRGB)
