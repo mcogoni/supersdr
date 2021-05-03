@@ -48,14 +48,15 @@ VOLUME = 100
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
 MAX_ZOOM = 14.
 WF_BINS  = 1024.
+
+# SuperSDR constants
 DISPLAY_WIDTH = int(WF_BINS)
 DISPLAY_HEIGHT = 400
 MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-
-CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radios
-CW_PITCH = 0.6
+CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radio
+CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
 on=True # AGC auto mode
@@ -111,7 +112,6 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- H: displays this help window",
         "- SHIFT+ESC: quits",
-        "",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
 
@@ -213,7 +213,7 @@ class kiwi_waterfall():
         # send a sequence of messages to the server, hardcoded for now
         # max wf speed, no compression
         msg_list = ['SET auth t=kiwi p=%s'%self.password, 'SET zoom=%d start=%d'%(self.zoom,self.counter),\
-        'SET maxdb=0 mindb=-100', 'SET wf_speed=4', 'SET wf_comp=0', 'SET maxdb=-10 mindb=-110']
+        'SET maxdb=-10 mindb=-110', 'SET wf_speed=4', 'SET wf_comp=0']
         for msg in msg_list:
             self.wf_stream.send_message(msg)
         print ("Starting to retrieve waterfall data...")
@@ -273,7 +273,7 @@ class kiwi_waterfall():
                 wf_color = np.ones_like(wf_color)*255
             self.wf_data[-1,:] = wf_color
             self.wf_data[0:DISPLAY_HEIGHT-1,:] = self.wf_data[1:DISPLAY_HEIGHT,:]
-        
+        self.keepalive()
 
     def set_freq_zoom(self, freq_, zoom_):
         self.freq = freq_
@@ -305,6 +305,9 @@ class kiwi_waterfall():
         self.wf_stream.send_message(msg)
 
         return self.freq
+
+    def keepalive(self):
+        self.wf_stream.send_message("SET keepalive")
 
     def close_connection(self):
         try:
@@ -408,8 +411,9 @@ class kiwi_sound():
         self.stream.send_message(msg)
 
     def get_audio_chunk(self):
-        self.stream.send_message('SET keepalive')
+        #self.stream.send_message('SET keepalive')
         snd_buf = self.process_audio_stream()
+        self.keepalive()
         return snd_buf
 
     def process_audio_stream(self):
@@ -443,6 +447,9 @@ class kiwi_sound():
             hc_ = HIGH_CUT_CW+delta_high_
         self.lc, self.hc = lc_, hc_
         return lc_, hc_
+
+    def keepalive(self):
+        self.stream.send_message("SET keepalive")
 
 def get_auto_mode(f):
     automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
@@ -512,20 +519,20 @@ def display_help_box(screen, message_list):
     font_size = font_size_dict["small"]
     smallfont = pygame.freetype.SysFont('Mono', font_size)
 
-    window_size = 350
+    window_size = 450
     pygame.draw.rect(screen, (0,0,0),
                    ((screen.get_width() / 2) - window_size/2,
-                    (screen.get_height() / 2) - window_size/2,
-                    window_size , window_size), 0)
+                    (screen.get_height() / 2) - window_size/3,
+                    window_size , window_size-150), 0)
     pygame.draw.rect(screen, (255,255,255),
                    ((screen.get_width() / 2) - window_size/2,
-                    (screen.get_height() / 2) - window_size/2,
-                    window_size,window_size), 1)
+                    (screen.get_height() / 2) - window_size/3,
+                    window_size,window_size-150), 1)
 
     if len(message_list) != 0:
         for ii, msg in enumerate(message_list):
             pos = (screen.get_width() / 2 - window_size/2 + font_size, 
-                    screen.get_height() / 2-window_size/2 + ii*font_size + font_size)
+                    screen.get_height() / 2-window_size/3 + ii*font_size + font_size)
             smallfont.render_to(sdrdisplay, pos, msg, WHITE)
 
 def display_msg_box(screen, message, pos=None, fontsize=12, color=WHITE):
@@ -667,8 +674,6 @@ def draw_lines(surface, wf_height, radio_mode, mouse):
 
 
 parser = OptionParser()
-parser.add_option("-a", "--audio-on",
-                  help="enable KiwiSDR soundstream", action="store_true")
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwi_password", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
@@ -685,7 +690,6 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
                   
 options = vars(parser.parse_args()[0])
-kiwi_audio = options["audio_on"]
 freq = options['freq'] # this is the central freq in kHz
 zoom = options['zoom'] 
 
@@ -730,7 +734,7 @@ wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
-pygame.display.set_caption("SuperSDR 1.0")
+pygame.display.set_caption("SuperSDR 1.1")
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 
@@ -750,7 +754,7 @@ current_string = []
 
 kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
 
-if kiwi_snd and kiwi_audio:
+if kiwi_snd:
     old_buffer = np.zeros((kiwi_filter.n_tap))
     audio_buffer = []
 
@@ -818,7 +822,8 @@ while not wf_quit:
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
 
         if event.type == pygame.KEYDOWN:
-            show_help_flag =  False
+            before_help_flag = show_help_flag
+            show_help_flag = False
             if not input_freq_flag:
                 keys = pygame.key.get_pressed()
                 fast_tune = True if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else False
@@ -949,7 +954,8 @@ while not wf_quit:
 
                 # Show help
                 elif keys[pygame.K_h]:
-                    show_help_flag = True
+                    if not before_help_flag:
+                        show_help_flag = True
 
                 # S-meter show/hide
                 elif keys[pygame.K_s] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
@@ -1142,8 +1148,6 @@ while not wf_quit:
         else:
             kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-    if random.random()>0.95:
-        kiwi_wf.wf_stream.send_message('SET keepalive')
 
 #   plot horiz line to show time of freq change
     kiwi_wf.receive_spectrum(True if wf_white_flag else False)
@@ -1190,7 +1194,7 @@ while not wf_quit:
 
         display_msg_box(sdrdisplay, msg_text, pos=None, fontsize=35, color=msg_color)
 
-    if s_meter_show_flag and kiwi_audio:
+    if s_meter_show_flag:
         rssi_smooth = np.mean(list(rssi_hist)[15:20])
         s_meter_draw(rssi_smooth)
 
