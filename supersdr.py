@@ -1044,7 +1044,10 @@ while not wf_quit:
                         print("ESCAPE!")
                     else:
                         if len(current_string)<10 or input_server_flag:
-                            current_string.append(chr(inkey))
+                            try:
+                                current_string.append(chr(inkey))
+                            except:
+                                pass
 
         # Quit
         if event.type == pygame.QUIT:
