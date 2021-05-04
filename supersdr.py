@@ -200,9 +200,12 @@ class kiwi_waterfall():
     def start_stream(self):
 
         uri = '/%d/%s' % (int(time.time()), 'W/F')
-        handshake_wf = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
-        handshake_wf.handshake(uri)
-        request_wf = wsclient.ClientRequest(self.socket)
+        try:
+            handshake_wf = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
+            handshake_wf.handshake(uri)
+            request_wf = wsclient.ClientRequest(self.socket)
+        except:
+            return
         request_wf.ws_version = mod_pywebsocket.common.VERSION_HYBI13
         stream_option_wf = StreamOptions()
         stream_option_wf.mask_send = True
@@ -773,16 +776,15 @@ else:
         freq = 14200
     radio_mode = "USB"
 
-print(freq)
+#init KIWI WF and RX audio
 kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password)
 
-# init pygame basic objects
+# init Pygame
 pygame.init()
 sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT))
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
-
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
@@ -799,17 +801,11 @@ show_help_flag =  False
 s_meter_show_flag = True
 
 input_new_server = None
-
-rssi = -127
-if kiwi_snd:
-    rssi = kiwi_snd.rssi
-
 current_string = []
 
 kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
 old_buffer = np.zeros((kiwi_filter.n_tap))
 audio_buffer = []
-
 
 play, kiwi_audio_stream = start_audio_stream()
 
@@ -828,8 +824,8 @@ print("SYNC OPTIONS:")
 print("WF<>CAT", wf_cat_link_flag, "WF<>RX", wf_snd_link_flag, "CAT<>RX", cat_snd_link_flag)
 
 rssi_maxlen = FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
-rssi_hist = deque(rssi_maxlen*[rssi], rssi_maxlen)
-rssi_smooth = rssi
+rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
+rssi_smooth = kiwi_snd.rssi
 run_index = 0
 run_index_automode = 0
 show_bigmsg = None
@@ -1133,8 +1129,9 @@ while not wf_quit:
 
     if input_freq_flag and manual_snd_freq:
         kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom)
-        kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
-        lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+        if auto_mode:
+            kiwi_snd.radio_mode = get_auto_mode(manual_snd_freq)
+            lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
         kiwi_snd.freq = kiwi_wf.freq
         kiwi_snd.set_mode_freq_pb()
         input_freq_flag = False
