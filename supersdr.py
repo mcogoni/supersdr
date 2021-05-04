@@ -113,6 +113,7 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
         "- SPACE: FORCE SYNC of WF to RX if no CAT, else all to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- H: displays this help window",
+        "- Q: switch to a different KIWI server",
         "- SHIFT+ESC: quits",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
@@ -1107,8 +1108,11 @@ while not wf_quit:
             kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
             kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
+            time.sleep(2)
+            play, kiwi_audio_stream = start_audio_stream()
 
         input_server_flag = False
+        input_new_server = None
 
     # Change KIWI RX PB: this can only affect the SND stream
     if change_passband_flag:
