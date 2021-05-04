@@ -184,6 +184,20 @@ def s_meter_draw(rssi_smooth):
     pos = (s_meter_center[0]+13, s_meter_center[1])
     smallfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
 
+def plot_eibi(surface_):
+    for f_khz in set(eibi.visible_stations):
+        f_bin = int(kiwi_wf.offset_to_bin(f_khz-kiwi_wf.start_f_khz))
+        ts = (YELLOW, eibi.get_names(f_khz)[0], (f_bin,250), "small")
+        smallfont = pygame.freetype.SysFont('Mono', 12)
+        render_ = smallfont.render_to
+        try:
+            if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
+                render_(surface_, ts[2], ts[1],  rotation=90, fgcolor=ts[0], bgcolor=(20,20,20))
+                pygame.draw.line(surface_, YELLOW, (f_bin, wf_height-30), (f_bin, wf_height-25), 1)
+        except:
+            pass
+
+
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwipassword", default="")
@@ -202,6 +216,8 @@ parser.add_option("-f", "--freq", type=int,
                   
 options = vars(parser.parse_args()[0])
 
+eibi = eibi_db()
+
 kiwi_host = options['kiwiserver']
 kiwi_port = options['kiwiport']
 kiwi_password = options['kiwipassword']
@@ -211,7 +227,7 @@ radiohost = options['radioserver']
 radioport = options['radioport']
 
 if not kiwi_host:
-    input_new_server = input("***\nNo KIWI specified!\nPlease enter: hostame [port] [password]\n")
+    input_new_server = input("***\nNo KIWI specified!\nPlease enter: hostname [port] [password]\n")
     input_text_list = input_new_server.rstrip().split(" ")
     if len(input_text_list) >= 1:
         kiwi_host = input_text_list[0]
@@ -219,7 +235,6 @@ if not kiwi_host:
         kiwi_port = int(input_text_list[1])
     if len(input_text_list) == 3:
         kiwi_password = input_text_list[2]
-
 
 if radiohost:
     try:
@@ -249,7 +264,7 @@ kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 #init KIWI WF and RX audio
-kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
+kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
 print(freq, radio_mode, 30, 3000, kiwi_password)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter)
 
@@ -273,6 +288,7 @@ input_freq_flag = False
 input_server_flag = False
 show_help_flag =  False
 s_meter_show_flag = True
+show_eibi_flag = False
 
 input_new_server = None
 current_string = []
@@ -333,6 +349,10 @@ while not wf_quit:
                     run_index_bigmsg = run_index
 
                 # Center RX freq on WF
+                if keys[pygame.K_i]:
+                    show_eibi_flag = False if show_eibi_flag else True
+
+                # Center RX freq on WF
                 if keys[pygame.K_z]:
                     wf_snd_link_flag = False if wf_snd_link_flag else True
                     force_sync_flag = True
@@ -382,21 +402,21 @@ while not wf_quit:
                 
                 # KIWI RX volume UP/DOWN, Mute
                 if keys[pygame.K_v]:
-                    if VOLUME < 150:
-                        VOLUME += 10
+                    if kiwi_snd.volume < 150:
+                        kiwi_snd.volume += 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
                 if keys[pygame.K_b]:
-                    if VOLUME > 0:
-                        VOLUME -= 10
+                    if kiwi_snd.volume > 0:
+                        kiwi_snd.volume -= 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
                 if keys[pygame.K_m]:
-                    if VOLUME > 0:
-                        old_volume = VOLUME
-                        VOLUME = 0
+                    if kiwi_snd.volume > 0:
+                        old_volume = kiwi_snd.volume
+                        kiwi_snd.volume = 0
                     else:
-                        VOLUME = old_volume
+                        kiwi_snd.volume = old_volume
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
 
@@ -646,14 +666,17 @@ while not wf_quit:
         kiwi_wf.set_freq_zoom(manual_wf_freq, kiwi_wf.zoom)
         wf_white_flag = True
 
+
     if manual_zoom:
         kiwi_wf.set_freq_zoom(kiwi_snd.freq, manual_zoom) # for now, the arrow zoom will be centered on the SND freq
         kiwi_snd.freq = kiwi_wf.freq
         kiwi_snd.set_mode_freq_pb()
         wf_white_flag = True
 
+
     # Change KIWI SND frequency
     if click_freq:
+
         kiwi_snd.freq = click_freq
         if auto_mode:
             kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
@@ -721,6 +744,8 @@ while not wf_quit:
     update_textsurfaces(kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width)
 
 #    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
+    if show_eibi_flag and kiwi_wf.zoom > 6:
+        plot_eibi(sdrdisplay)
 
     if input_freq_flag:
         question = "Freq (kHz)"
@@ -735,8 +760,8 @@ while not wf_quit:
         if run_index - run_index_bigmsg > 25:
             show_bigmsg = None
         if "VOLUME" == show_bigmsg:
-            msg_color = WHITE if VOLUME <= 100 else RED
-            msg_text = "VOLUME: %d"%(VOLUME)+'%'
+            msg_color = WHITE if kiwi_snd.volume <= 100 else RED
+            msg_text = "VOLUME: %d"%(kiwi_snd.volume)+'%'
         elif "cat_rx_sync" == show_bigmsg:
             msg_text = "CAT<->RX SYNC "+("ON" if cat_snd_link_flag else "OFF")
         elif "forcesync" == show_bigmsg:

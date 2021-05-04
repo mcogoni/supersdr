@@ -21,7 +21,7 @@ import random
 import struct
 import array
 import math
-from collections import deque
+from collections import deque, defaultdict
 
 
 from kiwi import wsclient
@@ -39,7 +39,6 @@ SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
 CHUNKS = 14
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 20
-VOLUME = 100
 
 # Hardcoded values for most kiwis
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
@@ -51,7 +50,7 @@ WF_HEIGHT = 400
 DISPLAY_WIDTH = WF_BINS
 DISPLAY_HEIGHT = 450
 V_POS_TEXT = 5
-MIN_DYN_RANGE = 70. # minimum visual dynamic range in dB
+MIN_DYN_RANGE = 90. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radio
@@ -155,7 +154,8 @@ class memory():
         self.mem_list = deque([], 10)
 
 class kiwi_waterfall():
-    def __init__(self, host_, port_, pass_, zoom_, freq_):
+    def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
+        self.eibi = eibi
         # kiwi hostname and port
         self.host = host_
         self.port = port_
@@ -307,6 +307,8 @@ class kiwi_waterfall():
             self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
+        self.eibi.get_stations(self.start_f_khz, self.end_f_khz)
+
 
         return self.freq
 
@@ -344,6 +346,7 @@ class kiwi_sound():
         self.lowpass = kiwi_filter.lowpass
         self.audio_buffer = []
         self.old_buffer = np.zeros((self.n_tap))
+        self.volume = 100
         
         self.rssi = -127
         self.freq = freq_
@@ -447,7 +450,7 @@ class kiwi_sound():
             self.audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
         
         popped = np.array(self.audio_buffer[:CHUNKS]).flatten()
-        popped = popped.astype(np.float64) * (VOLUME/100)
+        popped = popped.astype(np.float64) * (self.volume/100)
         self.audio_buffer = self.audio_buffer[CHUNKS:] # removed used chunks
 
         n = len(popped)
@@ -520,184 +523,6 @@ def get_auto_mode(f):
     return "USB" if f>10000 else "LSB"
 
 
-def display_box(screen, message, size):
-    smallfont = pygame.freetype.SysFont('Mono', 12)
-
-    pygame.draw.rect(screen, BLACK,
-                   ((screen.get_width() / 2) - size/2,
-                    (screen.get_height() / 2) - 12,
-                    size,18), 0)
-    pygame.draw.rect(screen, WHITE,
-                   ((screen.get_width() / 2) - size/2+2,
-                    (screen.get_height() / 2) - 14,
-                    size+4,20), 1)
-    if len(message) != 0:
-        pos = ((screen.get_width() / 2) - size/2+5, (screen.get_height() / 2) - 10)
-        smallfont.render_to(sdrdisplay, pos, message, WHITE)
-
-def display_help_box(screen, message_list):
-    font_size = font_size_dict["small"]
-    smallfont = pygame.freetype.SysFont('Mono', font_size)
-
-    window_size = 450
-    pygame.draw.rect(screen, (0,0,0),
-                   ((screen.get_width() / 2) - window_size/2,
-                    (screen.get_height() / 2) - window_size/3,
-                    window_size , window_size-150), 0)
-    pygame.draw.rect(screen, (255,255,255),
-                   ((screen.get_width() / 2) - window_size/2,
-                    (screen.get_height() / 2) - window_size/3,
-                    window_size,window_size-150), 1)
-
-    if len(message_list) != 0:
-        for ii, msg in enumerate(message_list):
-            pos = (screen.get_width() / 2 - window_size/2 + font_size, 
-                    screen.get_height() / 2-window_size/3 + ii*font_size + font_size)
-            smallfont.render_to(sdrdisplay, pos, msg, WHITE)
-
-def display_msg_box(screen, message, pos=None, fontsize=12, color=WHITE):
-    smallfont = pygame.freetype.SysFont('Mono', fontsize)
-    if not pos:
-        pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
-    # pygame.draw.rect(screen, BLACK,
-    #                ((screen.get_width() / 2) - msg_len/2,
-    #                 (screen.get_height() / 2) - 10, msg_len,20), 0)
-    # pygame.draw.rect(screen, WHITE,
-    #                ((screen.get_width() / 2) - msg_len/2+2,
-    #                 (screen.get_height() / 2) - 12, msg_len+4,24), 1)
-    if len(message) != 0:
-        smallfont.render_to(sdrdisplay, pos, message, color)
-    
-def s_meter_draw(rssi_smooth):
-    font_size = 8
-    smallfont = pygame.freetype.SysFont('Mono', font_size)
-
-    s_meter_radius = 50.
-    s_meter_center = (140,s_meter_radius+8)
-    alpha_rssi = rssi_smooth+127
-    alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
-
-    def _coords_from_angle(angle, s_meter_radius_):
-        x_ = s_meter_radius_ * math.cos(angle)
-        y_ = s_meter_radius_ * math.sin(angle)
-        s_meter_x = s_meter_center[0] + x_
-        s_meter_y = s_meter_center[1] - y_
-        return s_meter_x, s_meter_y
-    
-    s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius* 0.95)
-    pygame.draw.rect(sdrdisplay, YELLOW,
-                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 0)
-    pygame.draw.rect(sdrdisplay, BLACK,
-                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 3)
-    
-    angle_list = np.linspace(0.4, math.pi-0.4, 9)
-    text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
-    for alpha_seg, msg in zip(angle_list, text_list[::-1]):
-        text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
-        smallfont.render_to(sdrdisplay, (text_x-6, text_y-2), msg, D_GREY)
-
-        seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
-        color_ =  BLACK
-        tick_rad = 2
-        if alpha_seg < 1.4:
-            color_ = RED
-            tick_rad = 3
-        pygame.draw.circle(sdrdisplay, color_, (seg_x, seg_y), tick_rad)
-    pygame.draw.circle(sdrdisplay, D_GREY, s_meter_center, 4)
-
-    pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
-    str_rssi = "%ddBm"%rssi_smooth
-    smallfont = pygame.freetype.SysFont('Mono', 10)
-    str_len = len(str_rssi)
-    pos = (s_meter_center[0]+13, s_meter_center[1])
-    smallfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
-
-def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
-    global sdrdisplay
-    mousex_pos = mouse[0]
-    if mousex_pos < 25:
-        mousex_pos = 25
-    elif mousex_pos >= DISPLAY_WIDTH - 80:
-        mousex_pos = DISPLAY_WIDTH - 80
-
-    #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,wf_height-12), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,wf_height-12), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,wf_height-12), "small", False),
-            "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,V_POS_TEXT), "small", False),
-            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,wf_height-12), "small", False),
-            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,wf_height-12), "small", False),
-            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
-            "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
-            "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
-            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False)
-    }
-    if not s_meter_show_flag:
-        ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
-    
-    draw_dict = {}
-    for k in ts_dict:
-        if k == "p_freq" and not pygame.mouse.get_focused():
-            continue
-        if "small" in ts_dict[k][3]:
-            smallfont = pygame.freetype.SysFont('Mono', 12)
-            render_ = smallfont.render_to
-        elif "big" in ts_dict[k][3]:
-            bigfont = pygame.freetype.SysFont('Mono', 16)
-            render_ = bigfont.render_to
-        fontsize_ = font_size_dict[ts_dict[k][3]]
-
-        str_len = len(ts_dict[k][1])
-        x_r, y_r = ts_dict[k][2]
-        if ts_dict[k][4]:
-            pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len)*fontsize_*0.6, 14), 0)
-        render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
-
-def draw_lines(surface_, wf_height, radio_mode, mouse, kiwi_wf, kiwi_snd, cat_radio, cat_snd_link_flag):
-    center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
-    pygame.draw.line(surface_, RED, (center_freq_bin, DISPLAY_HEIGHT-30), (center_freq_bin, DISPLAY_HEIGHT-20), 4)
-    if pygame.mouse.get_focused():
-        pygame.draw.line(surface_, (250,0,0), (mouse[0], DISPLAY_HEIGHT-20), (mouse[0], DISPLAY_HEIGHT), 1)
-
-    snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
-    if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
-        # carrier line
-        pygame.draw.line(surface_, RED, (snd_freq_bin, DISPLAY_HEIGHT-20), (snd_freq_bin, DISPLAY_HEIGHT), 2)
-    if cat_radio and not cat_snd_link_flag:
-        tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
-        # tune wf line
-        pygame.draw.line(surface_, D_RED, (tune_freq_bin, DISPLAY_HEIGHT-20), (tune_freq_bin, DISPLAY_HEIGHT), 3)
-        
-    lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
-    lc_bin = snd_freq_bin + lc_bin
-    if lc_bin>0 and lc_bin< WF_BINS:
-        # low cut line
-        pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (lc_bin-5, wf_height-16), 2)
-    
-    hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
-    hc_bin = snd_freq_bin + hc_bin
-    if hc_bin>0 and hc_bin< WF_BINS:
-        # high cut line
-        pygame.draw.line(surface_, GREEN, (hc_bin, wf_height-30), (hc_bin+5, wf_height-16), 2)
-    
-    pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
-
-    if cat_radio and not cat_snd_link_flag:
-        lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
-        lc_bin = kiwi_wf.offset_to_bin(lc_/1000.)
-        lc_bin = tune_freq_bin + lc_bin + 1
-        if lc_bin>0 and lc_bin< WF_BINS:
-            # low cut line
-            pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (lc_bin-5, wf_height-16), 1)
-        
-        hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
-        hc_bin = tune_freq_bin + hc_bin
-        if hc_bin>0 and hc_bin< WF_BINS:
-            # high cut line
-            pygame.draw.line(surface_, YELLOW, (hc_bin, wf_height-30), (hc_bin+5, wf_height-16), 1)
-        pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
-
 def start_audio_stream(kiwi_snd):
     for k in range(FULL_BUFF_LEN*2):
        snd_buf = kiwi_snd.get_audio_chunk()
@@ -723,3 +548,38 @@ def start_audio_stream(kiwi_snd):
     kiwi_audio_stream.start_stream()
 
     return play, kiwi_audio_stream
+
+
+class eibi_db():
+    def __init__(self):
+        try:
+            with open("./eibi.csv", encoding="latin") as fd:
+                data = fd.readlines()
+        except:
+            return None
+        label_list = data[0].rstrip().split(";")
+        self.station_dict = defaultdict(list)
+        self.intfreq_dict = defaultdict(list)
+        self.visible_stations = []
+
+        for el in data[1:]:
+            els = el.rstrip().split(";")
+            self.intfreq_dict[int(round(float(els[0])))].append(float(els[0])) # store or each integer freqeuncy key all float freq in kHz
+            self.station_dict[float(els[0])].append(els[1:]) # store all stations' data using the float freq in kHz as key (multiple)
+
+        self.freq_set = set(self.intfreq_dict.keys())
+
+    def get_stations(self, start_f, end_f):
+        inters = set(range(int(start_f), int(end_f))) & self.freq_set
+        self.visible_stations = []
+        for intf in inters:
+            record = self.intfreq_dict[intf]
+            for f_khz in record:
+                self.visible_stations.append(f_khz) #self.station_dict[f_khz])
+        return self.visible_stations
+
+    def get_names(self, f_khz):
+        name_list = []
+        for station_record in self.station_dict[f_khz]:
+            name_list.append(station_record[3])
+        return name_list
