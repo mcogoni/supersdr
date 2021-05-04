@@ -514,19 +514,19 @@ def callback(in_data, frame_count, time_info, status):
 
     return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
-def display_box(screen, message):
+def display_box(screen, message, size):
     smallfont = pygame.freetype.SysFont('Mono', 12)
 
     pygame.draw.rect(screen, BLACK,
-                   ((screen.get_width() / 2) - 100,
+                   ((screen.get_width() / 2) - size/2,
                     (screen.get_height() / 2) - 12,
-                    200,18), 0)
+                    size,18), 0)
     pygame.draw.rect(screen, WHITE,
-                   ((screen.get_width() / 2) - 102,
+                   ((screen.get_width() / 2) - size/2+2,
                     (screen.get_height() / 2) - 14,
-                    204,20), 1)
+                    size+4,20), 1)
     if len(message) != 0:
-        pos = ((screen.get_width() / 2) - 70, (screen.get_height() / 2) - 10)
+        pos = ((screen.get_width() / 2) - size/2+5, (screen.get_height() / 2) - 10)
         smallfont.render_to(sdrdisplay, pos, message, WHITE)
 
 def display_help_box(screen, message_list):
@@ -793,14 +793,16 @@ wf_quit = False
 
 auto_mode = True
 input_freq_flag = False
+input_server_flag = False
 show_help_flag =  False
 s_meter_show_flag = True
+
+input_new_server = None
 
 rssi = -127
 if kiwi_snd:
     rssi = kiwi_snd.rssi
 
-question = "Freq (kHz)"
 current_string = []
 
 kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
@@ -853,7 +855,7 @@ while not wf_quit:
         if event.type == pygame.KEYDOWN:
             before_help_flag = show_help_flag
             show_help_flag = False
-            if not input_freq_flag:
+            if not input_freq_flag and not input_server_flag:
                 keys = pygame.key.get_pressed()
                 fast_tune = True if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] else False
 
@@ -1012,67 +1014,37 @@ while not wf_quit:
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
 
-                elif keys[pygame.K_q] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
-                    pygame.event.clear()
-                    input_text = input("hostname[:port][:password]")
-                    input_text_list = input_text.rstrip().split(":")
-                    # stop stream
-                    kiwi_audio_stream.stop_stream()
-                    kiwi_audio_stream.close()
-
-                    # close PyAudio
-                    play.terminate()
-
-                    kiwi_snd.close_connection()
-                    kiwi_wf.close_connection()
-
-                    if len(input_text_list) >= 1:
-                        new_host = input_text_list[0]
-                        new_port = int(kiwi_port)
-                        new_password = kiwi_password
-                    if len(input_text_list) >= 2:
-                        new_port = int(input_text_list[1])
-                    if len(input_text_list) == 3:
-                        new_password = input_text_list[2]
-                    
-                    print(input_text_list)
-                    try:
-                        kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq)
-                        kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password)
-                        print("Changed server to: %s:%d" % (new_host,new_port))
-                        kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
-
-                        time.sleep(2)
-                        play, kiwi_audio_stream = start_audio_stream()
-                    except:
-                        kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
-                        kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password)
-                        print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
-
+                elif keys[pygame.K_q]:# and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                    input_server_flag = True
+                    current_string = []
 
             # manual frequency input
             else:
                 pygame.key.set_repeat(0) # disabe key repeat
                 inkey = event.key
-                if inkey in ALLOWED_KEYS:
+                if inkey in ALLOWED_KEYS or input_server_flag:
                     if inkey == pygame.K_BACKSPACE:
                         current_string = current_string[0:-1]
                     elif inkey == pygame.K_RETURN:
                         current_string = "".join(current_string)
                         try:
-                            manual_snd_freq = int(current_string)
+                            if input_freq_flag:
+                                manual_snd_freq = int(current_string)
+                            elif input_server_flag:
+                                input_new_server = current_string
                         except:
                             pass
                             #click_freq = kiwi_wf.freq
                         pygame.key.set_repeat(200, 50)
                     elif inkey == pygame.K_ESCAPE:
-                        input_freq_flag = False
+                        input_freq_flag = False if input_freq_flag else False
+                        input_server_flag = False if input_server_flag else False
+
                         pygame.key.set_repeat(200, 50)
                         print("ESCAPE!")
                     else:
-                        if len(current_string)<10:
+                        if len(current_string)<10 or input_server_flag:
                             current_string.append(chr(inkey))
-                display_box(sdrdisplay, question + ": " + "".join(current_string))
 
         # Quit
         if event.type == pygame.QUIT:
@@ -1096,7 +1068,45 @@ while not wf_quit:
                 click_freq = kiwi_wf.bins_to_khz(mouse[0])
                 if kiwi_snd.radio_mode == "CW":
                     click_freq -= CW_PITCH # tune CW signal taking into account cw offset
-                
+    
+    if input_server_flag and input_new_server:
+        pygame.event.clear()
+        input_text_list = input_new_server.rstrip().split(" ")
+        # stop stream
+        kiwi_audio_stream.stop_stream()
+        kiwi_audio_stream.close()
+
+        # close PyAudio
+        play.terminate()
+
+        kiwi_snd.close_connection()
+        kiwi_wf.close_connection()
+
+        if len(input_text_list) >= 1:
+            new_host = input_text_list[0]
+            new_port = int(kiwi_port)
+            new_password = kiwi_password
+        if len(input_text_list) >= 2:
+            new_port = int(input_text_list[1])
+        if len(input_text_list) == 3:
+            new_password = input_text_list[2]
+        
+        print(input_text_list)
+        try:
+            kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq)
+            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password)
+            print("Changed server to: %s:%d" % (new_host,new_port))
+            kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
+
+            time.sleep(2)
+            play, kiwi_audio_stream = start_audio_stream()
+        except:
+            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
+            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password)
+            print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
+
+        input_server_flag = False
+
     # Change KIWI RX PB: this can only affect the SND stream
     if change_passband_flag:
         lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
@@ -1234,8 +1244,13 @@ while not wf_quit:
     update_textsurfaces(kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width)
 
 #    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
+
     if input_freq_flag:
-        display_box(sdrdisplay, question + ": " + "".join(current_string))
+        question = "Freq (kHz)"
+        display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
+    elif input_server_flag:
+        question = "hostname[ port][ password]"
+        display_box(sdrdisplay, question + ": " + "".join(current_string), 550)
     elif show_help_flag:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_bigmsg:
