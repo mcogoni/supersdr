@@ -159,17 +159,15 @@ class memory():
         self.mem_list = deque([], 10)
 
 class kiwi_waterfall():
-    def __init__(self, options):
+    def __init__(self, host_, port_, pass_, zoom_, freq_):
         # kiwi hostname and port
-        self.host = options['kiwiserver']
-        self.port = options['kiwiport']
-        self.password = options['kiwi_password']
-
+        self.host = host_
+        self.port = port_
+        self.password = pass_
         print ("KiwiSDR Server: %s:%d" % (self.host, self.port))
+        self.zoom = zoom_
+        self.freq = freq_
 
-        # kiwi RX parameters
-        self.zoom = options['zoom']
-        self.freq = options['freq'] # this is the central freq in kHz
         if not self.freq:
             self.freq = 14200
         self.tune = self.freq
@@ -318,10 +316,11 @@ class kiwi_waterfall():
 
     def close_connection(self):
         try:
-            kiwi_wf.wf_stream.close_connection(mod_pywebsocket.common.STATUS_GOING_AWAY)
+            self.wf_stream.close_connection(mod_pywebsocket.common.STATUS_GOING_AWAY)
             self.socket.close()
         except Exception as e:
             print ("exception: %s" % e)
+
 
     def change_passband(self, delta_low_, delta_high_):
         if self.radio_mode == "USB":
@@ -457,6 +456,14 @@ class kiwi_sound():
 
     def keepalive(self):
         self.stream.send_message("SET keepalive")
+
+    def close_connection(self):
+        try:
+            self.stream.close_connection(mod_pywebsocket.common.STATUS_GOING_AWAY)
+            self.socket.close()
+        except Exception as e:
+            print ("exception: %s" % e)
+
 
 def get_auto_mode(f):
     automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
@@ -618,7 +625,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
-            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-108, V_POS_TEXT), "big", False)
+            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False)
     }
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
@@ -660,13 +667,13 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     lc_bin = snd_freq_bin + lc_bin
     if lc_bin>0 and lc_bin< WF_BINS:
         # low cut line
-        pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (lc_bin-5, wf_height-12), 2)
+        pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (lc_bin-5, wf_height-16), 2)
     
     hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
     hc_bin = snd_freq_bin + hc_bin
     if hc_bin>0 and hc_bin< WF_BINS:
         # high cut line
-        pygame.draw.line(surface_, GREEN, (hc_bin, wf_height-30), (hc_bin+5, wf_height-12), 2)
+        pygame.draw.line(surface_, GREEN, (hc_bin, wf_height-30), (hc_bin+5, wf_height-16), 2)
     
     pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
 
@@ -676,19 +683,48 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         lc_bin = tune_freq_bin + lc_bin + 1
         if lc_bin>0 and lc_bin< WF_BINS:
             # low cut line
-            pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (lc_bin-5, wf_height-12), 1)
+            pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (lc_bin-5, wf_height-16), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
         hc_bin = tune_freq_bin + hc_bin
         if hc_bin>0 and hc_bin< WF_BINS:
             # high cut line
-            pygame.draw.line(surface_, YELLOW, (hc_bin, wf_height-30), (hc_bin+5, wf_height-12), 1)
+            pygame.draw.line(surface_, YELLOW, (hc_bin, wf_height-30), (hc_bin+5, wf_height-16), 1)
         pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
+
+
+def start_audio_stream():
+    global audio_buffer
+
+    for k in range(FULL_BUFF_LEN*2):
+       snd_buf = kiwi_snd.get_audio_chunk()
+       if snd_buf is not None:
+           audio_buffer.append(snd_buf)
+
+    play = pyaudio.PyAudio()
+    for i in range(play.get_device_count()):
+        #print(play.get_device_info_by_index(i))
+        if play.get_device_info_by_index(i)['name'] == "pulse":
+            CARD_INDEX = i
+        else:
+            CARD_INDEX = None
+
+    # open stream using callback (3)
+    kiwi_audio_stream = play.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=AUDIO_RATE,
+                    output=True,
+                    output_device_index=CARD_INDEX,
+                    frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
+                    stream_callback=callback)
+    kiwi_audio_stream.start_stream()
+
+    return play, kiwi_audio_stream
 
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
-                  help="KiwiSDR password", dest="kiwi_password", default="")
+                  help="KiwiSDR password", dest="kiwipassword", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
                   help="KiwiSDR server name", dest="kiwiserver", default='192.168.1.82')
 parser.add_option("-p", "--kiwiport", type=int,
@@ -703,14 +739,15 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
                   
 options = vars(parser.parse_args()[0])
+
+kiwi_host = options['kiwiserver']
+kiwi_port = options['kiwiport']
+kiwi_password = options['kiwipassword']
 freq = options['freq'] # this is the central freq in kHz
 zoom = options['zoom'] 
-
-kiwi_wf = kiwi_waterfall(options)
-
-#rigctld hostname and port
 radiohost = options['radioserver']
 radioport = options['radioport']
+
 if radiohost:
     try:
         cat_radio = cat(radiohost, radioport)
@@ -736,7 +773,8 @@ else:
     radio_mode = "USB"
 
 print(freq)
-kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_wf.password)
+kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
+kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password)
 
 # init pygame basic objects
 pygame.init()
@@ -766,34 +804,11 @@ question = "Freq (kHz)"
 current_string = []
 
 kiwi_filter = filter(KIWI_RATE/2, AUDIO_RATE)
+old_buffer = np.zeros((kiwi_filter.n_tap))
+audio_buffer = []
 
-if kiwi_snd:
-    old_buffer = np.zeros((kiwi_filter.n_tap))
-    audio_buffer = []
 
-    for k in range(FULL_BUFF_LEN*2):
-       snd_buf = kiwi_snd.get_audio_chunk()
-       if snd_buf is not None:
-           audio_buffer.append(snd_buf)
-
-    play = pyaudio.PyAudio()
-    for i in range(play.get_device_count()):
-        #print(play.get_device_info_by_index(i))
-        if play.get_device_info_by_index(i)['name'] == "pulse":
-            CARD_INDEX = i
-        else:
-            CARD_INDEX = None
-
-    # open stream using callback (3)
-    kiwi_audio_stream = play.open(format=FORMAT,
-                    channels=CHANNELS,
-                    rate=AUDIO_RATE,
-                    output=True,
-                    output_device_index=CARD_INDEX,
-                    frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
-                    stream_callback=callback)
-
-    kiwi_audio_stream.start_stream()
+play, kiwi_audio_stream = start_audio_stream()
 
 kiwi_memory = memory()
 kiwi_wf.set_freq_zoom(freq, zoom)
@@ -997,6 +1012,44 @@ while not wf_quit:
                 elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
 
+                elif keys[pygame.K_q] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                    pygame.event.clear()
+                    input_text = input("hostname[:port][:password]")
+                    input_text_list = input_text.rstrip().split(":")
+                    # stop stream
+                    kiwi_audio_stream.stop_stream()
+                    kiwi_audio_stream.close()
+
+                    # close PyAudio
+                    play.terminate()
+
+                    kiwi_snd.close_connection()
+                    kiwi_wf.close_connection()
+
+                    if len(input_text_list) >= 1:
+                        new_host = input_text_list[0]
+                        new_port = int(kiwi_port)
+                        new_password = kiwi_password
+                    if len(input_text_list) >= 2:
+                        new_port = int(input_text_list[1])
+                    if len(input_text_list) == 3:
+                        new_password = input_text_list[2]
+                    
+                    print(input_text_list)
+                    try:
+                        kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq)
+                        kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password)
+                        print("Changed server to: %s:%d" % (new_host,new_port))
+                        kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
+
+                        time.sleep(2)
+                        play, kiwi_audio_stream = start_audio_stream()
+                    except:
+                        kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
+                        kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password)
+                        print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
+
+
             # manual frequency input
             else:
                 pygame.key.set_repeat(0) # disabe key repeat
@@ -1024,7 +1077,6 @@ while not wf_quit:
         # Quit
         if event.type == pygame.QUIT:
             wf_quit = True
-
         # KIWI WF mouse zooming
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 4: # mouse scroll up
@@ -1222,5 +1274,15 @@ while not wf_quit:
     clock.tick(50)
     mouse = pygame.mouse.get_pos()
 
+# stop stream
+kiwi_audio_stream.stop_stream()
+kiwi_audio_stream.close()
+
+# close PyAudio
+play.terminate()
+
 pygame.quit()
+kiwi_snd.close_connection()
 kiwi_wf.close_connection()
+
+
