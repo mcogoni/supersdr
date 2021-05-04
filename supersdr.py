@@ -19,7 +19,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,wf_height-12), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,wf_height-12), "small", False),
             "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,V_POS_TEXT), "small", False),
+            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(140,V_POS_TEXT), "small", False),
             "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,wf_height-12), "small", False),
             "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,wf_height-12), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
@@ -28,7 +28,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False)
     }
     if not s_meter_show_flag:
-        ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
+        ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
     
     draw_dict = {}
     for k in ts_dict:
@@ -145,7 +145,7 @@ def s_meter_draw(rssi_smooth):
     smallfont = pygame.freetype.SysFont('Mono', font_size)
 
     s_meter_radius = 50.
-    s_meter_center = (140,s_meter_radius+8)
+    s_meter_center = (s_meter_radius+10,s_meter_radius+8)
     alpha_rssi = rssi_smooth+127
     alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
 
@@ -188,7 +188,7 @@ parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwipassword", default="")
 parser.add_option("-s", "--kiwiserver", type=str,
-                  help="KiwiSDR server name", dest="kiwiserver", default='192.168.1.82')
+                  help="KiwiSDR server name", dest="kiwiserver", default="")
 parser.add_option("-p", "--kiwiport", type=int,
                   help="port number", dest="kiwiport", default=8073)
 parser.add_option("-S", "--radioserver", type=str,
@@ -209,6 +209,17 @@ freq = options['freq'] # this is the central freq in kHz
 zoom = options['zoom'] 
 radiohost = options['radioserver']
 radioport = options['radioport']
+
+if not kiwi_host:
+    input_new_server = input("***\nNo KIWI specified!\nPlease enter: hostame [port] [password]\n")
+    input_text_list = input_new_server.rstrip().split(" ")
+    if len(input_text_list) >= 1:
+        kiwi_host = input_text_list[0]
+    if len(input_text_list) >= 2:
+        kiwi_port = int(input_text_list[1])
+    if len(input_text_list) == 3:
+        kiwi_password = input_text_list[2]
+
 
 if radiohost:
     try:
@@ -324,6 +335,7 @@ while not wf_quit:
                 # Center RX freq on WF
                 if keys[pygame.K_z]:
                     wf_snd_link_flag = False if wf_snd_link_flag else True
+                    force_sync_flag = True
                     show_bigmsg = "centertune"
                     run_index_bigmsg = run_index
 
@@ -584,7 +596,7 @@ while not wf_quit:
         else:
             kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
         force_sync_flag = False
-
+        wf_white_flag = True
 
     if input_freq_flag and manual_snd_freq:
         kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom)
@@ -649,6 +661,7 @@ while not wf_quit:
         kiwi_snd.set_mode_freq_pb()
         if wf_snd_link_flag or show_bigmsg == "restorememory":
             kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
+            wf_white_flag = True
 
     if cat_radio and cat_snd_link_flag:
         if manual_mode:
@@ -694,6 +707,7 @@ while not wf_quit:
 
 #   plot horiz line to show time of freq change
     kiwi_wf.receive_spectrum(True if wf_white_flag else False)
+    wf_white_flag = False
 
     # clear the background with a uniform color
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
