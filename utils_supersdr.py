@@ -338,8 +338,13 @@ class kiwi_waterfall():
         return lc_, hc_
 
 class kiwi_sound():
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf):
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, kiwi_filter):
         # connect to kiwi server
+        self.n_tap = kiwi_filter.n_tap
+        self.lowpass = kiwi_filter.lowpass
+        self.audio_buffer = []
+        self.old_buffer = np.zeros((self.n_tap))
+        
         self.rssi = -127
         self.freq = freq_
         self.radio_mode = mode_
@@ -426,6 +431,38 @@ class kiwi_sound():
         except Exception as e:
             print ("exception: %s" % e)
 
+    def callback(self, in_data, frame_count, time_info, status):
+        samples_got = 0
+        audio_buf_start_len = len(self.audio_buffer)
+        while audio_buf_start_len+samples_got <= FULL_BUFF_LEN:
+            snd_buf = self.get_audio_chunk()
+            if snd_buf is not None:
+                self.audio_buffer.append(snd_buf)
+                samples_got += 1
+            else:
+                break
+        # emergency buffer fillup with silence
+        while len(self.audio_buffer) <= FULL_BUFF_LEN:
+            print("!", end=' ')
+            self.audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
+        
+        popped = np.array(self.audio_buffer[:CHUNKS]).flatten()
+        popped = popped.astype(np.float64) * (VOLUME/100)
+        self.audio_buffer = self.audio_buffer[CHUNKS:] # removed used chunks
+
+        n = len(popped)
+        # oversample
+        pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
+        pyaudio_buffer[::SAMPLE_RATIO] = popped
+        pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
+        
+        # low pass filter
+        self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
+        pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
+
+        return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
+
+
 class cat:
     def __init__(self, radiohost_, radioport_):
         self.KNOWN_MODES = {"USB", "LSB", "CW", "AM"}
@@ -463,3 +500,226 @@ class cat:
         if self.radio_mode not in self.KNOWN_MODES:
             self.radio_mode = "USB" # defaults to USB if radio selects RTTY, FSK, etc
         return self.radio_mode
+
+
+def get_auto_mode(f):
+    automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
+                "LSB": ((1840,1850),(3600,3800),(7060,7200)),
+                "CW": ((1810, 1840),(3500,3600),(7000,7060),(10100, 10150),(14000,14100),
+                    (18068,18110),(21000,21150),(24890,24930),(28000,28190)),
+                "AM": ((148,283),(520,1720),(2300,2500),(3200,3400),(3900,4000),(4750,5060),
+                    (5900,6200),(7200,7450),(9400,9900),(11600,12100),(13570,13870),(15100,15800),
+                    (17480,17900),(18900,19020),(21450,21850),(25670,26100))}
+
+    f = round(f)
+    for mode_ in automode_dict:
+        for rng in automode_dict[mode_]:
+            if f in range(rng[0], rng[1]):
+                return mode_
+    # if f not in bands, apply generic rule
+    return "USB" if f>10000 else "LSB"
+
+
+def display_box(screen, message, size):
+    smallfont = pygame.freetype.SysFont('Mono', 12)
+
+    pygame.draw.rect(screen, BLACK,
+                   ((screen.get_width() / 2) - size/2,
+                    (screen.get_height() / 2) - 12,
+                    size,18), 0)
+    pygame.draw.rect(screen, WHITE,
+                   ((screen.get_width() / 2) - size/2+2,
+                    (screen.get_height() / 2) - 14,
+                    size+4,20), 1)
+    if len(message) != 0:
+        pos = ((screen.get_width() / 2) - size/2+5, (screen.get_height() / 2) - 10)
+        smallfont.render_to(sdrdisplay, pos, message, WHITE)
+
+def display_help_box(screen, message_list):
+    font_size = font_size_dict["small"]
+    smallfont = pygame.freetype.SysFont('Mono', font_size)
+
+    window_size = 450
+    pygame.draw.rect(screen, (0,0,0),
+                   ((screen.get_width() / 2) - window_size/2,
+                    (screen.get_height() / 2) - window_size/3,
+                    window_size , window_size-150), 0)
+    pygame.draw.rect(screen, (255,255,255),
+                   ((screen.get_width() / 2) - window_size/2,
+                    (screen.get_height() / 2) - window_size/3,
+                    window_size,window_size-150), 1)
+
+    if len(message_list) != 0:
+        for ii, msg in enumerate(message_list):
+            pos = (screen.get_width() / 2 - window_size/2 + font_size, 
+                    screen.get_height() / 2-window_size/3 + ii*font_size + font_size)
+            smallfont.render_to(sdrdisplay, pos, msg, WHITE)
+
+def display_msg_box(screen, message, pos=None, fontsize=12, color=WHITE):
+    smallfont = pygame.freetype.SysFont('Mono', fontsize)
+    if not pos:
+        pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
+    # pygame.draw.rect(screen, BLACK,
+    #                ((screen.get_width() / 2) - msg_len/2,
+    #                 (screen.get_height() / 2) - 10, msg_len,20), 0)
+    # pygame.draw.rect(screen, WHITE,
+    #                ((screen.get_width() / 2) - msg_len/2+2,
+    #                 (screen.get_height() / 2) - 12, msg_len+4,24), 1)
+    if len(message) != 0:
+        smallfont.render_to(sdrdisplay, pos, message, color)
+    
+def s_meter_draw(rssi_smooth):
+    font_size = 8
+    smallfont = pygame.freetype.SysFont('Mono', font_size)
+
+    s_meter_radius = 50.
+    s_meter_center = (140,s_meter_radius+8)
+    alpha_rssi = rssi_smooth+127
+    alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
+
+    def _coords_from_angle(angle, s_meter_radius_):
+        x_ = s_meter_radius_ * math.cos(angle)
+        y_ = s_meter_radius_ * math.sin(angle)
+        s_meter_x = s_meter_center[0] + x_
+        s_meter_y = s_meter_center[1] - y_
+        return s_meter_x, s_meter_y
+    
+    s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius* 0.95)
+    pygame.draw.rect(sdrdisplay, YELLOW,
+                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 0)
+    pygame.draw.rect(sdrdisplay, BLACK,
+                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 3)
+    
+    angle_list = np.linspace(0.4, math.pi-0.4, 9)
+    text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
+    for alpha_seg, msg in zip(angle_list, text_list[::-1]):
+        text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
+        smallfont.render_to(sdrdisplay, (text_x-6, text_y-2), msg, D_GREY)
+
+        seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
+        color_ =  BLACK
+        tick_rad = 2
+        if alpha_seg < 1.4:
+            color_ = RED
+            tick_rad = 3
+        pygame.draw.circle(sdrdisplay, color_, (seg_x, seg_y), tick_rad)
+    pygame.draw.circle(sdrdisplay, D_GREY, s_meter_center, 4)
+
+    pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
+    str_rssi = "%ddBm"%rssi_smooth
+    smallfont = pygame.freetype.SysFont('Mono', 10)
+    str_len = len(str_rssi)
+    pos = (s_meter_center[0]+13, s_meter_center[1])
+    smallfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
+
+def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
+    global sdrdisplay
+    mousex_pos = mouse[0]
+    if mousex_pos < 25:
+        mousex_pos = 25
+    elif mousex_pos >= DISPLAY_WIDTH - 80:
+        mousex_pos = DISPLAY_WIDTH - 80
+
+    #           Label   Color   Freq/Mode                       Screen position
+    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-60,wf_height-12), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,wf_height-12), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,wf_height-12), "small", False),
+            "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
+            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(230,V_POS_TEXT), "small", False),
+            "span": (GREEN, "SPAN %.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,wf_height-12), "small", False),
+            "filter": (GREEN, "FILT %.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,wf_height-12), "small", False),
+            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos, wf_height-25), "small", False),
+            "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
+            "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
+            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False)
+    }
+    if not s_meter_show_flag:
+        ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (wf_width/2-370,V_POS_TEXT), "big", False)
+    
+    draw_dict = {}
+    for k in ts_dict:
+        if k == "p_freq" and not pygame.mouse.get_focused():
+            continue
+        if "small" in ts_dict[k][3]:
+            smallfont = pygame.freetype.SysFont('Mono', 12)
+            render_ = smallfont.render_to
+        elif "big" in ts_dict[k][3]:
+            bigfont = pygame.freetype.SysFont('Mono', 16)
+            render_ = bigfont.render_to
+        fontsize_ = font_size_dict[ts_dict[k][3]]
+
+        str_len = len(ts_dict[k][1])
+        x_r, y_r = ts_dict[k][2]
+        if ts_dict[k][4]:
+            pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len)*fontsize_*0.6, 14), 0)
+        render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
+
+def draw_lines(surface_, wf_height, radio_mode, mouse, kiwi_wf, kiwi_snd, cat_radio, cat_snd_link_flag):
+    center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
+    pygame.draw.line(surface_, RED, (center_freq_bin, DISPLAY_HEIGHT-30), (center_freq_bin, DISPLAY_HEIGHT-20), 4)
+    if pygame.mouse.get_focused():
+        pygame.draw.line(surface_, (250,0,0), (mouse[0], DISPLAY_HEIGHT-20), (mouse[0], DISPLAY_HEIGHT), 1)
+
+    snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
+    if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
+        # carrier line
+        pygame.draw.line(surface_, RED, (snd_freq_bin, DISPLAY_HEIGHT-20), (snd_freq_bin, DISPLAY_HEIGHT), 2)
+    if cat_radio and not cat_snd_link_flag:
+        tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
+        # tune wf line
+        pygame.draw.line(surface_, D_RED, (tune_freq_bin, DISPLAY_HEIGHT-20), (tune_freq_bin, DISPLAY_HEIGHT), 3)
+        
+    lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
+    lc_bin = snd_freq_bin + lc_bin
+    if lc_bin>0 and lc_bin< WF_BINS:
+        # low cut line
+        pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (lc_bin-5, wf_height-16), 2)
+    
+    hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
+    hc_bin = snd_freq_bin + hc_bin
+    if hc_bin>0 and hc_bin< WF_BINS:
+        # high cut line
+        pygame.draw.line(surface_, GREEN, (hc_bin, wf_height-30), (hc_bin+5, wf_height-16), 2)
+    
+    pygame.draw.line(surface_, GREEN, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
+
+    if cat_radio and not cat_snd_link_flag:
+        lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
+        lc_bin = kiwi_wf.offset_to_bin(lc_/1000.)
+        lc_bin = tune_freq_bin + lc_bin + 1
+        if lc_bin>0 and lc_bin< WF_BINS:
+            # low cut line
+            pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (lc_bin-5, wf_height-16), 1)
+        
+        hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
+        hc_bin = tune_freq_bin + hc_bin
+        if hc_bin>0 and hc_bin< WF_BINS:
+            # high cut line
+            pygame.draw.line(surface_, YELLOW, (hc_bin, wf_height-30), (hc_bin+5, wf_height-16), 1)
+        pygame.draw.line(surface_, YELLOW, (lc_bin, wf_height-30), (hc_bin, wf_height-30), 2)
+
+def start_audio_stream(kiwi_snd):
+    for k in range(FULL_BUFF_LEN*2):
+       snd_buf = kiwi_snd.get_audio_chunk()
+       if snd_buf is not None:
+           kiwi_snd.audio_buffer.append(snd_buf)
+
+    play = pyaudio.PyAudio()
+    for i in range(play.get_device_count()):
+        #print(play.get_device_info_by_index(i))
+        if play.get_device_info_by_index(i)['name'] == "pulse":
+            CARD_INDEX = i
+        else:
+            CARD_INDEX = None
+
+    # open stream using callback (3)
+    kiwi_audio_stream = play.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=AUDIO_RATE,
+                    output=True,
+                    output_device_index=CARD_INDEX,
+                    frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
+                    stream_callback=kiwi_snd.callback)
+    kiwi_audio_stream.start_stream()
+
+    return play, kiwi_audio_stream
