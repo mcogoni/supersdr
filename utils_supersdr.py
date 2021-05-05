@@ -44,11 +44,20 @@ FULL_BUFF_LEN = 20
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
 MAX_ZOOM = 14
 WF_BINS  = 1024
-WF_HEIGHT = 400
 
 # SuperSDR constants
+WF_HEIGHT = 400
 DISPLAY_WIDTH = WF_BINS
-DISPLAY_HEIGHT = 450
+TOPBAR_HEIGHT = 20
+SPECTRUM_HEIGHT = 100
+BOTTOMBAR_HEIGHT = 20
+TUNEBAR_HEIGHT = 20
+DISPLAY_HEIGHT = WF_HEIGHT + SPECTRUM_HEIGHT + TOPBAR_HEIGHT + BOTTOMBAR_HEIGHT + TUNEBAR_HEIGHT
+TOPBAR_Y = 0
+SPECTRUM_Y = TOPBAR_HEIGHT
+TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
+WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
+BOTTOMBAR_Y = WF_Y + WF_HEIGHT
 V_POS_TEXT = 5
 MIN_DYN_RANGE = 90. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
@@ -82,6 +91,7 @@ RED = (255,0,0)
 BLUE = (0,0,255)
 GREEN = (0,255,0)
 YELLOW = (200,180,0)
+ORANGE = (255,140,0)
 
 # setup colormap from matplotlib
 palRGB = cm.jet(range(256))[:,:3]*255
@@ -308,7 +318,6 @@ class kiwi_waterfall():
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
         self.eibi.get_stations(self.start_f_khz, self.end_f_khz)
-
 
         return self.freq
 
