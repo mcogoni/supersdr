@@ -6,6 +6,7 @@ import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 from matplotlib import cm
 import numpy as np
 
+import _thread, threading, queue
 import socket
 import time
 import sys
@@ -36,9 +37,9 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 14
+CHUNKS = 3
 KIWI_SAMPLES_PER_FRAME = 512
-FULL_BUFF_LEN = 20
+FULL_BUFF_LEN = 6
 
 # Hardcoded values for most kiwis
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
@@ -126,6 +127,26 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 
 font_size_dict = {"small": 12, "big": 18}
 
+
+class dxcluster():
+    def __init__(self, mycall_):
+        self.mycall = mycall_
+        host, port = 'dxfun.com', 8000
+        self.server = (host, port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connect()
+    
+    def connect(self):
+        self.sock.connect(self.server)
+        self.send(self.mycall)
+
+    def send(self, msg):
+        msg = msg + '\n'
+        self.sock.send(msg.encode())
+
+    def receive(self):
+        msg = self.sock.recv(2048)
+        return msg.decode("latin-1")
 
 class filtering():
     def __init__(self, fl, fs):
@@ -353,7 +374,9 @@ class kiwi_sound():
         # connect to kiwi server
         self.n_tap = kiwi_filter.n_tap
         self.lowpass = kiwi_filter.lowpass
-        self.audio_buffer = []
+        #self.audio_buffer = []
+        self.audio_buffer = queue.Queue()
+
         self.old_buffer = np.zeros((self.n_tap))
         self.volume = 100
         
@@ -443,7 +466,7 @@ class kiwi_sound():
         except Exception as e:
             print ("exception: %s" % e)
 
-    def callback(self, in_data, frame_count, time_info, status):
+    def callback_ok(self, in_data, frame_count, time_info, status):
         samples_got = 0
         audio_buf_start_len = len(self.audio_buffer)
         while audio_buf_start_len+samples_got <= FULL_BUFF_LEN:
@@ -473,6 +496,35 @@ class kiwi_sound():
         pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
 
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
+
+    def callback(self, in_data, frame_count, time_info, status):
+        #print (self.audio_buffer.qsize())
+        popped = []
+        for _ in range(CHUNKS):
+            popped.append( self.audio_buffer.get() )
+
+        popped = np.array(popped).flatten()
+        popped = popped.astype(np.float64) * (self.volume/100)        
+
+        n = len(popped)
+        # oversample
+        pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
+        pyaudio_buffer[::SAMPLE_RATIO] = popped
+        pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
+        
+        # low pass filter
+        self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
+        pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
+
+        return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
+
+    def run(self):
+        while True:
+            if self.audio_buffer.qsize()<FULL_BUFF_LEN:
+                snd_buf = self.get_audio_chunk()
+                if snd_buf is not None:
+                    self.audio_buffer.put(snd_buf)
+            time.sleep(0.03)
 
 
 class cat:
@@ -533,10 +585,8 @@ def get_auto_mode(f):
 
 
 def start_audio_stream(kiwi_snd):
-    for k in range(FULL_BUFF_LEN*2):
-       snd_buf = kiwi_snd.get_audio_chunk()
-       if snd_buf is not None:
-           kiwi_snd.audio_buffer.append(snd_buf)
+    _thread.start_new_thread(kiwi_snd.run, ())
+    time.sleep(0.25)
 
     play = pyaudio.PyAudio()
     for i in range(play.get_device_count()):

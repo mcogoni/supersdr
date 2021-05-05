@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import _thread
 from optparse import OptionParser
 from utils_supersdr import *
 
@@ -204,6 +205,12 @@ def plot_eibi(surface_):
         except:
             pass
 
+def dxcluster_run():
+    while True:
+        dx_cluster_msg = dxclust.receive()
+        print(dx_cluster_msg)
+        time.sleep(5)
+
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -224,6 +231,7 @@ parser.add_option("-f", "--freq", type=int,
 options = vars(parser.parse_args()[0])
 
 eibi = eibi_db()
+dxclust = dxcluster("IS0KYB")
 
 kiwi_host = options['kiwiserver']
 kiwi_port = options['kiwiport']
@@ -300,6 +308,8 @@ show_eibi_flag = False
 input_new_server = None
 current_string = []
 
+dx_cluster_msg = True
+
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 
 kiwi_memory = memory()
@@ -322,6 +332,10 @@ rssi_smooth = kiwi_snd.rssi
 run_index = 0
 run_index_automode = 0
 show_bigmsg = None
+
+# keep receiving dx cluster announces every 5s
+_thread.start_new_thread(dxcluster_run, ())
+
 
 while not wf_quit:
     run_index += 1
@@ -755,7 +769,6 @@ while not wf_quit:
     draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse)
     update_textsurfaces(kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width)
 
-    
 #    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
     if show_eibi_flag and kiwi_wf.zoom > 6:
         plot_eibi(sdrdisplay)
