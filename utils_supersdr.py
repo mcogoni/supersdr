@@ -375,7 +375,7 @@ class kiwi_sound():
         self.n_tap = kiwi_filter.n_tap
         self.lowpass = kiwi_filter.lowpass
         #self.audio_buffer = []
-        self.audio_buffer = queue.Queue()
+        self.audio_buffer = queue.Queue(maxsize=FULL_BUFF_LEN)
 
         self.old_buffer = np.zeros((self.n_tap))
         self.volume = 100
@@ -586,7 +586,7 @@ def get_auto_mode(f):
 
 def start_audio_stream(kiwi_snd):
     _thread.start_new_thread(kiwi_snd.run, ())
-    time.sleep(0.25)
+    time.sleep(0.1)
 
     play = pyaudio.PyAudio()
     for i in range(play.get_device_count()):

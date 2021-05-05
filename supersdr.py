@@ -605,7 +605,7 @@ while not wf_quit:
         
         print(input_text_list)
         try:
-            kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq)
+            kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
             kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter)
             print("Changed server to: %s:%d" % (new_host,new_port))
             kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
@@ -808,12 +808,12 @@ while not wf_quit:
 
         display_msg_box(sdrdisplay, msg_text, pos=None, fontsize=35, color=msg_color)
 
-    rssi_smooth = np.mean(list(rssi_hist)[15:20])
+    rssi_smooth = np.mean(list(rssi_hist)[:])
     if s_meter_show_flag:
         s_meter_draw(rssi_smooth)
 
     pygame.display.update()
-    clock.tick(25)
+    clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
 # stop stream
