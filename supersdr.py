@@ -41,11 +41,6 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             bigfont = pygame.freetype.SysFont('Mono', 16)
             render_ = bigfont.render_to
         fontsize_ = font_size_dict[ts_dict[k][3]]
-
-        str_len = len(ts_dict[k][1])
-        x_r, y_r = ts_dict[k][2]
-        # if ts_dict[k][4]:
-        #     pygame.draw.rect(sdrdisplay, D_GREY, (x_r-1, y_r-1, (str_len)*fontsize_*0.6, 14), 0)
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
 
 def draw_lines(surface_, wf_height, radio_mode, mouse):
@@ -199,13 +194,13 @@ def plot_spectrum(t_avg=15, col=GREEN):
 def plot_eibi(surface_):
     for f_khz in set(eibi.visible_stations):
         f_bin = int(kiwi_wf.offset_to_bin(f_khz-kiwi_wf.start_f_khz))
-        ts = (YELLOW, eibi.get_names(f_khz)[0], (f_bin,250), "small")
+        ts = (ORANGE, eibi.get_names(f_khz)[0], (f_bin,WF_Y+20), "small")
         smallfont = pygame.freetype.SysFont('Mono', 12)
         render_ = smallfont.render_to
         try:
             if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
                 render_(surface_, ts[2], ts[1],  rotation=90, fgcolor=ts[0], bgcolor=(20,20,20))
-                pygame.draw.line(surface_, YELLOW, (f_bin, wf_height-30), (f_bin, wf_height-25), 1)
+                pygame.draw.line(surface_, ORANGE, (f_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), (f_bin, TUNEBAR_Y+15), 1)
         except:
             pass
 
