@@ -19,7 +19,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,SPECTRUM_Y+1), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,SPECTRUM_Y+1), "small", False),
             "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(140,V_POS_TEXT), "small", False),
+            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(5,BOTTOMBAR_Y+6), "small", False),
             "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,SPECTRUM_Y+1), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y+1), "small", False),
@@ -294,7 +294,7 @@ auto_mode = True
 input_freq_flag = False
 input_server_flag = False
 show_help_flag =  False
-s_meter_show_flag = True
+s_meter_show_flag = False
 show_eibi_flag = False
 
 input_new_server = None
@@ -746,13 +746,13 @@ while not wf_quit:
 
     # clear the background with a uniform color
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
-    pygame.draw.rect(sdrdisplay, (0,0,00), (0,DISPLAY_HEIGHT-16,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,00), (0,BOTTOMBAR_Y,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
 
     plot_spectrum()
     surface = pygame.surfarray.make_surface(np.flip(kiwi_wf.wf_data.T, axis=1))
     surface.set_palette(palRGB)
-    draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse)
     sdrdisplay.blit(surface, (0, WF_Y))
+    draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse)
     update_textsurfaces(kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width)
 
     
