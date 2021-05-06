@@ -277,12 +277,13 @@ else:
     radio_mode = "USB"
 
 kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
+audio_rec = audio_recording("out.wav")
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 #init KIWI WF and RX audio
 kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
 print(freq, radio_mode, 30, 3000, kiwi_password)
-kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter)
+kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
 if kiwi_snd is None:
     print("Server not ready")
     exit()
@@ -498,6 +499,17 @@ while not wf_quit:
                     if not before_help_flag:
                         show_help_flag = True
 
+                # Start/stop audio recording to file
+                elif keys[pygame.K_e]:
+                    if not audio_rec.recording_flag:
+                        audio_rec.start()
+                        show_bigmsg = "start_rec"
+                        run_index_bigmsg = run_index
+                    else:
+                        audio_rec.stop(play)
+                        show_bigmsg = "stop_rec"
+                        run_index_bigmsg = run_index
+
                 # S-meter show/hide
                 elif keys[pygame.K_s] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
                     s_meter_show_flag = False if s_meter_show_flag else True
@@ -610,13 +622,13 @@ while not wf_quit:
         kiwi_snd.terminate = False
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
-            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter)
+            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter, audio_rec)
             print("Changed server to: %s:%d" % (new_host,new_port))
             kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
             kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
-            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter)
+            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 
@@ -804,6 +816,10 @@ while not wf_quit:
             msg_text = "Reset All Memories!"
         elif "emptymemory" == show_bigmsg:
             msg_text = "No Memories!"
+        elif "start_rec" == show_bigmsg:
+            msg_text = "Start recording"
+        elif "stop_rec" == show_bigmsg:
+            msg_text = "Save recording"
         elif "centertune" == show_bigmsg:
             msg_text = "WF center tune mode " + ("ON" if wf_snd_link_flag else "OFF")
 

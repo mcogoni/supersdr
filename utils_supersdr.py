@@ -1,5 +1,7 @@
 import pygame
 import pyaudio
+import wave
+
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
@@ -7,7 +9,6 @@ from matplotlib import cm
 import numpy as np
 
 import threading, queue
-#from multiprocessing import Process, Queue
 
 import socket
 import time
@@ -129,6 +130,34 @@ HELP_MESSAGE_LIST = ["COMMANDS HELP",
 
 font_size_dict = {"small": 12, "big": 18}
 
+class audio_recording():
+    def __init__(self, filename_):
+        self.filename = filename_
+        self.audio_buffer = []
+
+        self.frames = []
+        self.recording_flag = False
+
+    def start(self):
+        print("start recording")
+        self.recording_flag = True
+
+    def stop(self, p_):
+        print("stop recording")
+        self.recording_flag = False
+        self.save(p_)
+
+    def save(self, p_):
+        self.wave = wave.open(self.filename, 'wb')
+        self.wave.setnchannels(CHANNELS)
+        self.wave.setsampwidth(p_.get_sample_size(FORMAT))
+        self.wave.setframerate(AUDIO_RATE)
+
+        # process audio data here
+
+        self.wave.writeframes(b''.join(self.audio_buffer))
+        self.wave.close()
+        self.recording = False
 
 class dxcluster():
     def __init__(self, mycall_):
@@ -347,7 +376,7 @@ class kiwi_waterfall():
         self.wf_stream.send_message("SET keepalive")
 
     def close_connection(self):
-        if self.wf_stream == None:
+        if not self.wf_stream:
             return
         try:
             self.wf_stream.close_connection(mod_pywebsocket.common.STATUS_GOING_AWAY)
@@ -373,11 +402,11 @@ class kiwi_waterfall():
         return lc_, hc_
 
 class kiwi_sound():
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, kiwi_filter):
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, kiwi_filter, audio_rec_):
         # connect to kiwi server
         self.n_tap = kiwi_filter.n_tap
         self.lowpass = kiwi_filter.lowpass
-        #self.audio_buffer = []
+        self.audio_rec_ = audio_rec_
         self.audio_buffer = queue.Queue(maxsize=FULL_BUFF_LEN)
         self.terminate = False
 
@@ -486,37 +515,6 @@ class kiwi_sound():
         except Exception as e:
             print ("exception: %s" % e)
 
-    def callback_ok(self, in_data, frame_count, time_info, status):
-        samples_got = 0
-        audio_buf_start_len = len(self.audio_buffer)
-        while audio_buf_start_len+samples_got <= FULL_BUFF_LEN:
-            snd_buf = self.get_audio_chunk()
-            if snd_buf is not None:
-                self.audio_buffer.append(snd_buf)
-                samples_got += 1
-            else:
-                break
-        # emergency buffer fillup with silence
-        while len(self.audio_buffer) <= FULL_BUFF_LEN:
-            print("!", end=' ')
-            self.audio_buffer.append(np.zeros((KIWI_SAMPLES_PER_FRAME)))
-        
-        popped = np.array(self.audio_buffer[:CHUNKS]).flatten()
-        popped = popped.astype(np.float64) * (self.volume/100)
-        self.audio_buffer = self.audio_buffer[CHUNKS:] # removed used chunks
-
-        n = len(popped)
-        # oversample
-        pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
-        pyaudio_buffer[::SAMPLE_RATIO] = popped
-        pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
-        
-        # low pass filter
-        self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
-        pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
-
-        return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
-
     def callback(self, in_data, frame_count, time_info, status):
         popped = []
         for _ in range(CHUNKS):
@@ -534,6 +532,9 @@ class kiwi_sound():
         # low pass filter
         self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
         pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
+        if self.audio_rec_.recording_flag:
+            print("!")
+            self.audio_rec_.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
