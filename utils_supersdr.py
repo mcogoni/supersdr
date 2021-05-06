@@ -6,7 +6,9 @@ import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 from matplotlib import cm
 import numpy as np
 
-import _thread, threading, queue
+import threading, queue
+#from multiprocessing import Process, Queue
+
 import socket
 import time
 import sys
@@ -37,9 +39,9 @@ CHANNELS = 1
 AUDIO_RATE = 48000
 KIWI_RATE = 12000
 SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 3
+CHUNKS = 2 # 10 or more for remote kiwis
 KIWI_SAMPLES_PER_FRAME = 512
-FULL_BUFF_LEN = 6
+FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
 
 # Hardcoded values for most kiwis
 MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
@@ -222,7 +224,6 @@ class kiwi_waterfall():
 
         self.start_stream()
 
-    
     def start_stream(self):
 
         uri = '/%d/%s' % (int(time.time()), 'W/F')
@@ -231,7 +232,7 @@ class kiwi_waterfall():
             handshake_wf.handshake(uri)
             request_wf = wsclient.ClientRequest(self.socket)
         except:
-            return
+            return None
         request_wf.ws_version = mod_pywebsocket.common.VERSION_HYBI13
         stream_option_wf = StreamOptions()
         stream_option_wf.mask_send = True
@@ -346,6 +347,8 @@ class kiwi_waterfall():
         self.wf_stream.send_message("SET keepalive")
 
     def close_connection(self):
+        if self.wf_stream == None:
+            return
         try:
             self.wf_stream.close_connection(mod_pywebsocket.common.STATUS_GOING_AWAY)
             self.socket.close()
@@ -376,6 +379,7 @@ class kiwi_sound():
         self.lowpass = kiwi_filter.lowpass
         #self.audio_buffer = []
         self.audio_buffer = queue.Queue(maxsize=FULL_BUFF_LEN)
+        self.terminate = False
 
         self.old_buffer = np.zeros((self.n_tap))
         self.volume = 100
@@ -407,11 +411,14 @@ class kiwi_sound():
             "SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
             
             for msg in msg_list:
-                print(msg)
                 self.stream.send_message(msg)
+            data = ""
+            while "MSG" in data:
+                data = self.stream.receive_message()
+
         except:
             print ("Failed to connect to Kiwi audio stream")
-            return None
+            raise
 
     def set_mode_freq_pb(self):
         #print (self.radio_mode, self.lc, self.hc, self.freq)
@@ -419,15 +426,26 @@ class kiwi_sound():
         self.stream.send_message(msg)
 
     def get_audio_chunk(self):
-        #self.stream.send_message('SET keepalive')
         snd_buf = self.process_audio_stream()
-        self.keepalive()
+        if snd_buf is not None:
+            self.keepalive()
+        else:
+            snd_buf = None #= np.zeros((KIWI_SAMPLES_PER_FRAME)).astype(np.int16)
         return snd_buf
 
     def process_audio_stream(self):
-        data = self.stream.receive_message()
-        if data is None:
-            return None
+        try:
+            data = self.stream.receive_message()
+            if data is None:
+                self.terminate = True
+                self.socket.close()
+                print ('server closed the connection cleanly')
+                return None
+        except ConnectionTerminatedException:
+                self.terminate = True
+                print('server closed the connection unexpectedly')
+                return None
+
         #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
 
         if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
@@ -460,6 +478,8 @@ class kiwi_sound():
         self.stream.send_message("SET keepalive")
 
     def close_connection(self):
+        if self.stream == None:
+            return
         try:
             self.stream.close_connection(mod_pywebsocket.common.STATUS_GOING_AWAY)
             self.socket.close()
@@ -498,7 +518,6 @@ class kiwi_sound():
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
     def callback(self, in_data, frame_count, time_info, status):
-        #print (self.audio_buffer.qsize())
         popped = []
         for _ in range(CHUNKS):
             popped.append( self.audio_buffer.get() )
@@ -519,12 +538,12 @@ class kiwi_sound():
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
     def run(self):
-        while True:
-            if self.audio_buffer.qsize()<FULL_BUFF_LEN:
-                snd_buf = self.get_audio_chunk()
-                if snd_buf is not None:
-                    self.audio_buffer.put(snd_buf)
-            time.sleep(0.03)
+        while not self.terminate:
+            snd_buf = self.get_audio_chunk()
+            if snd_buf is not None:
+                self.audio_buffer.put(snd_buf)
+            #time.sleep(0.03)
+        return
 
 
 class cat:
@@ -585,8 +604,10 @@ def get_auto_mode(f):
 
 
 def start_audio_stream(kiwi_snd):
-    _thread.start_new_thread(kiwi_snd.run, ())
-    time.sleep(0.1)
+    threading.Thread(target=kiwi_snd.run, daemon=True).start()
+    print("Filling audio buffer...")
+    while kiwi_snd.audio_buffer.qsize()<FULL_BUFF_LEN:
+        pass
 
     play = pyaudio.PyAudio()
     for i in range(play.get_device_count()):

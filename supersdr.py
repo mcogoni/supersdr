@@ -14,7 +14,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         mousex_pos = 25
     elif mousex_pos >= DISPLAY_WIDTH - 80:
         mousex_pos = DISPLAY_WIDTH - 80
-
+    buff_level = kiwi_snd.audio_buffer.qsize()
     #           Label   Color   Freq/Mode                       Screen position
     ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-30,SPECTRUM_Y+1), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,SPECTRUM_Y+1), "small", False),
@@ -26,7 +26,8 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y+1), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
-            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False)
+            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False),
+            "buffer": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, "buffer level:"+str(buff_level), (200,BOTTOMBAR_Y+6), "small", False)
     }
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
@@ -206,7 +207,7 @@ def plot_eibi(surface_):
             pass
 
 def dxcluster_run():
-    while True:
+    while not kiwi_snd.terminate:
         dx_cluster_msg = dxclust.receive()
         print(dx_cluster_msg)
         time.sleep(5)
@@ -282,7 +283,13 @@ print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
 print(freq, radio_mode, 30, 3000, kiwi_password)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter)
+if kiwi_snd is None:
+    print("Server not ready")
+    exit()
+play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 
+# keep receiving dx cluster announces every 5s
+threading.Thread(target=dxcluster_run, daemon=True).start()
 
 # init Pygame
 pygame.init()
@@ -310,8 +317,6 @@ current_string = []
 
 dx_cluster_msg = True
 
-play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
-
 kiwi_memory = memory()
 kiwi_wf.set_freq_zoom(freq, zoom)
 kiwi_snd.freq = freq
@@ -332,10 +337,6 @@ rssi_smooth = kiwi_snd.rssi
 run_index = 0
 run_index_automode = 0
 show_bigmsg = None
-
-# keep receiving dx cluster announces every 5s
-_thread.start_new_thread(dxcluster_run, ())
-
 
 while not wf_quit:
     run_index += 1
@@ -584,15 +585,18 @@ while not wf_quit:
     if input_server_flag and input_new_server:
         pygame.event.clear()
         input_text_list = input_new_server.rstrip().split(" ")
-        # stop stream
-        kiwi_audio_stream.stop_stream()
-        kiwi_audio_stream.close()
 
         # close PyAudio
         play.terminate()
 
-        kiwi_snd.close_connection()
+        kiwi_snd.terminate = True
+        time.sleep(0.5)
+        # stop stream
+        kiwi_audio_stream.stop_stream()
+        kiwi_audio_stream.close()
+
         kiwi_wf.close_connection()
+        kiwi_snd.close_connection()
 
         if len(input_text_list) >= 1:
             new_host = input_text_list[0]
@@ -603,20 +607,17 @@ while not wf_quit:
         if len(input_text_list) == 3:
             new_password = input_text_list[2]
         
-        print(input_text_list)
+        kiwi_snd.terminate = False
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
             kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter)
             print("Changed server to: %s:%d" % (new_host,new_port))
             kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
-
-            time.sleep(2)
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
-            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
+            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
             kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
-            time.sleep(2)
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 
         input_server_flag = False
@@ -816,15 +817,17 @@ while not wf_quit:
     clock.tick(30)
     mouse = pygame.mouse.get_pos()
 
+# close PyAudio
+play.terminate()
+
+kiwi_snd.terminate = True
+time.sleep(0.5)
+
 # stop stream
 kiwi_audio_stream.stop_stream()
 kiwi_audio_stream.close()
 
-# close PyAudio
-play.terminate()
+kiwi_wf.close_connection()
+kiwi_snd.close_connection()
 
 pygame.quit()
-kiwi_snd.close_connection()
-kiwi_wf.close_connection()
-
-
