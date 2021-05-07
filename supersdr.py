@@ -16,9 +16,9 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         mousex_pos = DISPLAY_WIDTH - 80
     buff_level = kiwi_snd.audio_buffer.qsize()
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (GREEN, "%.2fkHz"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-30,SPECTRUM_Y+1), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,SPECTRUM_Y+1), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,SPECTRUM_Y+1), "small", False),
+    ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2+3,TUNEBAR_Y+6), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+6), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+6), "small", False),
             "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
             "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(5,BOTTOMBAR_Y+6), "small", False),
             "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,SPECTRUM_Y+1), "small", False),
@@ -27,14 +27,16 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
             "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False),
-            "buffer": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, "buffer level:"+str(buff_level), (200,BOTTOMBAR_Y+6), "small", False)
-    }
+            "buffer": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, "buffer level:"+str(buff_level), (200,BOTTOMBAR_Y+6), "small", False), 
+            "recording": (RED if audio_rec.recording_flag else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
+            "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
+            }
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
     
     draw_dict = {}
     for k in ts_dict:
-        if k == "p_freq" and not pygame.mouse.get_focused():
+        if k == "p_freq" and not (pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y):
             continue
         if "small" in ts_dict[k][3]:
             smallfont = pygame.freetype.SysFont('Mono', 12)
@@ -50,13 +52,13 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     # center WF line
     pygame.draw.line(surface_, RED, (center_freq_bin, WF_Y), (center_freq_bin, WF_Y+6), 4)
     # mouse click_freq line
-    if pygame.mouse.get_focused():
+    if pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y:
         pygame.draw.line(surface_, (250,0,0), (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
 
     snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
     if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
         # carrier line
-        pygame.draw.line(surface_, RED, (snd_freq_bin, TUNEBAR_Y), (snd_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 2)
+        pygame.draw.line(surface_, RED, (snd_freq_bin, TUNEBAR_Y), (snd_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
     if cat_radio and not cat_snd_link_flag:
         tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
         # tune wf line
@@ -66,13 +68,13 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     lc_bin = snd_freq_bin + lc_bin
     if lc_bin>0 and lc_bin< WF_BINS:
         # low cut line
-        pygame.draw.line(surface_, GREEN, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 2)
+        pygame.draw.line(surface_, GREEN, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
     
     hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
     hc_bin = snd_freq_bin + hc_bin
     if hc_bin>0 and hc_bin< WF_BINS:
         # high cut line
-        pygame.draw.line(surface_, GREEN, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 2)
+        pygame.draw.line(surface_, GREEN, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
     
     pygame.draw.line(surface_, GREEN, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
 
@@ -206,12 +208,6 @@ def plot_eibi(surface_):
         except:
             pass
 
-def dxcluster_run():
-    while not kiwi_snd.terminate:
-        dx_cluster_msg = dxclust.receive()
-        print(dx_cluster_msg)
-        time.sleep(5)
-
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -230,6 +226,8 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
                   
 options = vars(parser.parse_args()[0])
+
+palRGB = create_cm("cutesdr")
 
 eibi = eibi_db()
 dxclust = dxcluster("IS0KYB")
@@ -277,11 +275,15 @@ else:
     radio_mode = "USB"
 
 kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
-audio_rec = audio_recording("out.wav")
+audio_rec = audio_recording("supersdr_%s.wav"%datetime.now())
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 #init KIWI WF and RX audio
 kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
+wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
+wf_t.start()
+
+
 print(freq, radio_mode, 30, 3000, kiwi_password)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
 if kiwi_snd is None:
@@ -290,7 +292,8 @@ if kiwi_snd is None:
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 
 # keep receiving dx cluster announces every 5s
-threading.Thread(target=dxcluster_run, daemon=True).start()
+dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,), daemon=True)
+dx_t.start()
 
 # init Pygame
 pygame.init()
@@ -348,7 +351,7 @@ while not wf_quit:
     manual_zoom = None
     manual_mode = None
     change_passband_flag = False
-    wf_white_flag = False
+    kiwi_wf.wf_white_flag = False
     force_sync_flag = None
 
     rssi = kiwi_snd.rssi
@@ -587,13 +590,19 @@ while not wf_quit:
                     zoom_f = kiwi_wf.freq + (kiwi_wf.freq-t_khz)
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom - 1)
             elif event.button == 1:
-                kiwi_wf.zoom_to_span()
-                kiwi_wf.start_freq()
-                kiwi_wf.end_freq()
-                click_freq = kiwi_wf.bins_to_khz(mouse[0])
-                if kiwi_snd.radio_mode == "CW":
-                    click_freq -= CW_PITCH # tune CW signal taking into account cw offset
+                if WF_Y <= mouse[1] <= BOTTOMBAR_Y:
+                    kiwi_wf.zoom_to_span()
+                    kiwi_wf.start_freq()
+                    kiwi_wf.end_freq()
+                    click_freq = kiwi_wf.bins_to_khz(mouse[0])
+                    if kiwi_snd.radio_mode == "CW":
+                        click_freq -= CW_PITCH # tune CW signal taking into account cw offset
     
+    if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4:
+        show_help_flag = True
+    else:
+        show_help_flag = False
+
     if input_server_flag and input_new_server:
         pygame.event.clear()
         input_text_list = input_new_server.rstrip().split(" ")
@@ -602,7 +611,9 @@ while not wf_quit:
         play.terminate()
 
         kiwi_snd.terminate = True
-        time.sleep(0.5)
+        kiwi_wf.terminate = True
+        time.sleep(1)
+
         # stop stream
         kiwi_audio_stream.stop_stream()
         kiwi_audio_stream.close()
@@ -620,6 +631,7 @@ while not wf_quit:
             new_password = input_text_list[2]
         
         kiwi_snd.terminate = False
+        kiwi_wf.terminate = False
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
             kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter, audio_rec)
@@ -632,6 +644,9 @@ while not wf_quit:
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 
+        wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
+        wf_t.start()
+            
         input_server_flag = False
         input_new_server = None
 
@@ -650,7 +665,7 @@ while not wf_quit:
         else:
             kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
         force_sync_flag = False
-        wf_white_flag = True
+        kiwi_wf.wf_white_flag = True
 
     if input_freq_flag and manual_snd_freq:
         kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom)
@@ -660,7 +675,7 @@ while not wf_quit:
         kiwi_snd.freq = kiwi_wf.freq
         kiwi_snd.set_mode_freq_pb()
         input_freq_flag = False
-        wf_white_flag = True
+        kiwi_wf.wf_white_flag = True
 
     # Change KIWI RX mode
     if manual_mode:
@@ -691,21 +706,21 @@ while not wf_quit:
 
             if kiwi_snd.freq < kiwi_wf.start_f_khz:
                 kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-                wf_white_flag = True
+                kiwi_wf.wf_white_flag = True
             elif kiwi_snd.freq > kiwi_wf.end_f_khz:
                 kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
-                wf_white_flag = True
+                kiwi_wf.wf_white_flag = True
 
     if manual_wf_freq:
         kiwi_wf.set_freq_zoom(manual_wf_freq, kiwi_wf.zoom)
-        wf_white_flag = True
+        kiwi_wf.wf_white_flag = True
 
 
     if manual_zoom:
         kiwi_wf.set_freq_zoom(kiwi_snd.freq, manual_zoom) # for now, the arrow zoom will be centered on the SND freq
         #kiwi_snd.freq = kiwi_wf.freq
         #kiwi_snd.set_mode_freq_pb()
-        wf_white_flag = True
+        kiwi_wf.wf_white_flag = True
 
 
     # Change KIWI SND frequency
@@ -718,7 +733,7 @@ while not wf_quit:
         kiwi_snd.set_mode_freq_pb()
         if wf_snd_link_flag or show_bigmsg == "restorememory":
             kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
-            wf_white_flag = True
+            kiwi_wf.wf_white_flag = True
 
     if cat_radio and cat_snd_link_flag:
         if manual_mode:
@@ -741,10 +756,10 @@ while not wf_quit:
                     if abs(delta_f) < 5*kiwi_wf.span_khz:
                         if delta_f + kiwi_wf.span_khz/2 < 0:
                             kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-                            wf_white_flag = True
+                            kiwi_wf.wf_white_flag = True
                         elif delta_f - kiwi_wf.span_khz/2 > 0:
                             kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
-                            wf_white_flag = True
+                            kiwi_wf.wf_white_flag = True
                     else:
                         kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
@@ -768,8 +783,8 @@ while not wf_quit:
 
 
 #   plot horiz line to show time of freq change
-    kiwi_wf.receive_spectrum(True if wf_white_flag else False)
-    wf_white_flag = False
+    #kiwi_wf.receive_spectrum(True if wf_white_flag else False)
+    kiwi_wf.wf_white_flag = False
 
     # clear the background with a uniform color
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
@@ -830,13 +845,14 @@ while not wf_quit:
         s_meter_draw(rssi_smooth)
 
     pygame.display.update()
-    clock.tick(30)
+    clock.tick(20)
     mouse = pygame.mouse.get_pos()
 
 # close PyAudio
 play.terminate()
 
 kiwi_snd.terminate = True
+kiwi_wf.terminate = True
 time.sleep(0.5)
 
 # stop stream

@@ -12,6 +12,7 @@ import threading, queue
 
 import socket
 import time
+from datetime import datetime
 import sys
 if sys.version_info > (3,):
     buffer = memoryview
@@ -32,6 +33,7 @@ from kiwi import wsclient
 import mod_pywebsocket.common
 from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
+from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
 
 # Pyaudio options
@@ -96,9 +98,6 @@ BLUE = (0,0,255)
 GREEN = (0,255,0)
 YELLOW = (200,180,0)
 ORANGE = (255,140,0)
-
-# setup colormap from matplotlib
-palRGB = cm.jet(range(256))[:,:3]*255
 
 ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
@@ -179,6 +178,13 @@ class dxcluster():
         msg = self.sock.recv(2048)
         return msg.decode("latin-1")
 
+    def run(self, kiwi_snd):
+        while not kiwi_snd.terminate:
+            dx_cluster_msg = self.receive()
+            print(dx_cluster_msg)
+            time.sleep(5)
+
+
 class filtering():
     def __init__(self, fl, fs):
         b = fl/fs
@@ -226,6 +232,9 @@ class kiwi_waterfall():
         self.zoom = zoom_
         self.freq = freq_
 
+        self.wf_white_flag = False
+        self.terminate = False
+
         if not self.freq:
             self.freq = 14200
         self.tune = self.freq
@@ -239,6 +248,9 @@ class kiwi_waterfall():
         print ("Actual frequency:", self.actual_freq, "kHz")
         self.socket = None
         self.wf_stream = None
+        self.wf_color = None
+        self.wf_buffer = queue.Queue(maxsize=200)
+
         self.wf_data = np.zeros((WF_HEIGHT, WF_BINS))
 
         # connect to kiwi WF server
@@ -252,6 +264,12 @@ class kiwi_waterfall():
         print ("Socket open...")
 
         self.start_stream()
+
+        while True:
+            msg = self.wf_stream.receive_message()
+            if msg and bytearray2str(msg[0:3]) == "W/F":
+                break
+
 
     def start_stream(self):
 
@@ -307,7 +325,7 @@ class kiwi_waterfall():
         bins_per_khz_ = WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_) + self.start_f_khz
 
-    def receive_spectrum(self, white_flag=False):
+    def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
             msg = msg[16:] # remove some header from each msg
@@ -317,22 +335,20 @@ class kiwi_waterfall():
             wf = -(255 - wf)  # dBm
             wf_db = wf - 13 # typical Kiwi wf cal
             dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
-            wf_color =  (wf_db - np.min(wf_db[1:-1]))
+            self.wf_color = (wf_db - np.min(wf_db[1:-1]))
             # standardize the distribution between 0 and 1
-            wf_color /= np.max(wf_color[1:-1])
+            self.wf_color /= np.max(self.wf_color[1:-1])
             # clip extreme values
-            wf_color = np.clip(wf_color, np.percentile(wf_color,CLIP_LOWP), np.percentile(wf_color, CLIP_HIGHP))
+            self.wf_color = np.clip(self.wf_color, np.percentile(self.wf_color,CLIP_LOWP), np.percentile(self.wf_color, CLIP_HIGHP))
             # standardize again between 0 and 255
-            wf_color -= np.min(wf_color[1:-1])
+            self.wf_color -= np.min(self.wf_color[1:-1])
             # expand between 0 and 255
-            wf_color /= (np.max(wf_color[1:-1])/255.)
+            self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
             # avoid too bright colors with no signals
-            wf_color *= (min(dyn_range, MIN_DYN_RANGE)/MIN_DYN_RANGE)
+            self.wf_color *= (min(dyn_range, MIN_DYN_RANGE)/MIN_DYN_RANGE)
             # insert a full signal line to see freq/zoom changes
-            if white_flag:
-                wf_color = np.ones_like(wf_color)*255
-            self.wf_data[-1,:] = wf_color
-            self.wf_data[0:WF_HEIGHT-1,:] = self.wf_data[1:WF_HEIGHT,:]
+            if self.wf_white_flag:
+                self.wf_color = np.ones_like(self.wf_color)*255
         self.keepalive()
 
     def set_freq_zoom(self, freq_, zoom_):
@@ -384,7 +400,6 @@ class kiwi_waterfall():
         except Exception as e:
             print ("exception: %s" % e)
 
-
     def change_passband(self, delta_low_, delta_high_):
         if self.radio_mode == "USB":
             lc_ = LOW_CUT_SSB+delta_low_
@@ -401,9 +416,18 @@ class kiwi_waterfall():
         self.lc, self.hc = lc_, hc_
         return lc_, hc_
 
+    def run(self):
+        while not self.terminate:
+            self.receive_spectrum()
+            self.wf_data[-1,:] = self.wf_color
+            self.wf_data[0:WF_HEIGHT-1,:] = self.wf_data[1:WF_HEIGHT,:]
+        return
+
+
 class kiwi_sound():
     def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, kiwi_filter, audio_rec_):
         # connect to kiwi server
+        self.kiwi_wf = kiwi_wf
         self.n_tap = kiwi_filter.n_tap
         self.lowpass = kiwi_filter.lowpass
         self.audio_rec_ = audio_rec_
@@ -419,6 +443,7 @@ class kiwi_sound():
         self.lc, self.hc = lc_, hc_
         print ("Trying to contact server...")
         try:
+            #self.socket = kiwi_wf.socket
             self.socket = socket.socket()
             self.socket.connect((kiwi_wf.host, kiwi_wf.port)) # future: allow different kiwiserver for audio stream
 
@@ -467,16 +492,17 @@ class kiwi_sound():
             data = self.stream.receive_message()
             if data is None:
                 self.terminate = True
+                self.kiwi_wf.terminate = True
                 self.socket.close()
                 print ('server closed the connection cleanly')
-                return None
+                raise
         except ConnectionTerminatedException:
                 self.terminate = True
+                self.kiwi_wf.terminate = True
                 print('server closed the connection unexpectedly')
-                return None
+                raise
 
         #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
-
         if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
             s_meter, = struct.unpack('>H',  buffer(data[8:10]))
             self.rssi = 0.1 * s_meter - 127
@@ -533,7 +559,6 @@ class kiwi_sound():
         self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
         pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
         if self.audio_rec_.recording_flag:
-            print("!")
             self.audio_rec_.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
@@ -601,11 +626,12 @@ def get_auto_mode(f):
             if f in range(rng[0], rng[1]):
                 return mode_
     # if f not in bands, apply generic rule
-    return "USB" if f>10000 else "LSB"
+    return "USB" if f>TENMHZ else "LSB"
 
 
 def start_audio_stream(kiwi_snd):
     threading.Thread(target=kiwi_snd.run, daemon=True).start()
+
     print("Filling audio buffer...")
     while kiwi_snd.audio_buffer.qsize()<FULL_BUFF_LEN:
         pass
@@ -664,3 +690,27 @@ class eibi_db():
         for station_record in self.station_dict[f_khz]:
             name_list.append(station_record[3])
         return name_list
+
+
+def create_cm(which):
+    if which == "jet":
+        # setup colormap from matplotlib
+        colormap = cm.jet(range(256))[:,:3]*255
+    elif which == "cutesdr":
+        # this colormap is taken from CuteSDR source code
+        colormap = []
+        for i in range(255):
+            if i<43:
+                col = ( 0,0, 255*(i)/43)
+            if( (i>=43) and (i<87) ):
+                col = ( 0, 255*(i-43)/43, 255 )
+            if( (i>=87) and (i<120) ):
+                col = ( 0,255, 255-(255*(i-87)/32))
+            if( (i>=120) and (i<154) ):
+                col = ( (255*(i-120)/33), 255, 0)
+            if( (i>=154) and (i<217) ):
+                col = ( 255, 255 - (255*(i-154)/62), 0)
+            if( (i>=217) ):
+                col = ( 255, 0, 128*(i-217)/38)
+            colormap.append(col)
+    return colormap
