@@ -20,15 +20,15 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+6), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+6), "small", False),
             "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "kiwi": (GREY, ("kiwi:"+kiwi_wf.host)[:30] ,(5,BOTTOMBAR_Y+6), "small", False),
-            "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-180,SPECTRUM_Y+1), "small", False),
-            "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width-270,SPECTRUM_Y+1), "small", False),
+            "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(55,BOTTOMBAR_Y+6), "small", False),
+            "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-80,SPECTRUM_Y+1), "small", False),
+            "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y+1), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
-            "center": ((GREEN if wf_snd_link_flag else RED), "CENTER", (wf_width/2-20, V_POS_TEXT), "big", False),
-            "sync": ((GREEN if cat_snd_link_flag else RED), "SYNC", (wf_width/2-75, V_POS_TEXT), "big", False),
-            "buffer": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, "buffer level:"+str(buff_level), (200,BOTTOMBAR_Y+6), "small", False), 
-            "recording": (RED if audio_rec.recording_flag else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
+            "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-130, SPECTRUM_Y+2), "small", False),
+            "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (5, BOTTOMBAR_Y+4), "big", False),
+            "cat": (GREEN if cat_radio else GREY, "CAT", (180,BOTTOMBAR_Y+6), "big", False), 
+            "recording": (RED if audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
     if not s_meter_show_flag:
@@ -411,7 +411,7 @@ while not wf_quit:
                     delta_high = 0
                 if keys[pygame.K_j]:
                     change_passband_flag = True
-                    delta = -100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else 100
+                    delta = 100 if (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) else -100
                     delta_low += delta
                     if delta_low > 3000:
                         delta_low = 3000
