@@ -20,14 +20,14 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+6), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+6), "small", False),
             "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
-            "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(55,BOTTOMBAR_Y+6), "small", False),
+            "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-80,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y+1), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-130, SPECTRUM_Y+2), "small", False),
-            "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (5, BOTTOMBAR_Y+4), "big", False),
-            "cat": (GREEN if cat_radio else GREY, "CAT", (180,BOTTOMBAR_Y+6), "big", False), 
+            "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
+            "cat": (GREEN if cat_radio else GREY, "CAT", (5,BOTTOMBAR_Y+4), "big", False), 
             "recording": (RED if audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
@@ -351,7 +351,6 @@ while not wf_quit:
     manual_zoom = None
     manual_mode = None
     change_passband_flag = False
-    kiwi_wf.wf_white_flag = False
     force_sync_flag = None
 
     rssi = kiwi_snd.rssi
@@ -463,7 +462,7 @@ while not wf_quit:
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 - 10
                         else:
-                            manual_snd_freq = (kiwi_snd.freq*10//1)/10 - (0.1 if not fast_tune else 1.0)
+                            manual_snd_freq = ((kiwi_snd.freq-(0.1 if not fast_tune else 1.0))*10//1)/10
                 elif keys[pygame.K_RIGHT]:
                     if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):                    
                         if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10:
@@ -472,7 +471,7 @@ while not wf_quit:
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 + 10
                         else:
-                            manual_snd_freq = (kiwi_snd.freq*10//1)/10 + (0.1 if not fast_tune else 1.0)
+                            manual_snd_freq = ((kiwi_snd.freq+(0.1 if not fast_tune else 1.0))*10//1)/10 
                 elif keys[pygame.K_PAGEDOWN]:
                     manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/2
                 elif keys[pygame.K_PAGEUP]:
@@ -584,11 +583,13 @@ while not wf_quit:
                     t_khz = kiwi_wf.bins_to_khz(mouse[0])
                     zoom_f = (t_khz+kiwi_wf.freq)/2
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom + 1)
+                    kiwi_wf.set_white_flag()
             elif event.button == 5: # mouse scroll down
                 if kiwi_wf.zoom>0:
                     t_khz = kiwi_wf.bins_to_khz(mouse[0])
                     zoom_f = kiwi_wf.freq + (kiwi_wf.freq-t_khz)
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom - 1)
+                    kiwi_wf.set_white_flag()
             elif event.button == 1:
                 if WF_Y <= mouse[1] <= BOTTOMBAR_Y:
                     kiwi_wf.zoom_to_span()
@@ -665,7 +666,7 @@ while not wf_quit:
         else:
             kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
         force_sync_flag = False
-        kiwi_wf.wf_white_flag = True
+        kiwi_wf.set_white_flag()
 
     if input_freq_flag and manual_snd_freq:
         kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom)
@@ -675,7 +676,7 @@ while not wf_quit:
         kiwi_snd.freq = kiwi_wf.freq
         kiwi_snd.set_mode_freq_pb()
         input_freq_flag = False
-        kiwi_wf.wf_white_flag = True
+        kiwi_wf.set_white_flag()
 
     # Change KIWI RX mode
     if manual_mode:
@@ -706,21 +707,21 @@ while not wf_quit:
 
             if kiwi_snd.freq < kiwi_wf.start_f_khz:
                 kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-                kiwi_wf.wf_white_flag = True
+                kiwi_wf.set_white_flag()
             elif kiwi_snd.freq > kiwi_wf.end_f_khz:
                 kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
-                kiwi_wf.wf_white_flag = True
+                kiwi_wf.set_white_flag()
 
     if manual_wf_freq:
         kiwi_wf.set_freq_zoom(manual_wf_freq, kiwi_wf.zoom)
-        kiwi_wf.wf_white_flag = True
+        kiwi_wf.set_white_flag()
 
 
     if manual_zoom:
         kiwi_wf.set_freq_zoom(kiwi_snd.freq, manual_zoom) # for now, the arrow zoom will be centered on the SND freq
         #kiwi_snd.freq = kiwi_wf.freq
         #kiwi_snd.set_mode_freq_pb()
-        kiwi_wf.wf_white_flag = True
+        kiwi_wf.set_white_flag()
 
 
     # Change KIWI SND frequency
@@ -733,7 +734,7 @@ while not wf_quit:
         kiwi_snd.set_mode_freq_pb()
         if wf_snd_link_flag or show_bigmsg == "restorememory":
             kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
-            kiwi_wf.wf_white_flag = True
+            kiwi_wf.set_white_flag()
 
     if cat_radio and cat_snd_link_flag:
         if manual_mode:
@@ -756,10 +757,10 @@ while not wf_quit:
                     if abs(delta_f) < 5*kiwi_wf.span_khz:
                         if delta_f + kiwi_wf.span_khz/2 < 0:
                             kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-                            kiwi_wf.wf_white_flag = True
+                            kiwi_wf.set_white_flag()
                         elif delta_f - kiwi_wf.span_khz/2 > 0:
                             kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
-                            kiwi_wf.wf_white_flag = True
+                            kiwi_wf.set_white_flag()
                     else:
                         kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
@@ -781,10 +782,6 @@ while not wf_quit:
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-
-#   plot horiz line to show time of freq change
-    #kiwi_wf.receive_spectrum(True if wf_white_flag else False)
-    kiwi_wf.wf_white_flag = False
 
     # clear the background with a uniform color
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
@@ -847,6 +844,9 @@ while not wf_quit:
     pygame.display.update()
     clock.tick(20)
     mouse = pygame.mouse.get_pos()
+
+    if cat_radio and not cat_radio.cat_ok:
+        cat_radio = None
 
 # close PyAudio
 play.terminate()

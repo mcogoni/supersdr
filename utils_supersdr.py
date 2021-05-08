@@ -271,7 +271,6 @@ class kiwi_waterfall():
             if msg and bytearray2str(msg[0:3]) == "W/F":
                 break
 
-
     def start_stream(self):
 
         uri = '/%d/%s' % (int(time.time()), 'W/F')
@@ -348,8 +347,6 @@ class kiwi_waterfall():
             # avoid too bright colors with no signals
             self.wf_color *= (min(dyn_range, MIN_DYN_RANGE)/MIN_DYN_RANGE)
             # insert a full signal line to see freq/zoom changes
-            if self.wf_white_flag:
-                self.wf_color = np.ones_like(self.wf_color)*255
         self.keepalive()
 
     def set_freq_zoom(self, freq_, zoom_):
@@ -416,6 +413,10 @@ class kiwi_waterfall():
             hc_ = HIGH_CUT_CW+delta_high_
         self.lc, self.hc = lc_, hc_
         return lc_, hc_
+
+    def set_white_flag(self):
+        self.wf_color = np.ones_like(self.wf_color)*255
+        self.wf_data[-2,:] = self.wf_color
 
     def run(self):
         while not self.terminate:
@@ -585,31 +586,48 @@ class cat:
         except:
             return None
         self.freq = self.get_freq()
+        if not self.freq:
+            return None
         self.radio_mode = self.get_mode()
+        self.reply = None
+        self.cat_ok = True
+
+    def send_msg(self, msg):
+        self.socket.send((msg+"\n").encode())
+        out = self.socket.recv(512).decode() # tbi implement verification of reply
+        if len(out)==0 or "RPRT -5" in out:
+             self.cat_ok = False
+             self.reply = None
+        else:
+            #print(out)
+            self.reply = out        
 
     def set_freq(self, freq_):
         if freq_ >= CAT_LOWEST_FREQ:
-            self.socket.send(("F %d\n" % (freq_*1000)).encode())
-            tmp = self.socket.recv(512).decode() # tbi implement verification of reply
+            self.send_msg(("\\set_freq %d" % (freq_*1000)))
+            #if self.reply: # to be verified!
+            #    self.freq = freq_
 
     def set_mode(self, radio_mode_):
-        self.socket.send(("+M %s 2400\n"%radio_mode_).encode())
-        self.radio_mode = radio_mode_
-        out = self.socket.recv(512) # tbi check reply
+        self.send_msg(("\\set_mode %s 2400"%radio_mode_))
+        if self.reply:
+            self.radio_mode = radio_mode_
 
     def get_freq(self):
-        self.socket.send("+f\n".encode())
-        out = self.socket.recv(512) # tbi check reply
-        self.freq = int(out.decode().split(" ")[1].split("\n")[0])/1000.
+        self.send_msg("\\get_freq")
+        if self.reply:
+            self.freq = int(self.reply)/1000.
         return self.freq
 
     def get_mode(self):
-        self.socket.send("m\n".encode())
-        out = self.socket.recv(512) # tbi check reply
-        self.radio_mode = out.decode().split("\n")[0]
-        if self.radio_mode not in self.KNOWN_MODES:
-            self.radio_mode = "USB" # defaults to USB if radio selects RTTY, FSK, etc
-        return self.radio_mode
+        self.send_msg("\\get_mode")
+        if self.reply:
+            self.radio_mode = self.reply.split("\n")[0]
+            if self.radio_mode not in self.KNOWN_MODES:
+                self.radio_mode = "USB" # defaults to USB if radio selects RTTY, FSK, etc
+            return self.radio_mode
+        else:
+            return "USB"
 
 
 def get_auto_mode(f):
