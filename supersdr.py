@@ -275,7 +275,7 @@ else:
     radio_mode = "USB"
 
 kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
-audio_rec = audio_recording("supersdr_%s.wav"%datetime.now())
+audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"))
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 #init KIWI WF and RX audio

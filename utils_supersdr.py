@@ -177,12 +177,12 @@ class dxcluster():
 
     def receive(self):
         msg = self.sock.recv(2048)
-        return msg.decode("latin-1")
+        return msg.decode("utf-8")
 
     def run(self, kiwi_snd):
         while not kiwi_snd.terminate:
             dx_cluster_msg = self.receive()
-            print(dx_cluster_msg)
+            print("%s"%dx_cluster_msg.rstrip('\r\n').replace("\x07", ""))
             time.sleep(5)
 
 
