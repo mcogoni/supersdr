@@ -462,7 +462,7 @@ while not wf_quit:
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 - 10
                         else:
-                            manual_snd_freq = ((kiwi_snd.freq-(0.1 if not fast_tune else 1.0))*10//1)/10
+                            manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 - (0.1 if not fast_tune else 1.0)
                 elif keys[pygame.K_RIGHT]:
                     if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):                    
                         if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10:
@@ -471,7 +471,7 @@ while not wf_quit:
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 + 10
                         else:
-                            manual_snd_freq = ((kiwi_snd.freq+(0.1 if not fast_tune else 1.0))*10//1)/10 
+                            manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 + (0.1001 if not fast_tune else 1.0)
                 elif keys[pygame.K_PAGEDOWN]:
                     manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/2
                 elif keys[pygame.K_PAGEUP]:
