@@ -344,6 +344,7 @@ rssi_smooth = kiwi_snd.rssi
 run_index = 0
 run_index_automode = 0
 show_bigmsg = None
+msg_text = ""
 
 while not wf_quit:
     run_index += 1
