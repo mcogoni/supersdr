@@ -482,7 +482,12 @@ class kiwi_sound():
         self.stream.send_message(msg)
 
     def get_audio_chunk(self):
-        snd_buf = self.process_audio_stream()
+        try:
+            snd_buf = self.process_audio_stream()
+        except:
+            self.terminate = True
+            return
+
         if snd_buf is not None:
             self.keepalive()
         else:
@@ -570,7 +575,6 @@ class kiwi_sound():
             snd_buf = self.get_audio_chunk()
             if snd_buf is not None:
                 self.audio_buffer.put(snd_buf)
-            #time.sleep(0.03)
         return
 
 
@@ -649,11 +653,17 @@ def get_auto_mode(f):
 
 
 def start_audio_stream(kiwi_snd):
-    threading.Thread(target=kiwi_snd.run, daemon=True).start()
+    rx_t = threading.Thread(target=kiwi_snd.run, daemon=True)
+    rx_t.start()
 
     print("Filling audio buffer...")
-    while kiwi_snd.audio_buffer.qsize()<FULL_BUFF_LEN:
+    while kiwi_snd.audio_buffer.qsize()<FULL_BUFF_LEN and not kiwi_snd.terminate:
         pass
+
+    if kiwi_snd.terminate:
+        print("kiwi sound not started!")
+        del kiwi_snd
+        return (None, None)
 
     play = pyaudio.PyAudio()
     for i in range(play.get_device_count()):

@@ -286,10 +286,13 @@ wf_t.start()
 
 print(freq, radio_mode, 30, 3000, kiwi_password)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
-if kiwi_snd is None:
+if not kiwi_snd:
     print("Server not ready")
     exit()
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
+if not play:
+    del kiwi_snd
+    exit("Chosen KIWI receiver is not ready!")
 
 # keep receiving dx cluster announces every 5s
 dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,), daemon=True)
@@ -633,17 +636,25 @@ while not wf_quit:
         
         kiwi_snd.terminate = False
         kiwi_wf.terminate = False
+
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
             kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter, audio_rec)
             print("Changed server to: %s:%d" % (new_host,new_port))
-            kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
+            print ("something went wrong...")
+            play = None
+        if not play:
             kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
             kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
+            if not play:
+                exit("Old kiwi server not available anymore!")
+        else:
+            kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
+
 
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
         wf_t.start()
