@@ -524,6 +524,8 @@ while not wf_quit:
                         show_bigmsg = "cat_rx_sync"
                         run_index_bigmsg = run_index
                         cat_snd_link_flag = False if cat_snd_link_flag else True
+                        force_sync_flag = True
+
 
                 # Automatic mode change ON/OFF
                 elif keys[pygame.K_x]:
