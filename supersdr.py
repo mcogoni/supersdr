@@ -33,7 +33,10 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             }
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
-    
+    if click_drag_flag:
+        delta_khz = kiwi_wf.deltabins_to_khz(start_drag_x-mousex_pos)
+        ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,SPECTRUM_Y+20), "big", False)
+
     draw_dict = {}
     for k in ts_dict:
         if k == "p_freq" and not (pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y):
@@ -46,6 +49,8 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             render_ = bigfont.render_to
         fontsize_ = font_size_dict[ts_dict[k][3]]
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
+
+
 
 def draw_lines(surface_, wf_height, radio_mode, mouse):
     center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
@@ -93,6 +98,10 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
             pygame.draw.line(surface_, YELLOW, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
         pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
 
+    if click_drag_flag:
+        pygame.draw.line(sdrdisplay, RED, (start_drag_x, SPECTRUM_Y+10), (mouse[0], SPECTRUM_Y+10), 4)
+
+
 def display_box(screen, message, size):
     smallfont = pygame.freetype.SysFont('Mono', 12)
 
@@ -112,7 +121,7 @@ def display_help_box(screen, message_list):
     font_size = font_size_dict["small"]
     smallfont = pygame.freetype.SysFont('Mono', font_size)
 
-    window_size = 450
+    window_size = 455
     pygame.draw.rect(screen, (0,0,0),
                    ((screen.get_width() / 2) - window_size/2,
                     (screen.get_height() / 2) - window_size/3,
@@ -187,7 +196,7 @@ def s_meter_draw(rssi_smooth):
 
 def plot_spectrum(t_avg=15, col=GREEN):
     global sdrdisplay
-    spectrum_surf = pygame.Surface((1024, SPECTRUM_HEIGHT))
+    spectrum_surf = pygame.Surface((WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
     for x, v in enumerate(np.average(kiwi_wf.wf_data.T[:,-t_avg:], axis=1)):
         y = SPECTRUM_HEIGHT-1-int(v/255 *SPECTRUM_HEIGHT)
@@ -224,8 +233,11 @@ parser.add_option("-z", "--zoom", type=int,
                   help="zoom factor", dest="zoom", default=8)
 parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
+parser.add_option("-r", "--fps", type=int,
+                  help="screen refresh rate", dest="refresh", default=25)
                   
 options = vars(parser.parse_args()[0])
+FPS = options['refresh']
 
 palRGB = create_cm("cutesdr")
 
@@ -296,7 +308,7 @@ if not play:
 
 # keep receiving dx cluster announces every 5s
 dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,), daemon=True)
-dx_t.start()
+#dx_t.start()
 
 # init Pygame
 pygame.init()
@@ -306,7 +318,7 @@ wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
-pygame.display.set_caption("SuperSDR 2.0")
+pygame.display.set_caption("SuperSDR v2.0")
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 
@@ -345,6 +357,7 @@ run_index = 0
 run_index_automode = 0
 show_bigmsg = None
 msg_text = ""
+click_drag_flag = False
 
 while not wf_quit:
     run_index += 1
@@ -604,6 +617,17 @@ while not wf_quit:
                     click_freq = kiwi_wf.bins_to_khz(mouse[0])
                     if kiwi_snd.radio_mode == "CW":
                         click_freq -= CW_PITCH # tune CW signal taking into account cw offset
+                if SPECTRUM_Y <= mouse[1] <= TUNEBAR_Y:
+                    pygame.mouse.get_rel()
+                    start_drag_x = mouse[0]
+                    click_drag_flag = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1 and click_drag_flag:
+                delta_x = pygame.mouse.get_rel()[0]
+                delta_freq = kiwi_wf.deltabins_to_khz(delta_x)
+                manual_wf_freq = kiwi_wf.freq - delta_freq
+                click_drag_flag = False
+                    
     
     if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4:
         show_help_flag = True
@@ -658,7 +682,6 @@ while not wf_quit:
         else:
             kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
 
-
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
         wf_t.start()
             
@@ -711,7 +734,6 @@ while not wf_quit:
                 kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
                 lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
             kiwi_snd.set_mode_freq_pb()
-
         else:
             kiwi_snd.freq = manual_snd_freq
             kiwi_snd.set_mode_freq_pb()
@@ -737,10 +759,8 @@ while not wf_quit:
         #kiwi_snd.set_mode_freq_pb()
         kiwi_wf.set_white_flag()
 
-
     # Change KIWI SND frequency
     if click_freq:
-
         kiwi_snd.freq = click_freq
         if auto_mode:
             kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
@@ -796,15 +816,14 @@ while not wf_quit:
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-
-    # clear the background with a uniform color
-    pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
-    pygame.draw.rect(sdrdisplay, (0,0,00), (0,BOTTOMBAR_Y,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
-
     plot_spectrum()
     surface = pygame.surfarray.make_surface(np.flip(kiwi_wf.wf_data.T, axis=1))
     surface.set_palette(palRGB)
     sdrdisplay.blit(surface, (0, WF_Y))
+
+    pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,TOPBAR_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,80), (0,TUNEBAR_Y,DISPLAY_WIDTH,TUNEBAR_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,0), (0,BOTTOMBAR_Y,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
     draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse)
     update_textsurfaces(kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width)
 
@@ -855,9 +874,10 @@ while not wf_quit:
     if s_meter_show_flag:
         s_meter_draw(rssi_smooth)
 
-    pygame.display.update()
-    clock.tick(20)
     mouse = pygame.mouse.get_pos()
+
+    pygame.display.update()
+    clock.tick(FPS)
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None

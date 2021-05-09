@@ -103,7 +103,7 @@ ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
 ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE, K_KP_ENTER]
 
-HELP_MESSAGE_LIST = ["COMMANDS HELP",
+HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
         "",
         "- LEFT/RIGHT: move KIWI RX freq +/- 1kHz (+SHIFT: X10)",
         "- PAGE UP/DOWN: move WF freq +/- SPAN/2",
@@ -324,6 +324,10 @@ class kiwi_waterfall():
     def bins_to_khz(self, bins_):
         bins_per_khz_ = WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_) + self.start_f_khz
+
+    def deltabins_to_khz(self, bins_):
+        bins_per_khz_ = WF_BINS / self.span_khz
+        return (1./bins_per_khz_) * (bins_)
 
     def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
