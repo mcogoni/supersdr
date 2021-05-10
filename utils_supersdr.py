@@ -106,23 +106,23 @@ ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE, K_KP_ENTER]
 HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
         "",
         "- LEFT/RIGHT: move KIWI RX freq +/- 1kHz (+SHIFT: X10)",
-        "- PAGE UP/DOWN: move WF freq +/- SPAN/2",
+        "- PAGE UP/DOWN: move WF freq +/- SPAN/4",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C/A: switches to USB, LSB, CW, AM",
         "- J/K/O: change low/high cut of RX (SHIFT inverts), O resets",
-        "- E: start audio recording",
+        "- E: start/stop audio recording",
         "- F: enter frequency with keyboard",
-        "- W/R: Write/Restore quick memory (up to 10)",
+        "- W/R: Write/Restore quick cyclic memory (up to 10)",
         "- SHIFT+W: Deletes all stored memories",
         "- V/B: up/down volume 10%",
         "- M: mute/unmute",
         "- SHIFT+S: S-METER show/hide",
         "- S: SYNC CAT and KIWI RX ON/OFF",
         "- Z: Center KIWI RX, shift WF instead",
-        "- SPACE: FORCE SYNC of WF to RX if no CAT, else all to CAT",
+        "- SPACE: FORCE SYNC of WF to RX if no CAT, else sync to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- H: displays this help window",
-        "- I: displays EIBI DB labels",
+        "- I/D: displays EIBI/DXCLUSTER labels",
         "- Q: switch to a different KIWI server",
         "- SHIFT+ESC: quits",
         "",
@@ -154,10 +154,10 @@ class audio_recording():
         self.wave.setframerate(AUDIO_RATE)
 
         # process audio data here
-
         self.wave.writeframes(b''.join(self.audio_buffer))
         self.wave.close()
         self.recording = False
+
 
 class dxcluster():
     def __init__(self, mycall_):
@@ -166,10 +166,16 @@ class dxcluster():
         self.server = (host, port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect()
-    
+        self.int_freq_dict = defaultdict(list)
+        self.spot_dict = {}    
+
     def connect(self):
         self.sock.connect(self.server)
         self.send(self.mycall)
+        self.visible_stations = []
+        self.freq_set = set([])
+        self.time_to_live = 1200 # seconds for a spot to live
+        self.last_update = datetime.utcnow()
 
     def send(self, msg):
         msg = msg + '\n'
@@ -177,13 +183,71 @@ class dxcluster():
 
     def receive(self):
         msg = self.sock.recv(2048)
-        return msg.decode("utf-8")
+        try:
+            msg = msg.decode("utf-8")
+        except:
+            msg = None
+            print("DX cluster msg decode failed")
+        return msg
 
-    def run(self, kiwi_snd):
+    def decode_spot(self, line):
+        qrg, callsign, utc = None, None, None
+        try:
+            els = line.split("  ")
+            els = [x for x in els if x]
+            spotter = els[0][6:].replace(":", "")
+            qrg = float(els[1].strip())
+            callsign = els[2].strip()
+            utc = datetime.utcnow()
+        except:
+            print("DX cluster msg decode failed")
+        return qrg, callsign, utc        
+
+    def clean_old_spots(self):
+        print("cleaning old spots")
+        now  = datetime.utcnow()
+        del_list = []
+        for k in self.spot_dict:
+            spot_utc =self.spot_dict[k][1]
+            duration = now - spot_utc
+            duration_in_s = duration.total_seconds()
+            if duration_in_s > self.time_to_live:
+                del_list.append(k)
+        for k in del_list:
+            del self.spot_dict[k]
+
+    def run(self, kiwi_snd, kiwi_wf):
         while not kiwi_snd.terminate:
             dx_cluster_msg = self.receive()
-            print("%s"%dx_cluster_msg.rstrip('\r\n').replace("\x07", ""))
-            time.sleep(5)
+            if not dx_cluster_msg:
+                continue
+            spot_str = "%s"%dx_cluster_msg
+            for line in spot_str.replace("\x07", "").split("\n"):
+                print ("%r"%line.rstrip('\r\n'))
+                if "DX de " in line:
+                    qrg, callsign, utc = self.decode_spot(line)
+                    if not qrg:
+                        continue
+                    self.store_spot(qrg, callsign, utc)
+            if (datetime.utcnow() - self.last_update).total_seconds() > 10:
+                if random.random()>0.95:
+                    self.clean_old_spots()
+                self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
+                self.last_update = datetime.utcnow()
+
+            time.sleep(10)
+
+    def store_spot(self, qrg_, callsign_, utc_):
+        self.spot_dict[qrg_] = (callsign_, utc_)
+        self.int_freq_dict[int(qrg_)].append(qrg_)
+        self.freq_set.add(int(qrg_))
+
+    def get_stations(self, start_f, end_f):
+        inters = set(range(int(start_f), int(end_f))) & self.freq_set
+        self.visible_stations = []
+        for int_freq in inters:
+            self.visible_stations.append(int_freq) #self.station_dict[f_khz])
+        return self.visible_stations
 
 
 class filtering():
@@ -225,6 +289,7 @@ class memory():
 class kiwi_waterfall():
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
+
         # kiwi hostname and port
         self.host = host_
         self.port = port_
@@ -552,13 +617,13 @@ class kiwi_sound():
         except Exception as e:
             print ("exception: %s" % e)
 
-    def callback(self, in_data, frame_count, time_info, status):
+    def play_buffer(self, in_data, frame_count, time_info, status):
         popped = []
         for _ in range(CHUNKS):
             popped.append( self.audio_buffer.get() )
 
         popped = np.array(popped).flatten()
-        popped = popped.astype(np.float64) * (self.volume/100)        
+        popped = popped.astype(np.float64) * (self.volume/100)
 
         n = len(popped)
         # oversample
@@ -677,14 +742,13 @@ def start_audio_stream(kiwi_snd):
         else:
             CARD_INDEX = None
 
-    # open stream using callback (3)
     kiwi_audio_stream = play.open(format=FORMAT,
                     channels=CHANNELS,
                     rate=AUDIO_RATE,
                     output=True,
                     output_device_index=CARD_INDEX,
                     frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
-                    stream_callback=kiwi_snd.callback)
+                    stream_callback=kiwi_snd.play_buffer)
     kiwi_audio_stream.start_stream()
 
     return play, kiwi_audio_stream
@@ -747,3 +811,5 @@ def create_cm(which):
                 col = ( 255, 0, 128*(i-217)/38)
             colormap.append(col)
     return colormap
+
+

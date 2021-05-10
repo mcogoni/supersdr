@@ -23,12 +23,14 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-80,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
-            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y+1), "small", False),
+            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-130, SPECTRUM_Y+2), "small", False),
             "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
             "cat": (GREEN if cat_radio else GREY, "CAT", (5,BOTTOMBAR_Y+4), "big", False), 
             "recording": (RED if audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
+            "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
+            "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
     if not s_meter_show_flag:
@@ -217,6 +219,21 @@ def plot_eibi(surface_):
         except:
             pass
 
+def plot_dxcluster(surface_):
+    for f_khz in set(dxclust.visible_stations):
+        try:
+            for string_f_khz in dxclust.int_freq_dict[f_khz]:
+                f_khz_float = float(string_f_khz)
+                f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
+                ts = (ORANGE, dxclust.spot_dict[string_f_khz][0], (f_bin,WF_Y+20), "small")
+                smallfont = pygame.freetype.SysFont('Mono', 14)
+                render_ = smallfont.render_to
+                if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
+                    render_(surface_, ts[2], ts[1],  rotation=90, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), (f_bin, TUNEBAR_Y+15), 1)
+        except:
+            pass
+
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -307,12 +324,12 @@ if not play:
     exit("Chosen KIWI receiver is not ready!")
 
 # keep receiving dx cluster announces every 5s
-dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,), daemon=True)
-#dx_t.start()
+dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,kiwi_wf), daemon=True)
+dx_t.start()
 
 # init Pygame
 pygame.init()
-sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT))
+sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), pygame.SCALED | pygame.RESIZABLE, vsync=1)
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
@@ -330,6 +347,7 @@ input_server_flag = False
 show_help_flag =  False
 s_meter_show_flag = False
 show_eibi_flag = False
+show_dxcluster_flag = False
 
 input_new_server = None
 current_string = []
@@ -393,6 +411,10 @@ while not wf_quit:
                 # Center RX freq on WF
                 if keys[pygame.K_i]:
                     show_eibi_flag = False if show_eibi_flag else True
+
+                # Show realtime DX-CLUSTER labels
+                if keys[pygame.K_d]:
+                    show_dxcluster_flag = False if show_dxcluster_flag else True
 
                 # Center RX freq on WF
                 if keys[pygame.K_z]:
@@ -490,9 +512,9 @@ while not wf_quit:
                         else:
                             manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 + (0.1001 if not fast_tune else 1.0)
                 elif keys[pygame.K_PAGEDOWN]:
-                    manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/2
+                    manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/4
                 elif keys[pygame.K_PAGEUP]:
-                    manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz/2
+                    manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz/4
 
                 # KIWI RX mode change
                 elif keys[pygame.K_u]:
@@ -629,7 +651,7 @@ while not wf_quit:
                 click_drag_flag = False
                     
     
-    if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4:
+    if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
         show_help_flag = True
     else:
         show_help_flag = False
@@ -830,6 +852,9 @@ while not wf_quit:
 #    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
     if show_eibi_flag and kiwi_wf.zoom > 6:
         plot_eibi(sdrdisplay)
+    elif show_dxcluster_flag and kiwi_wf.zoom > 4:
+        plot_dxcluster(sdrdisplay)
+
     if input_freq_flag:
         question = "Freq (kHz)"
         display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
@@ -875,8 +900,7 @@ while not wf_quit:
         s_meter_draw(rssi_smooth)
 
     mouse = pygame.mouse.get_pos()
-
-    pygame.display.update()
+    pygame.display.flip()
     clock.tick(FPS)
 
     if cat_radio and not cat_radio.cat_ok:
