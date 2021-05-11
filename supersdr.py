@@ -370,7 +370,6 @@ while not wf_quit:
     click_freq = None
     manual_wf_freq = None
     manual_snd_freq = None
-    manual_zoom = None
     manual_mode = None
     change_passband_flag = False
     force_sync_flag = None
@@ -474,10 +473,10 @@ while not wf_quit:
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:
                     if kiwi_wf.zoom > 0:
-                        manual_zoom = kiwi_wf.zoom - 1
+                        kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom - 1)
                 elif keys[pygame.K_UP]:
-                    if kiwi_wf.zoom< MAX_ZOOM:
-                        manual_zoom = kiwi_wf.zoom + 1
+                    if kiwi_wf.zoom < MAX_ZOOM:
+                        kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom + 1)
 
                 # KIWI WF arrow step tune
                 elif keys[pygame.K_LEFT]:
@@ -759,13 +758,6 @@ while not wf_quit:
 
     if manual_wf_freq:
         kiwi_wf.set_freq_zoom(manual_wf_freq, kiwi_wf.zoom)
-        kiwi_wf.set_white_flag()
-
-
-    if manual_zoom:
-        kiwi_wf.set_freq_zoom(kiwi_snd.freq, manual_zoom) # for now, the arrow zoom will be centered on the SND freq
-        #kiwi_snd.freq = kiwi_wf.freq
-        #kiwi_snd.set_mode_freq_pb()
         kiwi_wf.set_white_flag()
 
     # Change KIWI SND frequency

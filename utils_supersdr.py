@@ -425,29 +425,23 @@ class kiwi_waterfall():
         self.start_freq()
         self.end_freq()
         if zoom_ == 0: # 30 MHz span, WF freq should be 15 MHz
-            print("zoom 0 detected!")
             self.freq = 15000
             self.start_freq()
             self.end_freq()
             self.span_khz = MAX_FREQ
         else: # zoom level > 0
-            if self.start_f_khz<0: # did we hit the left side?
-                self.freq -= self.start_f_khz
+            if self.start_f_khz<0: # did we hit the left limit?
+                #self.freq -= self.start_f_khz
+                self.freq = self.zoom_to_span()/2
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
-
-            if self.end_f_khz>MAX_FREQ: # did we hit the right side?
-                self.freq -= self.end_f_khz - MAX_FREQ
+            elif self.end_f_khz>MAX_FREQ: # did we hit the right limit?
+                self.freq = MAX_FREQ - self.zoom_to_span()/2 
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
         self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
-        if zoom_>0 and actual_freq<=0:
-            self.freq = self.zoom_to_span()
-            self.start_freq()
-            self.end_freq()
-            self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
         self.eibi.get_stations(self.start_f_khz, self.end_f_khz)
