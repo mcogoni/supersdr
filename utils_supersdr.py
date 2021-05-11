@@ -223,7 +223,7 @@ class dxcluster():
                 continue
             spot_str = "%s"%dx_cluster_msg
             for line in spot_str.replace("\x07", "").split("\n"):
-                print ("%r"%line.rstrip('\r\n'))
+                #print ("%r"%line.rstrip('\r\n'))
                 if "DX de " in line:
                     qrg, callsign, utc = self.decode_spot(line)
                     if not qrg:
@@ -235,7 +235,7 @@ class dxcluster():
                 self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
                 self.last_update = datetime.utcnow()
 
-            time.sleep(10)
+            time.sleep(9)
 
     def store_spot(self, qrg_, callsign_, utc_):
         self.spot_dict[qrg_] = (callsign_, utc_)
@@ -424,21 +424,20 @@ class kiwi_waterfall():
         self.zoom_to_span()
         self.start_freq()
         self.end_freq()
-        if zoom_ == 0:
+        if zoom_ == 0: # 30 MHz span, WF freq should be 15 MHz
             print("zoom 0 detected!")
             self.freq = 15000
             self.start_freq()
             self.end_freq()
             self.span_khz = MAX_FREQ
-            #self.zoom_to_span()
-        else:
-            if self.start_f_khz<0:
+        else: # zoom level > 0
+            if self.start_f_khz<0: # did we hit the left side?
                 self.freq -= self.start_f_khz
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
 
-            if self.end_f_khz>MAX_FREQ:
+            if self.end_f_khz>MAX_FREQ: # did we hit the right side?
                 self.freq -= self.end_f_khz - MAX_FREQ
                 self.start_freq()
                 self.end_freq()

@@ -44,14 +44,10 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         if k == "p_freq" and not (pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y):
             continue
         if "small" in ts_dict[k][3]:
-            smallfont = pygame.freetype.SysFont('Mono', 12)
             render_ = smallfont.render_to
         elif "big" in ts_dict[k][3]:
-            bigfont = pygame.freetype.SysFont('Mono', 16)
             render_ = bigfont.render_to
-        fontsize_ = font_size_dict[ts_dict[k][3]]
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
-
 
 
 def draw_lines(surface_, wf_height, radio_mode, mouse):
@@ -105,8 +101,6 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
 
 
 def display_box(screen, message, size):
-    smallfont = pygame.freetype.SysFont('Mono', 12)
-
     pygame.draw.rect(screen, BLACK,
                    ((screen.get_width() / 2) - size/2,
                     (screen.get_height() / 2) - 12,
@@ -121,7 +115,6 @@ def display_box(screen, message, size):
 
 def display_help_box(screen, message_list):
     font_size = font_size_dict["small"]
-    smallfont = pygame.freetype.SysFont('Mono', font_size)
 
     window_size = 455
     pygame.draw.rect(screen, (0,0,0),
@@ -139,23 +132,13 @@ def display_help_box(screen, message_list):
                     screen.get_height() / 2-window_size/3 + ii*font_size + font_size)
             smallfont.render_to(sdrdisplay, pos, msg, WHITE)
 
-def display_msg_box(screen, message, pos=None, fontsize=12, color=WHITE):
-    smallfont = pygame.freetype.SysFont('Mono', fontsize)
+def display_msg_box(screen, message, pos=None, color=WHITE):
     if not pos:
         pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
-    # pygame.draw.rect(screen, BLACK,
-    #                ((screen.get_width() / 2) - msg_len/2,
-    #                 (screen.get_height() / 2) - 10, msg_len,20), 0)
-    # pygame.draw.rect(screen, WHITE,
-    #                ((screen.get_width() / 2) - msg_len/2+2,
-    #                 (screen.get_height() / 2) - 12, msg_len+4,24), 1)
     if len(message) != 0:
-        smallfont.render_to(sdrdisplay, pos, message, color)
+        hugefont.render_to(sdrdisplay, pos, message, color)
     
 def s_meter_draw(rssi_smooth):
-    font_size = 8
-    smallfont = pygame.freetype.SysFont('Mono', font_size)
-
     s_meter_radius = 50.
     s_meter_center = (s_meter_radius+10,s_meter_radius+8)
     alpha_rssi = rssi_smooth+127
@@ -178,7 +161,7 @@ def s_meter_draw(rssi_smooth):
     text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
     for alpha_seg, msg in zip(angle_list, text_list[::-1]):
         text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
-        smallfont.render_to(sdrdisplay, (text_x-6, text_y-2), msg, D_GREY)
+        nanofont.render_to(sdrdisplay, (text_x-6, text_y-2), msg, D_GREY)
 
         seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
         color_ =  BLACK
@@ -191,10 +174,9 @@ def s_meter_draw(rssi_smooth):
 
     pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
     str_rssi = "%ddBm"%rssi_smooth
-    smallfont = pygame.freetype.SysFont('Mono', 10)
     str_len = len(str_rssi)
     pos = (s_meter_center[0]+13, s_meter_center[1])
-    smallfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
+    microfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
 
 def plot_spectrum(t_avg=15, col=GREEN):
     global sdrdisplay
@@ -210,7 +192,6 @@ def plot_eibi(surface_):
     for f_khz in set(eibi.visible_stations):
         f_bin = int(kiwi_wf.offset_to_bin(f_khz-kiwi_wf.start_f_khz))
         ts = (ORANGE, eibi.get_names(f_khz)[0], (f_bin,WF_Y+20), "small")
-        smallfont = pygame.freetype.SysFont('Mono', 12)
         render_ = smallfont.render_to
         try:
             if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
@@ -226,8 +207,7 @@ def plot_dxcluster(surface_):
                 f_khz_float = float(string_f_khz)
                 f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
                 ts = (ORANGE, dxclust.spot_dict[string_f_khz][0], (f_bin,WF_Y+20), "small")
-                smallfont = pygame.freetype.SysFont('Mono', 14)
-                render_ = smallfont.render_to
+                render_ = midfont.render_to
                 if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
                     render_(surface_, ts[2], ts[1],  rotation=90, fgcolor=ts[0], bgcolor=(20,20,20))
                     pygame.draw.line(surface_, WHITE, (f_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), (f_bin, TUNEBAR_Y+15), 1)
@@ -329,7 +309,8 @@ dx_t.start()
 
 # init Pygame
 pygame.init()
-sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), pygame.SCALED | pygame.RESIZABLE, vsync=1)
+sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
+    pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF, vsync=1)
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
@@ -338,6 +319,12 @@ pygame.display.set_icon(icon)
 pygame.display.set_caption("SuperSDR v2.0")
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
+nanofont = pygame.freetype.SysFont('Mono', 8)
+microfont = pygame.freetype.SysFont('Mono', 10)
+smallfont = pygame.freetype.SysFont('Mono', 12)
+midfont = pygame.freetype.SysFont('Mono', 14)
+bigfont = pygame.freetype.SysFont('Mono', 16)
+hugefont = pygame.freetype.SysFont('Mono', 35)
 
 wf_quit = False
 
@@ -893,7 +880,7 @@ while not wf_quit:
         elif "centertune" == show_bigmsg:
             msg_text = "WF center tune mode " + ("ON" if wf_snd_link_flag else "OFF")
 
-        display_msg_box(sdrdisplay, msg_text, pos=None, fontsize=35, color=msg_color)
+        display_msg_box(sdrdisplay, msg_text, pos=None, color=msg_color)
 
     rssi_smooth = np.mean(list(rssi_hist)[:])
     if s_meter_show_flag:
