@@ -7,6 +7,7 @@ import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
 from matplotlib import cm
 import numpy as np
+import pickle
 
 import threading, queue
 
@@ -27,7 +28,6 @@ import struct
 import array
 import math
 from collections import deque, defaultdict
-
 
 from kiwi import wsclient
 import mod_pywebsocket.common
@@ -271,6 +271,11 @@ class memory():
     def __init__(self):
         self.mem_list = deque([], 10)
         self.index = 0
+        try:
+            self.load_from_disk()
+        except:
+            pass
+        self.index = len(self.mem_list)
 
     def write_mem(self, freq, radio_mode, lc, hc):
         self.mem_list.append((freq, radio_mode, lc, hc))
@@ -285,6 +290,15 @@ class memory():
     
     def reset_all_mem(self):
         self.mem_list = deque([], 10)
+
+    def save_to_disk(self):
+        with open("supersdr.memory", "wb") as fd:
+            pickle.dump(self.mem_list, fd)
+
+    def load_from_disk(self):
+        with open("supersdr.memory", "rb") as fd:
+            self.mem_list = pickle.load(fd)
+
 
 class kiwi_waterfall():
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
@@ -310,6 +324,13 @@ class kiwi_waterfall():
         self.span_khz = self.zoom_to_span()
         self.start_f_khz = self.start_freq()
         self.end_f_khz = self.end_freq()
+        
+        self.bins_per_khz = WF_BINS / self.span_khz
+        self.div_list = []
+        self.subdiv_list = []
+        self.min_bin_spacing = 100 # minimum pixels between major ticks (/10 for minor ticks)
+        self.space_khz = 10 # initial proposed spacing between major ticks in kHz
+
         self.counter, self.actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         print ("Actual frequency:", self.actual_freq, "kHz")
         self.socket = None
@@ -335,6 +356,28 @@ class kiwi_waterfall():
             msg = self.wf_stream.receive_message()
             if msg and bytearray2str(msg[0:3]) == "W/F":
                 break
+
+    def gen_div(self):
+        self.space_khz = 10
+        self.div_list = []
+        self.subdiv_list = []
+        self.div_list = []
+        f_s = int(self.start_f_khz)
+        f_e = int(self.end_f_khz)
+    
+        while self.div_list == [] and self.subdiv_list == []:
+            if self.bins_per_khz*self.space_khz > self.min_bin_spacing:
+                for f in range(f_s, f_e+1):
+                    if not f%self.space_khz:
+                        fbin = int(self.offset_to_bin(f-self.start_f_khz))
+                        self.div_list.append(fbin)
+
+            if self.bins_per_khz*self.space_khz/10 > self.min_bin_spacing/10:
+                for f in range(f_s, f_e+1):
+                    if not f%(self.space_khz/10):
+                        fbin = int(self.offset_to_bin(f-self.start_f_khz))
+                        self.subdiv_list.append(fbin)
+            self.space_khz *= 10                
 
     def start_stream(self):
 
@@ -445,6 +488,8 @@ class kiwi_waterfall():
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
         self.eibi.get_stations(self.start_f_khz, self.end_f_khz)
+        self.bins_per_khz = WF_BINS / self.span_khz
+        self.gen_div()
 
         return self.freq
 
@@ -804,5 +849,4 @@ def create_cm(which):
                 col = ( 255, 0, 128*(i-217)/38)
             colormap.append(col)
     return colormap
-
 

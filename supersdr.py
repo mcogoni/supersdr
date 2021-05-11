@@ -16,16 +16,17 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         mousex_pos = DISPLAY_WIDTH - 80
     buff_level = kiwi_snd.audio_buffer.qsize()
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2+3,TUNEBAR_Y+6), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+6), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+6), "small", False),
-            "rx_freq": (GREY, "%.2fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2+55,V_POS_TEXT), "small", False),
+    ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
+            "rx_freq": (RED, "%.3fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
             "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
-            "span": (ORANGE, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-80,SPECTRUM_Y+1), "small", False),
+            "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
+            "div": (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,SPECTRUM_Y+13), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
-            "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-130, SPECTRUM_Y+2), "small", False),
+            "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-145, SPECTRUM_Y+2), "small", False),
             "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
             "cat": (GREEN if cat_radio else GREY, "CAT", (5,BOTTOMBAR_Y+4), "big", False), 
             "recording": (RED if audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
@@ -48,7 +49,6 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         elif "big" in ts_dict[k][3]:
             render_ = bigfont.render_to
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
-
 
 def draw_lines(surface_, wf_height, radio_mode, mouse):
     center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
@@ -97,7 +97,13 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
 
     if click_drag_flag:
-        pygame.draw.line(sdrdisplay, RED, (start_drag_x, SPECTRUM_Y+10), (mouse[0], SPECTRUM_Y+10), 4)
+        pygame.draw.line(surface_, RED, (start_drag_x, SPECTRUM_Y+10), (mouse[0], SPECTRUM_Y+10), 4)
+
+    for x in kiwi_wf.div_list:
+        pygame.draw.line(surface_, YELLOW, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+5), 3)
+    for x in kiwi_wf.subdiv_list:
+        pygame.draw.line(surface_, WHITE, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+15), 1)
+
 
 
 def display_box(screen, message, size):
@@ -292,7 +298,6 @@ kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
-
 print(freq, radio_mode, 30, 3000, kiwi_password)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
 if not kiwi_snd:
@@ -304,8 +309,8 @@ if not play:
     exit("Chosen KIWI receiver is not ready!")
 
 # keep receiving dx cluster announces every 5s
-dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,kiwi_wf), daemon=True)
-dx_t.start()
+#dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,kiwi_wf), daemon=True)
+#dx_t.start()
 
 # init Pygame
 pygame.init()
@@ -412,21 +417,26 @@ while not wf_quit:
                 # Memory read/write, reset
                 if keys[pygame.K_w]:
                     if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
-                        kiwi_memory.reset_all_mem()
-                        show_bigmsg = "resetmemory"
+                        kiwi_memory.save_to_disk()
+                        show_bigmsg = "savememorydisk"
                         run_index_bigmsg = run_index
                     else:
                         kiwi_memory.write_mem(kiwi_snd.freq, radio_mode, lc, hc)
                         show_bigmsg = "writememory"
                         run_index_bigmsg = run_index
                 if keys[pygame.K_r]:
-                    run_index_bigmsg = run_index
-                    mem_tmp = kiwi_memory.restore_mem()
-                    if mem_tmp:
-                        click_freq, kiwi_snd.radio_mode, lc, hc = mem_tmp
-                        show_bigmsg = "restorememory"
+                    if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+                        kiwi_memory.reset_all_mem()
+                        show_bigmsg = "resetmemory"
+                        run_index_bigmsg = run_index
                     else:
-                        show_bigmsg = "emptymemory"
+                        run_index_bigmsg = run_index
+                        mem_tmp = kiwi_memory.restore_mem()
+                        if mem_tmp:
+                            click_freq, kiwi_snd.radio_mode, lc, hc = mem_tmp
+                            show_bigmsg = "restorememory"
+                        else:
+                            show_bigmsg = "emptymemory"
 
                 # KIWI RX passband change
                 if keys[pygame.K_o]:
@@ -474,9 +484,11 @@ while not wf_quit:
                 if keys[pygame.K_DOWN]:
                     if kiwi_wf.zoom > 0:
                         kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom - 1)
+                        kiwi_wf.set_white_flag()
                 elif keys[pygame.K_UP]:
                     if kiwi_wf.zoom < MAX_ZOOM:
                         kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom + 1)
+                        kiwi_wf.set_white_flag()
 
                 # KIWI WF arrow step tune
                 elif keys[pygame.K_LEFT]:
@@ -843,8 +855,9 @@ while not wf_quit:
     elif show_help_flag:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_bigmsg:
+        pos = None
         msg_color = WHITE
-        if run_index - run_index_bigmsg > 25:
+        if run_index - run_index_bigmsg > 65:
             show_bigmsg = None
         if "VOLUME" == show_bigmsg:
             msg_color = WHITE if kiwi_snd.volume <= 100 else RED
@@ -860,9 +873,14 @@ while not wf_quit:
         elif "writememory" == show_bigmsg:
             msg_text = "Stored Memory %d"% (len(kiwi_memory.mem_list)-1)
         elif "restorememory" == show_bigmsg:
-            msg_text = "Restored Memory %d"% kiwi_memory.index
+            msg_text = "Recall memory:%d -> %s"% (kiwi_memory.index, 
+                str(kiwi_memory.mem_list[kiwi_memory.index][0])+" kHz "+kiwi_memory.mem_list[kiwi_memory.index][1]) 
+            pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
         elif "resetmemory" == show_bigmsg:
             msg_text = "Reset All Memories!"
+        elif "savememorydisk" == show_bigmsg:
+            msg_text = "Save All Memories to Disk"
+            pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
         elif "emptymemory" == show_bigmsg:
             msg_text = "No Memories!"
         elif "start_rec" == show_bigmsg:
@@ -872,7 +890,7 @@ while not wf_quit:
         elif "centertune" == show_bigmsg:
             msg_text = "WF center tune mode " + ("ON" if wf_snd_link_flag else "OFF")
 
-        display_msg_box(sdrdisplay, msg_text, pos=None, color=msg_color)
+        display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
     rssi_smooth = np.mean(list(rssi_hist)[:])
     if s_meter_show_flag:
