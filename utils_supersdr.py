@@ -46,14 +46,9 @@ CHUNKS = 2 # 10 or more for remote kiwis
 KIWI_SAMPLES_PER_FRAME = 512
 FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
 
-# Hardcoded values for most kiwis
-MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
-MAX_ZOOM = 14
-WF_BINS  = 1024
-
 # SuperSDR constants
 WF_HEIGHT = 400
-DISPLAY_WIDTH = WF_BINS
+DISPLAY_WIDTH = 1024
 TOPBAR_HEIGHT = 20
 SPECTRUM_HEIGHT = 100
 BOTTOMBAR_HEIGHT = 20
@@ -68,7 +63,7 @@ V_POS_TEXT = 5
 MIN_DYN_RANGE = 90. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radio
+CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radios
 CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
@@ -128,7 +123,7 @@ HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
 
-font_size_dict = {"small": 12, "big": 18}
+font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
 class audio_recording():
     def __init__(self, filename_):
@@ -160,26 +155,37 @@ class audio_recording():
 
 
 class dxcluster():
+    CLEANUP_TIME = 60
+    UPDATE_TIME = 5
+
     def __init__(self, mycall_):
         self.mycall = mycall_
         host, port = 'dxfun.com', 8000
         self.server = (host, port)
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect()
-        self.int_freq_dict = defaultdict(list)
-        self.spot_dict = {}    
+        self.int_freq_dict = defaultdict(set)
+        self.spot_dict = {}
+        self.callsign_freq_dict = {}
+        self.terminate = False
+        self.failed_counter = 0
 
     def connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect(self.server)
         self.send(self.mycall)
         self.visible_stations = []
-        self.freq_set = set([])
         self.time_to_live = 1200 # seconds for a spot to live
         self.last_update = datetime.utcnow()
+        self.last_cleanup = datetime.utcnow()
 
     def send(self, msg):
         msg = msg + '\n'
         self.sock.send(msg.encode())
+
+    def keepalive(self):
+        try:
+            self.send("\n")
+        except:
+            pass
 
     def receive(self):
         msg = self.sock.recv(2048)
@@ -187,66 +193,81 @@ class dxcluster():
             msg = msg.decode("utf-8")
         except:
             msg = None
-            print("DX cluster msg decode failed")
+            #print("DX cluster msg decode failed")
         return msg
 
     def decode_spot(self, line):
-        qrg, callsign, utc = None, None, None
+        els = line.split("  ")
+        els = [x for x in els if x]
+        spotter = els[0][6:].replace(":", "")
+        utc = datetime.utcnow()
         try:
-            els = line.split("  ")
-            els = [x for x in els if x]
-            spotter = els[0][6:].replace(":", "")
             qrg = float(els[1].strip())
             callsign = els[2].strip()
-            utc = datetime.utcnow()
+            print(utc, qrg, callsign)
         except:
-            print("DX cluster msg decode failed")
+            qrg, callsign, utc = None, None, None
+            print("DX cluster msg decode failed: %s"%els)
         return qrg, callsign, utc        
 
     def clean_old_spots(self):
-        print("cleaning old spots")
         now  = datetime.utcnow()
         del_list = []
-        for k in self.spot_dict:
-            spot_utc =self.spot_dict[k][1]
+        for call in self.spot_dict:
+            spot_utc =self.spot_dict[call][1]
             duration = now - spot_utc
             duration_in_s = duration.total_seconds()
             if duration_in_s > self.time_to_live:
-                del_list.append(k)
-        for k in del_list:
-            del self.spot_dict[k]
+                del_list.append(call)
+        for call in del_list:
+            del self.spot_dict[call]
+        # for call in self.spot_dict:
+        #     f_, qrg_ = self.spot_dict[call]
+        #     self.int_freq_dict[int(f_)] = f_
 
-    def run(self, kiwi_snd, kiwi_wf):
-        while not kiwi_snd.terminate:
+    def run(self, kiwi_wf):
+        while not self.terminate:
             dx_cluster_msg = self.receive()
             if not dx_cluster_msg:
-                continue
+                self.failed_counter += 1
+                print("DX Cluster void response")
+                if self.failed_counter > 5:
+                    self.sock.close()
+                    self.connect()
+            self.failed_counter = 0
             spot_str = "%s"%dx_cluster_msg
             for line in spot_str.replace("\x07", "").split("\n"):
                 #print ("%r"%line.rstrip('\r\n'))
                 if "DX de " in line:
                     qrg, callsign, utc = self.decode_spot(line)
-                    if not qrg:
+                    if qrg and callsign:
+                        self.store_spot(qrg, callsign, utc)
+                    else:
                         continue
-                    self.store_spot(qrg, callsign, utc)
-            if (datetime.utcnow() - self.last_update).total_seconds() > 10:
-                if random.random()>0.95:
-                    self.clean_old_spots()
-                self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
-                self.last_update = datetime.utcnow()
 
-            time.sleep(9)
+            delta_t = (datetime.utcnow() - self.last_cleanup).total_seconds()
+            if delta_t > self.CLEANUP_TIME: # cleanup db and keepalive msg
+                self.clean_old_spots()
+                self.last_cleanup = datetime.utcnow()
+                #print("cleaned old spots")
+            delta_t = (datetime.utcnow() - self.last_update).total_seconds()
+            if delta_t > self.UPDATE_TIME:
+                self.keepalive()
+                self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
+                #print("dx cluster updated")
+                self.last_update = datetime.utcnow()
+            time.sleep(5)
 
     def store_spot(self, qrg_, callsign_, utc_):
-        self.spot_dict[qrg_] = (callsign_, utc_)
-        self.int_freq_dict[int(qrg_)].append(qrg_)
-        self.freq_set.add(int(qrg_))
+        self.spot_dict[callsign_] = (qrg_, utc_)
+        self.callsign_freq_dict[qrg_] = callsign_
+        self.int_freq_dict[int(qrg_)].add(qrg_)
 
     def get_stations(self, start_f, end_f):
-        inters = set(range(int(start_f), int(end_f))) & self.freq_set
+        inters = set(range(int(start_f), int(end_f))) & set(self.int_freq_dict.keys())
         self.visible_stations = []
         for int_freq in inters:
-            self.visible_stations.append(int_freq) #self.station_dict[f_khz])
+            self.visible_stations.append(int_freq)
         return self.visible_stations
 
 
@@ -292,15 +313,30 @@ class memory():
         self.mem_list = deque([], 10)
 
     def save_to_disk(self):
-        with open("supersdr.memory", "wb") as fd:
-            pickle.dump(self.mem_list, fd)
+        current_mem = self.mem_list
+        self.load_from_disk()
+        self.mem_list += current_mem
+        self.mem_list = list(set(self.mem_list))
+        try:
+            with open("supersdr.memory", "wb") as fd:
+                pickle.dump(self.mem_list, fd)
+        except:
+            print("Cannot save memory file!")
 
     def load_from_disk(self):
-        with open("supersdr.memory", "rb") as fd:
-            self.mem_list = pickle.load(fd)
-
+        try:
+            with open("supersdr.memory", "rb") as fd:
+                self.mem_list = pickle.load(fd)
+        except:
+            print("No memory file found!")
 
 class kiwi_waterfall():
+    MAX_FREQ = 30000
+    CENTER_FREQ = int(MAX_FREQ/2)
+    MAX_ZOOM = 14
+    WF_BINS = 1024
+    MAX_FPS = 23
+
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
 
@@ -325,7 +361,6 @@ class kiwi_waterfall():
         self.start_f_khz = self.start_freq()
         self.end_f_khz = self.end_freq()
         
-        self.bins_per_khz = WF_BINS / self.span_khz
         self.div_list = []
         self.subdiv_list = []
         self.min_bin_spacing = 100 # minimum pixels between major ticks (/10 for minor ticks)
@@ -337,8 +372,6 @@ class kiwi_waterfall():
         self.wf_stream = None
         self.wf_color = None
         self.wf_buffer = queue.Queue(maxsize=200)
-
-        self.wf_data = np.zeros((WF_HEIGHT, WF_BINS))
 
         # connect to kiwi WF server
         print ("Trying to contact %s..."%self.host)
@@ -354,8 +387,24 @@ class kiwi_waterfall():
 
         while True:
             msg = self.wf_stream.receive_message()
-            if msg and bytearray2str(msg[0:3]) == "W/F":
-                break
+            #print(msg)
+            if msg:
+                if bytearray2str(msg[0:3]) == "W/F":
+                    break
+                elif "MSG center_freq" in bytearray2str(msg):
+                    els = bytearray2str(msg[4:]).split()                
+                    self.MAX_FREQ = int(int(els[1].split("=")[1])/1000)
+                    self.CENTER_FREQ = int(int(self.MAX_FREQ)/2)
+                elif "MSG wf_fft_size" in bytearray2str(msg):
+                    els = bytearray2str(msg[4:]).split()
+                    print(els)
+                    self.MAX_ZOOM = int(els[3].split("=")[1])
+                    self.WF_BINS = int(els[0].split("=")[1])
+                    self.MAX_FPS = int(els[2].split("=")[1])
+                
+        self.bins_per_khz = self.WF_BINS / self.span_khz
+        self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
+
 
     def gen_div(self):
         self.space_khz = 10
@@ -406,15 +455,15 @@ class kiwi_waterfall():
 
     def zoom_to_span(self):
             """return frequency span in kHz for a given zoom level"""
-            assert(self.zoom >= 0 and self.zoom <= MAX_ZOOM)
-            self.span_khz = MAX_FREQ / 2**self.zoom
+            assert(self.zoom >= 0 and self.zoom <= self.MAX_ZOOM)
+            self.span_khz = self.MAX_FREQ / 2**self.zoom
             return self.span_khz
 
     def start_frequency_to_counter(self, start_frequency_):
         """convert a given start frequency in kHz to the counter value used in _set_zoom_start"""
-        assert(start_frequency_ >= 0 and start_frequency_ <= MAX_FREQ)
-        self.counter = round(start_frequency_/MAX_FREQ * 2**MAX_ZOOM * WF_BINS)
-        start_frequency_ = self.counter * MAX_FREQ / WF_BINS / 2**MAX_ZOOM
+        assert(start_frequency_ >= 0 and start_frequency_ <= self.MAX_FREQ)
+        self.counter = round(start_frequency_/self.MAX_FREQ * 2**self.MAX_ZOOM * self.WF_BINS)
+        start_frequency_ = self.counter * self.MAX_FREQ / self.WF_BINS / 2**self.MAX_ZOOM
         return self.counter, start_frequency_
 
     def start_freq(self):
@@ -426,15 +475,15 @@ class kiwi_waterfall():
         return self.end_f_khz
 
     def offset_to_bin(self, offset_khz_):
-        bins_per_khz_ = WF_BINS / self.span_khz
+        bins_per_khz_ = self.WF_BINS / self.span_khz
         return bins_per_khz_ * (offset_khz_)
 
     def bins_to_khz(self, bins_):
-        bins_per_khz_ = WF_BINS / self.span_khz
+        bins_per_khz_ = self.WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_) + self.start_f_khz
 
     def deltabins_to_khz(self, bins_):
-        bins_per_khz_ = WF_BINS / self.span_khz
+        bins_per_khz_ = self.WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_)
 
     def receive_spectrum(self):
@@ -468,10 +517,10 @@ class kiwi_waterfall():
         self.start_freq()
         self.end_freq()
         if zoom_ == 0: # 30 MHz span, WF freq should be 15 MHz
-            self.freq = 15000
+            self.freq = self.CENTER_FREQ
             self.start_freq()
             self.end_freq()
-            self.span_khz = MAX_FREQ
+            self.span_khz = self.MAX_FREQ
         else: # zoom level > 0
             if self.start_f_khz<0: # did we hit the left limit?
                 #self.freq -= self.start_f_khz
@@ -479,8 +528,8 @@ class kiwi_waterfall():
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
-            elif self.end_f_khz>MAX_FREQ: # did we hit the right limit?
-                self.freq = MAX_FREQ - self.zoom_to_span()/2 
+            elif self.end_f_khz>self.MAX_FREQ: # did we hit the right limit?
+                self.freq = self.MAX_FREQ - self.zoom_to_span()/2 
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
@@ -488,7 +537,7 @@ class kiwi_waterfall():
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
         self.eibi.get_stations(self.start_f_khz, self.end_f_khz)
-        self.bins_per_khz = WF_BINS / self.span_khz
+        self.bins_per_khz = self.WF_BINS / self.span_khz
         self.gen_div()
 
         return self.freq
@@ -801,21 +850,23 @@ class eibi_db():
             return None
         label_list = data[0].rstrip().split(";")
         self.station_dict = defaultdict(list)
-        self.intfreq_dict = defaultdict(list)
+        self.int_freq_dict = defaultdict(list)
+        self.station_freq_dict = {}
         self.visible_stations = []
 
         for el in data[1:]:
             els = el.rstrip().split(";")
-            self.intfreq_dict[int(round(float(els[0])))].append(float(els[0])) # store or each integer freqeuncy key all float freq in kHz
+            self.int_freq_dict[int(round(float(els[0])))].append(float(els[0])) # store or each integer freqeuncy key all float freq in kHz
             self.station_dict[float(els[0])].append(els[1:]) # store all stations' data using the float freq in kHz as key (multiple)
+            self.station_freq_dict[float(els[0])] = els[1:]
 
-        self.freq_set = set(self.intfreq_dict.keys())
+        self.freq_set = set(self.int_freq_dict.keys())
 
     def get_stations(self, start_f, end_f):
         inters = set(range(int(start_f), int(end_f))) & self.freq_set
         self.visible_stations = []
         for intf in inters:
-            record = self.intfreq_dict[intf]
+            record = self.int_freq_dict[intf]
             for f_khz in record:
                 self.visible_stations.append(f_khz) #self.station_dict[f_khz])
         return self.visible_stations

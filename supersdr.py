@@ -22,7 +22,6 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "rx_freq": (RED, "%.3fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
             "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
-            "div": (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,SPECTRUM_Y+13), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
@@ -39,6 +38,11 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     if click_drag_flag:
         delta_khz = kiwi_wf.deltabins_to_khz(start_drag_x-mousex_pos)
         ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,SPECTRUM_Y+20), "big", False)
+    if len(kiwi_wf.div_list)>1:
+        ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,SPECTRUM_Y+13), "small", False)
+    else:
+        ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-95,SPECTRUM_Y+13), "small", False)
+
 
     draw_dict = {}
     for k in ts_dict:
@@ -59,7 +63,7 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         pygame.draw.line(surface_, (250,0,0), (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
 
     snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
-    if snd_freq_bin>0 and snd_freq_bin< WF_BINS:
+    if snd_freq_bin>0 and snd_freq_bin< kiwi_wf.WF_BINS:
         # carrier line
         pygame.draw.line(surface_, RED, (snd_freq_bin, TUNEBAR_Y), (snd_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
     if cat_radio and not cat_snd_link_flag:
@@ -69,13 +73,13 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         
     lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
     lc_bin = snd_freq_bin + lc_bin
-    if lc_bin>0 and lc_bin< WF_BINS:
+    if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
         # low cut line
         pygame.draw.line(surface_, GREEN, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
     
     hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
     hc_bin = snd_freq_bin + hc_bin
-    if hc_bin>0 and hc_bin< WF_BINS:
+    if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
         # high cut line
         pygame.draw.line(surface_, GREEN, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
     
@@ -85,13 +89,13 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
         lc_bin = kiwi_wf.offset_to_bin(lc_/1000.)
         lc_bin = tune_freq_bin + lc_bin + 1
-        if lc_bin>0 and lc_bin< WF_BINS:
+        if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
             # low cut line
             pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
         hc_bin = tune_freq_bin + hc_bin
-        if hc_bin>0 and hc_bin< WF_BINS:
+        if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
             # high cut line
             pygame.draw.line(surface_, YELLOW, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
         pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
@@ -103,7 +107,6 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         pygame.draw.line(surface_, YELLOW, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+5), 3)
     for x in kiwi_wf.subdiv_list:
         pygame.draw.line(surface_, WHITE, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+15), 1)
-
 
 
 def display_box(screen, message, size):
@@ -186,7 +189,7 @@ def s_meter_draw(rssi_smooth):
 
 def plot_spectrum(t_avg=15, col=GREEN):
     global sdrdisplay
-    spectrum_surf = pygame.Surface((WF_BINS, SPECTRUM_HEIGHT))
+    spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
     for x, v in enumerate(np.average(kiwi_wf.wf_data.T[:,-t_avg:], axis=1)):
         y = SPECTRUM_HEIGHT-1-int(v/255 *SPECTRUM_HEIGHT)
@@ -195,31 +198,64 @@ def plot_spectrum(t_avg=15, col=GREEN):
     sdrdisplay.blit(spectrum_surf, (0, SPECTRUM_Y))
 
 def plot_eibi(surface_):
-    for f_khz in set(eibi.visible_stations):
-        f_bin = int(kiwi_wf.offset_to_bin(f_khz-kiwi_wf.start_f_khz))
-        ts = (ORANGE, eibi.get_names(f_khz)[0], (f_bin,WF_Y+20), "small")
-        render_ = smallfont.render_to
+    y_offset = 0
+    old_fbin = -100
+    fontsize = font_size_dict["medium"]
+    station_list = [ string_f_khz for f_khz in set(eibi.visible_stations) for string_f_khz in eibi.int_freq_dict[f_khz] ]
+    sorted_station_list = sorted(station_list, key=float)
+    shown_list = []
+    for string_f_khz in sorted_station_list:
+        station_record = eibi.station_freq_dict[string_f_khz]
+        if station_record in shown_list:
+            continue
+        f_khz_float = float(string_f_khz)
+        f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
+        shown_list.append(station_record)
         try:
-            if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
-                render_(surface_, ts[2], ts[1],  rotation=90, fgcolor=ts[0], bgcolor=(20,20,20))
-                pygame.draw.line(surface_, ORANGE, (f_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), (f_bin, TUNEBAR_Y+15), 1)
+            ts = (WHITE, station_record[3], (f_bin,WF_Y+20), "small")
         except:
-            pass
-
+            continue
+        render_ = midfont.render_to
+        str_len = len(ts[1])
+        x, y = ts[2]
+        if x>fontsize*str_len/2 and x<DISPLAY_WIDTH-10:
+            if f_bin-old_fbin <= fontsize*str_len/2+5:
+                y_offset += fontsize
+            else:
+                y_offset = 0
+            old_fbin = f_bin
+            try:
+                render_(surface_, (x-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
+            except:
+                pass
 def plot_dxcluster(surface_):
-    for f_khz in set(dxclust.visible_stations):
+    y_offset = 0
+    old_fbin = -100
+    fontsize = font_size_dict["medium"]
+    station_list = [string_f_khz for f_khz in set(dxclust.visible_stations) for string_f_khz in dxclust.int_freq_dict[f_khz] ]
+    sorted_station_list = sorted(station_list, key=float)
+    for string_f_khz in sorted_station_list:
+        f_khz_float = float(string_f_khz)
+        f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
         try:
-            for string_f_khz in dxclust.int_freq_dict[f_khz]:
-                f_khz_float = float(string_f_khz)
-                f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
-                ts = (ORANGE, dxclust.spot_dict[string_f_khz][0], (f_bin,WF_Y+20), "small")
-                render_ = midfont.render_to
-                if ts[2][0]>10 and ts[2][0]<DISPLAY_WIDTH-10:
-                    render_(surface_, ts[2], ts[1],  rotation=90, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), (f_bin, TUNEBAR_Y+15), 1)
+            ts = (WHITE, dxclust.callsign_freq_dict[string_f_khz], (f_bin,WF_Y+20), "small")
         except:
-            pass
-
+            continue
+        render_ = midfont.render_to
+        str_len = len(ts[1])
+        x, y = ts[2]
+        if x>fontsize*str_len/2 and x<DISPLAY_WIDTH-10:
+            if f_bin-old_fbin <= fontsize*str_len/2+5:
+                y_offset += fontsize
+            else:
+                y_offset = 0
+            old_fbin = f_bin
+            try:
+                render_(surface_, (x-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
+            except:
+                pass
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -237,7 +273,7 @@ parser.add_option("-z", "--zoom", type=int,
 parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=25)
+                  help="screen refresh rate", dest="refresh", default=23)
                   
 options = vars(parser.parse_args()[0])
 FPS = options['refresh']
@@ -308,10 +344,6 @@ if not play:
     del kiwi_snd
     exit("Chosen KIWI receiver is not ready!")
 
-# keep receiving dx cluster announces every 5s
-#dx_t = threading.Thread(target=dxclust.run, args=(kiwi_snd,kiwi_wf), daemon=True)
-#dx_t.start()
-
 # init Pygame
 pygame.init()
 sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
@@ -343,6 +375,10 @@ show_dxcluster_flag = False
 
 input_new_server = None
 current_string = []
+
+dxclust.connect()
+dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
+dx_t.start()
 
 dx_cluster_msg = True
 
@@ -406,6 +442,10 @@ while not wf_quit:
                 # Show realtime DX-CLUSTER labels
                 if keys[pygame.K_d]:
                     show_dxcluster_flag = False if show_dxcluster_flag else True
+                    if show_dxcluster_flag:
+                        dxclust.terminate = False
+                    else:
+                        dxclust.terminate = True
 
                 # Center RX freq on WF
                 if keys[pygame.K_z]:
@@ -414,7 +454,11 @@ while not wf_quit:
                     show_bigmsg = "centertune"
                     run_index_bigmsg = run_index
 
-                # Memory read/write, reset
+                # Memory read/write, reset, save to/load from disk
+                if keys[pygame.K_t]:
+                        kiwi_memory.load_from_disk()
+                        show_bigmsg = "loadmemorydisk"
+                        run_index_bigmsg = run_index
                 if keys[pygame.K_w]:
                     if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
                         kiwi_memory.save_to_disk()
@@ -486,7 +530,7 @@ while not wf_quit:
                         kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom - 1)
                         kiwi_wf.set_white_flag()
                 elif keys[pygame.K_UP]:
-                    if kiwi_wf.zoom < MAX_ZOOM:
+                    if kiwi_wf.zoom < kiwi_wf.MAX_ZOOM:
                         kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom + 1)
                         kiwi_wf.set_white_flag()
 
@@ -560,7 +604,6 @@ while not wf_quit:
                         cat_snd_link_flag = False if cat_snd_link_flag else True
                         force_sync_flag = True
 
-
                 # Automatic mode change ON/OFF
                 elif keys[pygame.K_x]:
                     show_bigmsg = "automode"
@@ -618,7 +661,7 @@ while not wf_quit:
         # KIWI WF mouse zooming
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 4: # mouse scroll up
-                if kiwi_wf.zoom<MAX_ZOOM:
+                if kiwi_wf.zoom<kiwi_wf.MAX_ZOOM:
                     t_khz = kiwi_wf.bins_to_khz(mouse[0])
                     zoom_f = (t_khz+kiwi_wf.freq)/2
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom + 1)
@@ -843,7 +886,7 @@ while not wf_quit:
 #    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
     if show_eibi_flag and kiwi_wf.zoom > 6:
         plot_eibi(sdrdisplay)
-    elif show_dxcluster_flag and kiwi_wf.zoom > 4:
+    elif show_dxcluster_flag and kiwi_wf.zoom > 3:
         plot_dxcluster(sdrdisplay)
 
     if input_freq_flag:
@@ -878,6 +921,9 @@ while not wf_quit:
             pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
         elif "resetmemory" == show_bigmsg:
             msg_text = "Reset All Memories!"
+        elif "loadmemorydisk" == show_bigmsg:
+            msg_text = "Load Memories from Disk"
+            pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
         elif "savememorydisk" == show_bigmsg:
             msg_text = "Save All Memories to Disk"
             pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
@@ -902,6 +948,10 @@ while not wf_quit:
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
+
+    # for thread in threading.enumerate(): 
+    #     print(thread.name)
+
 
 # close PyAudio
 play.terminate()
