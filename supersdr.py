@@ -274,14 +274,17 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
+parser.add_option("-c", "--callsign", type=str,
+                  help="DX CLUSTER Callsign", dest="callsign", default="IS0KYB")
                   
 options = vars(parser.parse_args()[0])
 FPS = options['refresh']
+CALLSIGN = options['callsign']
 
 palRGB = create_cm("cutesdr")
 
 eibi = eibi_db()
-dxclust = dxcluster("IS0KYB")
+dxclust = dxcluster(CALLSIGN)
 
 kiwi_host = options['kiwiserver']
 kiwi_port = options['kiwiport']

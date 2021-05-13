@@ -155,7 +155,7 @@ class audio_recording():
 
 
 class dxcluster():
-    CLEANUP_TIME = 60
+    CLEANUP_TIME = 600
     UPDATE_TIME = 5
 
     def __init__(self, mycall_):
@@ -170,7 +170,17 @@ class dxcluster():
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect(self.server)
+        connected = False
+        while not connected:
+            print(f'Connection to: {self.server}')
+            try:
+                self.sock.connect(self.server)
+            except:
+                print('Impossibile to connect')
+                sleep(5)     
+            else:       
+                print('Connected!!!')
+                connected = True
         self.send(self.mycall)
         self.visible_stations = []
         self.time_to_live = 1200 # seconds for a spot to live
@@ -233,7 +243,10 @@ class dxcluster():
                 print("DX Cluster void response")
                 if self.failed_counter > 5:
                     self.sock.close()
+                    time.sleep(5)
                     self.connect()
+                    time.sleep(5)
+                    continue
             self.failed_counter = 0
             spot_str = "%s"%dx_cluster_msg
             for line in spot_str.replace("\x07", "").split("\n"):
@@ -256,7 +269,7 @@ class dxcluster():
                 self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
                 #print("dx cluster updated")
                 self.last_update = datetime.utcnow()
-            time.sleep(5)
+            #time.sleep(5)
 
     def store_spot(self, qrg_, callsign_, utc_):
         self.spot_dict[callsign_] = (qrg_, utc_)
