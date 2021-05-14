@@ -600,7 +600,7 @@ class kiwi_sound():
     # Pyaudio options
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    AUDIO_RATE = 44100
+    AUDIO_RATE = 48000
     KIWI_RATE = 12000
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
     CHUNKS = 2 # 10 or more for remote kiwis
@@ -746,16 +746,16 @@ class kiwi_sound():
         popped = popped.astype(np.float64) * (self.volume/100)
 
         n = len(popped)
-        pyaudio_buffer = signal.resample_poly(popped, int(n*self.SAMPLE_RATIO), n, padtype="line")
-
-        # oversample
-        # pyaudio_buffer = np.zeros((self.SAMPLE_RATIO*n))
-        # pyaudio_buffer[::self.SAMPLE_RATIO] = popped
-        # pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
-        
-        # # low pass filter
-        # self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
-        # pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * self.SAMPLE_RATIO
+        if self.SAMPLE_RATIO % 1: # high bandwidth kiwis (3ch 20kHz)
+            pyaudio_buffer = signal.resample_poly(popped, int(n*self.SAMPLE_RATIO), n, padtype="line")
+        else: # normal 12kHz kiwis
+            pyaudio_buffer = np.zeros(int(self.SAMPLE_RATIO*n))
+            pyaudio_buffer[::int(self.SAMPLE_RATIO)] = popped
+            pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
+            
+            # low pass filter
+            self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
+            pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
 
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
