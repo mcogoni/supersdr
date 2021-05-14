@@ -587,12 +587,12 @@ while not wf_quit:
 
                 # Start/stop audio recording to file
                 elif keys[pygame.K_e]:
-                    if not audio_rec.recording_flag:
-                        audio_rec.start()
+                    if not kiwi_snd.audio_rec.recording_flag:
+                        kiwi_snd.audio_rec.start()
                         show_bigmsg = "start_rec"
                         run_index_bigmsg = run_index
                     else:
-                        audio_rec.stop(play)
+                        kiwi_snd.audio_rec.stop(play)
                         show_bigmsg = "stop_rec"
                         run_index_bigmsg = run_index
 

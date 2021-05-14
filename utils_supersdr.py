@@ -7,6 +7,7 @@ import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
 from matplotlib import cm
 import numpy as np
+from scipy import signal
 import pickle
 
 import threading, queue
@@ -126,10 +127,10 @@ HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
 font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
 class audio_recording():
-    def __init__(self, filename_):
+    def __init__(self, filename_, kiwi_snd):
         self.filename = filename_
         self.audio_buffer = []
-
+        self.kiwi_snd = kiwi_snd
         self.frames = []
         self.recording_flag = False
 
@@ -144,9 +145,9 @@ class audio_recording():
 
     def save(self, p_):
         self.wave = wave.open(self.filename, 'wb')
-        self.wave.setnchannels(CHANNELS)
-        self.wave.setsampwidth(p_.get_sample_size(FORMAT))
-        self.wave.setframerate(AUDIO_RATE)
+        self.wave.setnchannels(self.kiwi_snd.CHANNELS)
+        self.wave.setsampwidth(p_.get_sample_size(self.kiwi_snd.FORMAT))
+        self.wave.setframerate(self.kiwi_snd.AUDIO_RATE)
 
         # process audio data here
         self.wave.writeframes(b''.join(self.audio_buffer))
@@ -599,7 +600,7 @@ class kiwi_sound():
     # Pyaudio options
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
-    AUDIO_RATE = 48000
+    AUDIO_RATE = 44100
     KIWI_RATE = 12000
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
     CHUNKS = 2 # 10 or more for remote kiwis
@@ -642,10 +643,16 @@ class kiwi_sound():
             
             for msg in msg_list:
                 self.stream.send_message(msg)
-            data = ""
-            while "MSG" in data:
-                data = self.stream.receive_message()
 
+            while True:
+                msg = self.stream.receive_message()
+                if "SND" in bytearray2str(msg[:4]):
+                    break
+                elif "MSG audio_init" in bytearray2str(msg):
+                    msg = bytearray2str(msg)
+                    els = msg[4:].split()                
+                    self.KIWI_RATE = int(int(els[1].split("=")[1]))
+                    self.SAMPLE_RATIO = self.AUDIO_RATE/self.KIWI_RATE
         except:
             print ("Failed to connect to Kiwi audio stream")
             raise
@@ -655,7 +662,7 @@ class kiwi_sound():
         self.lowpass = self.kiwi_filter.lowpass
         self.old_buffer = np.zeros((self.n_tap))
 
-        self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"))
+        self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"), self)
 
 
     def set_mode_freq_pb(self):
@@ -739,14 +746,17 @@ class kiwi_sound():
         popped = popped.astype(np.float64) * (self.volume/100)
 
         n = len(popped)
+        pyaudio_buffer = signal.resample_poly(popped, int(n*self.SAMPLE_RATIO), n, padtype="line")
+
         # oversample
-        pyaudio_buffer = np.zeros((self.SAMPLE_RATIO*n))
-        pyaudio_buffer[::self.SAMPLE_RATIO] = popped
-        pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
+        # pyaudio_buffer = np.zeros((self.SAMPLE_RATIO*n))
+        # pyaudio_buffer[::self.SAMPLE_RATIO] = popped
+        # pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
         
-        # low pass filter
-        self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
-        pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * self.SAMPLE_RATIO
+        # # low pass filter
+        # self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
+        # pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * self.SAMPLE_RATIO
+
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
