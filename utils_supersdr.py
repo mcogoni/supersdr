@@ -646,7 +646,7 @@ class kiwi_sound():
 
             while True:
                 msg = self.stream.receive_message()
-                if "SND" in bytearray2str(msg[:4]):
+                if msg and "SND" == bytearray2str(msg[:3]):
                     break
                 elif "MSG audio_init" in bytearray2str(msg):
                     msg = bytearray2str(msg)
