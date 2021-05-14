@@ -20,7 +20,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
             "rx_freq": (RED, "%.3fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
-            "kiwi": (RED if buff_level<FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
+            "kiwi": (RED if buff_level<kiwi_snd.FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
@@ -28,7 +28,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-145, SPECTRUM_Y+2), "small", False),
             "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
             "cat": (GREEN if cat_radio else GREY, "CAT", (5,BOTTOMBAR_Y+4), "big", False), 
-            "recording": (RED if audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
+            "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
@@ -328,8 +328,8 @@ else:
         freq = 14200
     radio_mode = "USB"
 
-kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
-audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"))
+# kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
+# audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"))
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 #init KIWI WF and RX audio
@@ -338,7 +338,7 @@ wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
 print(freq, radio_mode, 30, 3000, kiwi_password)
-kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
+kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
 if not kiwi_snd:
     print("Server not ready")
     exit()
@@ -399,7 +399,7 @@ cat_snd_link_flag = True if cat_radio else False
 print("SYNC OPTIONS:")
 print("WF<>CAT", wf_cat_link_flag, "WF<>RX", wf_snd_link_flag, "CAT<>RX", cat_snd_link_flag)
 
-rssi_maxlen = FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
+rssi_maxlen = kiwi_snd.FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
 run_index = 0
@@ -732,7 +732,7 @@ while not wf_quit:
 
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
-            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_filter, audio_rec)
+            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf)
             print("Changed server to: %s:%d" % (new_host,new_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
@@ -740,7 +740,7 @@ while not wf_quit:
             play = None
         if not play:
             kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
-            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_filter, audio_rec)
+            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
             if not play:

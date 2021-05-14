@@ -36,15 +36,15 @@ from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
 
-# Pyaudio options
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-AUDIO_RATE = 48000
-KIWI_RATE = 12000
-SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 2 # 10 or more for remote kiwis
-KIWI_SAMPLES_PER_FRAME = 512
-FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
+# # Pyaudio options
+# FORMAT = pyaudio.paInt16
+# CHANNELS = 1
+# AUDIO_RATE = 48000
+# KIWI_RATE = 12000
+# SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
+# CHUNKS = 2 # 10 or more for remote kiwis
+# KIWI_SAMPLES_PER_FRAME = 512
+# FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
 
 # SuperSDR constants
 WF_HEIGHT = 400
@@ -596,16 +596,21 @@ class kiwi_waterfall():
 
 
 class kiwi_sound():
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, kiwi_filter, audio_rec_):
+    # Pyaudio options
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    AUDIO_RATE = 48000
+    KIWI_RATE = 12000
+    SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
+    CHUNKS = 2 # 10 or more for remote kiwis
+    KIWI_SAMPLES_PER_FRAME = 512
+    FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
+
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf):
         # connect to kiwi server
         self.kiwi_wf = kiwi_wf
-        self.n_tap = kiwi_filter.n_tap
-        self.lowpass = kiwi_filter.lowpass
-        self.audio_rec_ = audio_rec_
-        self.audio_buffer = queue.Queue(maxsize=FULL_BUFF_LEN)
+        self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
         self.terminate = False
-
-        self.old_buffer = np.zeros((self.n_tap))
         self.volume = 100
         
         self.rssi = -127
@@ -633,7 +638,7 @@ class kiwi_sound():
             (self.radio_mode.lower(), self.lc, self.hc, self.freq),
             "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
             "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
-            "SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
+            "SET AR OK in=%d out=%d" % (self.KIWI_RATE, self.AUDIO_RATE)]
             
             for msg in msg_list:
                 self.stream.send_message(msg)
@@ -644,6 +649,14 @@ class kiwi_sound():
         except:
             print ("Failed to connect to Kiwi audio stream")
             raise
+        
+        self.kiwi_filter = filtering(self.KIWI_RATE/2, self.AUDIO_RATE)
+        self.n_tap = self.kiwi_filter.n_tap
+        self.lowpass = self.kiwi_filter.lowpass
+        self.old_buffer = np.zeros((self.n_tap))
+
+        self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"))
+
 
     def set_mode_freq_pb(self):
         #print (self.radio_mode, self.lc, self.hc, self.freq)
@@ -719,7 +732,7 @@ class kiwi_sound():
 
     def play_buffer(self, in_data, frame_count, time_info, status):
         popped = []
-        for _ in range(CHUNKS):
+        for _ in range(self.CHUNKS):
             popped.append( self.audio_buffer.get() )
 
         popped = np.array(popped).flatten()
@@ -727,15 +740,15 @@ class kiwi_sound():
 
         n = len(popped)
         # oversample
-        pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
-        pyaudio_buffer[::SAMPLE_RATIO] = popped
+        pyaudio_buffer = np.zeros((self.SAMPLE_RATIO*n))
+        pyaudio_buffer[::self.SAMPLE_RATIO] = popped
         pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
         
         # low pass filter
         self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
-        pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
-        if self.audio_rec_.recording_flag:
-            self.audio_rec_.audio_buffer.append(pyaudio_buffer.astype(np.int16))
+        pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * self.SAMPLE_RATIO
+        if self.audio_rec.recording_flag:
+            self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
@@ -826,7 +839,7 @@ def start_audio_stream(kiwi_snd):
     rx_t.start()
 
     print("Filling audio buffer...")
-    while kiwi_snd.audio_buffer.qsize()<FULL_BUFF_LEN and not kiwi_snd.terminate:
+    while kiwi_snd.audio_buffer.qsize() < kiwi_snd.FULL_BUFF_LEN and not kiwi_snd.terminate:
         pass
 
     if kiwi_snd.terminate:
@@ -842,12 +855,12 @@ def start_audio_stream(kiwi_snd):
         else:
             CARD_INDEX = None
 
-    kiwi_audio_stream = play.open(format=FORMAT,
-                    channels=CHANNELS,
-                    rate=AUDIO_RATE,
+    kiwi_audio_stream = play.open(format=kiwi_snd.FORMAT,
+                    channels=kiwi_snd.CHANNELS,
+                    rate=kiwi_snd.AUDIO_RATE,
                     output=True,
                     output_device_index=CARD_INDEX,
-                    frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
+                    frames_per_buffer= int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
                     stream_callback=kiwi_snd.play_buffer)
     kiwi_audio_stream.start_stream()
 
