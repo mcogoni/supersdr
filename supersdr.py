@@ -275,16 +275,24 @@ parser.add_option("-f", "--freq", type=int,
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
 parser.add_option("-c", "--callsign", type=str,
-                  help="DX CLUSTER Callsign", dest="callsign", default="IS0KYB")
+                  help="DX CLUSTER Callsign", dest="callsign", default="")
+parser.add_option("-m", "--colormap", type=str,
+                  help="colormap for waterfall", dest="colormap", default="cutesdr")
                   
 options = vars(parser.parse_args()[0])
 FPS = options['refresh']
+
 CALLSIGN = options['callsign']
-
-palRGB = create_cm("cutesdr")
-
+if not CALLSIGN:
+    print("*"*20)
+    CALLSIGN = input("Please enter your CALLSIGN to access DXCLUSTER: ")
+try:
+    dxclust = dxcluster(CALLSIGN)
+except:
+    dxclust = None
 eibi = eibi_db()
-dxclust = dxcluster(CALLSIGN)
+
+palRGB = create_cm(options["colormap"])
 
 kiwi_host = options['kiwiserver']
 kiwi_port = options['kiwiport']
@@ -337,7 +345,6 @@ kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
-print(freq, radio_mode, 30, 3000, kiwi_password)
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
 if not kiwi_snd:
     print("Server not ready")
@@ -379,11 +386,15 @@ show_dxcluster_flag = False
 input_new_server = None
 current_string = []
 
-dxclust.connect()
-dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
-dx_t.start()
+if dxclust:
+    print(dxclust)
+    dxclust.connect()
+    dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
+    dx_t.start()
+    dx_cluster_msg = True
+else:
+    dx_cluster_msg = False
 
-dx_cluster_msg = True
 
 kiwi_memory = memory()
 kiwi_wf.set_freq_zoom(freq, zoom)
@@ -444,11 +455,12 @@ while not wf_quit:
 
                 # Show realtime DX-CLUSTER labels
                 if keys[pygame.K_d]:
-                    show_dxcluster_flag = False if show_dxcluster_flag else True
-                    if show_dxcluster_flag:
-                        dxclust.terminate = False
-                    else:
-                        dxclust.terminate = True
+                    if dxclust:
+                        show_dxcluster_flag = False if show_dxcluster_flag else True
+                        if show_dxcluster_flag:
+                            dxclust.terminate = False
+                        else:
+                            dxclust.terminate = True
 
                 # Center RX freq on WF
                 if keys[pygame.K_z]:
@@ -526,6 +538,14 @@ while not wf_quit:
                         kiwi_snd.volume = old_volume
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
+
+                # KIWI WF colormap dynamic range
+                if keys[pygame.K_PLUS]:
+                    if MIN_DYN_RANGE < 100:
+                        MIN_DYN_RANGE += 5
+                elif keys[pygame.K_MINUS]:
+                    if MIN_DYN_RANGE > 30:
+                        MIN_DYN_RANGE -= 5
 
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:

@@ -7,7 +7,7 @@ import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
 from matplotlib import cm
 import numpy as np
-from scipy import signal
+from scipy.signal import resample_poly
 import pickle
 
 import threading, queue
@@ -61,7 +61,7 @@ TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
 WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
 BOTTOMBAR_Y = WF_Y + WF_HEIGHT
 V_POS_TEXT = 5
-MIN_DYN_RANGE = 90. # minimum visual dynamic range in dB
+MIN_DYN_RANGE = 60. # minimum visual dynamic range in dB
 CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radios
@@ -160,6 +160,8 @@ class dxcluster():
     UPDATE_TIME = 5
 
     def __init__(self, mycall_):
+        if mycall_ == "":
+            raise
         self.mycall = mycall_
         host, port = 'dxfun.com', 8000
         self.server = (host, port)
@@ -658,6 +660,9 @@ class kiwi_sound():
             raise
         
         self.kiwi_filter = filtering(self.KIWI_RATE/2, self.AUDIO_RATE)
+        gcd = np.gcd(self.KIWI_RATE,self.AUDIO_RATE)
+        self.n_low, self.n_high = int(self.KIWI_RATE/gcd), int(self.AUDIO_RATE/gcd)
+
         self.n_tap = self.kiwi_filter.n_tap
         self.lowpass = self.kiwi_filter.lowpass
         self.old_buffer = np.zeros((self.n_tap))
@@ -747,7 +752,7 @@ class kiwi_sound():
 
         n = len(popped)
         if self.SAMPLE_RATIO % 1: # high bandwidth kiwis (3ch 20kHz)
-            pyaudio_buffer = signal.resample_poly(popped, int(n*self.SAMPLE_RATIO), n, padtype="line")
+            pyaudio_buffer = resample_poly(popped, self.n_high, self.n_low, padtype="line")
         else: # normal 12kHz kiwis
             pyaudio_buffer = np.zeros(int(self.SAMPLE_RATIO*n))
             pyaudio_buffer[::int(self.SAMPLE_RATIO)] = popped
