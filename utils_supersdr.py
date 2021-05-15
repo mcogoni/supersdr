@@ -36,17 +36,6 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-
-# # Pyaudio options
-# FORMAT = pyaudio.paInt16
-# CHANNELS = 1
-# AUDIO_RATE = 48000
-# KIWI_RATE = 12000
-# SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-# CHUNKS = 2 # 10 or more for remote kiwis
-# KIWI_SAMPLES_PER_FRAME = 512
-# FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
-
 # SuperSDR constants
 WF_HEIGHT = 400
 DISPLAY_WIDTH = 1024
@@ -61,10 +50,7 @@ TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
 WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
 BOTTOMBAR_Y = WF_Y + WF_HEIGHT
 V_POS_TEXT = 5
-MIN_DYN_RANGE = 60. # minimum visual dynamic range in dB
-CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radios
 CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
@@ -352,6 +338,8 @@ class kiwi_waterfall():
     MAX_ZOOM = 14
     WF_BINS = 1024
     MAX_FPS = 23
+    MIN_DYN_RANGE = 60. # minimum visual dynamic range in dB
+    CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
@@ -516,13 +504,15 @@ class kiwi_waterfall():
             # standardize the distribution between 0 and 1
             self.wf_color /= np.max(self.wf_color[1:-1])
             # clip extreme values
-            self.wf_color = np.clip(self.wf_color, np.percentile(self.wf_color,CLIP_LOWP), np.percentile(self.wf_color, CLIP_HIGHP))
+            low_perc = np.percentile(self.wf_color,self.CLIP_LOWP)
+            high_perc = np.percentile(self.wf_color, self.CLIP_HIGHP)
+            self.wf_color = np.clip(self.wf_color, low_perc, high_perc)
             # standardize again between 0 and 255
             self.wf_color -= np.min(self.wf_color[1:-1])
             # expand between 0 and 255
             self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
             # avoid too bright colors with no signals
-            self.wf_color *= (min(dyn_range, MIN_DYN_RANGE)/MIN_DYN_RANGE)
+            self.wf_color *= (min(dyn_range, self.MIN_DYN_RANGE)/self.MIN_DYN_RANGE)
             # insert a full signal line to see freq/zoom changes
         self.keepalive()
 
@@ -588,13 +578,13 @@ class kiwi_waterfall():
 
     def set_white_flag(self):
         self.wf_color = np.ones_like(self.wf_color)*255
-        self.wf_data[-2,:] = self.wf_color
+        self.wf_data[1,:] = self.wf_color
 
     def run(self):
         while not self.terminate:
             self.receive_spectrum()
-            self.wf_data[-1,:] = self.wf_color
-            self.wf_data[0:WF_HEIGHT-1,:] = self.wf_data[1:WF_HEIGHT,:]
+            self.wf_data[0,:] = self.wf_color
+            self.wf_data = np.roll(self.wf_data, 1, axis=0)
         return
 
 
@@ -757,7 +747,7 @@ class kiwi_sound():
             pyaudio_buffer = np.zeros(int(self.SAMPLE_RATIO*n))
             pyaudio_buffer[::int(self.SAMPLE_RATIO)] = popped
             pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
-            
+
             # low pass filter
             self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
             pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
@@ -776,6 +766,8 @@ class kiwi_sound():
 
 
 class cat:
+    CAT_MIN_FREQ = 100 # 100 kHz is OK for most radios
+    CAT_MAX_FREQ = 30000
     def __init__(self, radiohost_, radioport_):
         self.KNOWN_MODES = {"USB", "LSB", "CW", "AM"}
         self.radiohost, self.radioport = radiohost_, radioport_
@@ -804,7 +796,7 @@ class cat:
             self.reply = out        
 
     def set_freq(self, freq_):
-        if freq_ >= CAT_LOWEST_FREQ:
+        if freq_ >= self.CAT_MIN_FREQ and freq_ <= self.CAT_MAX_FREQ:
             self.send_msg(("\\set_freq %d" % (freq_*1000)))
             #if self.reply: # to be verified!
             #    self.freq = freq_

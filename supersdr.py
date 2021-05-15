@@ -19,7 +19,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            "rx_freq": (RED, "%.3fkHz %s"%(kiwi_snd.freq, kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
+            "rx_freq": (RED, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
             "kiwi": (RED if buff_level<kiwi_snd.FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
@@ -31,6 +31,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
+            "wf_param": (GREEN, "WF:%d%%-%ddB"%(kiwi_wf.CLIP_LOWP, kiwi_wf.MIN_DYN_RANGE), (10,SPECTRUM_Y+1), "small", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
     if not s_meter_show_flag:
@@ -191,7 +192,7 @@ def plot_spectrum(t_avg=15, col=GREEN):
     global sdrdisplay
     spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
-    for x, v in enumerate(np.average(kiwi_wf.wf_data.T[:,-t_avg:], axis=1)):
+    for x, v in enumerate(np.average(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
         y = SPECTRUM_HEIGHT-1-int(v/255 *SPECTRUM_HEIGHT)
         pixarr[x,y] = col
     del pixarr
@@ -316,7 +317,7 @@ if radiohost:
     try:
         cat_radio = cat(radiohost, radioport)
         cat_radio.get_freq()
-        if cat_radio.freq > CAT_LOWEST_FREQ:
+        if cat_radio.freq > cat_radio.CAT_MIN_FREQ and cat_radio.freq < cat_radio.CAT_MAX_FREQ:
             freq = cat_radio.freq
             cat_radio.get_mode()
             radio_mode = cat_radio.radio_mode
@@ -525,12 +526,12 @@ while not wf_quit:
                         kiwi_snd.volume += 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
-                if keys[pygame.K_b]:
+                elif keys[pygame.K_b]:
                     if kiwi_snd.volume > 0:
                         kiwi_snd.volume -= 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
-                if keys[pygame.K_m]:
+                elif keys[pygame.K_m]:
                     if kiwi_snd.volume > 0:
                         old_volume = kiwi_snd.volume
                         kiwi_snd.volume = 0
@@ -540,12 +541,19 @@ while not wf_quit:
                     run_index_bigmsg = run_index
 
                 # KIWI WF colormap dynamic range
-                if keys[pygame.K_PLUS]:
-                    if MIN_DYN_RANGE < 100:
-                        MIN_DYN_RANGE += 5
-                elif keys[pygame.K_MINUS]:
-                    if MIN_DYN_RANGE > 30:
-                        MIN_DYN_RANGE -= 5
+                if keys[pygame.K_PERIOD] and not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                    if kiwi_wf.MIN_DYN_RANGE < 150:
+                        kiwi_wf.MIN_DYN_RANGE += 5
+                elif keys[pygame.K_COMMA] and not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                    if kiwi_wf.MIN_DYN_RANGE > 50:
+                        kiwi_wf.MIN_DYN_RANGE -= 5
+                # KIWI WF colormap dynamic range
+                elif keys[pygame.K_PERIOD] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                    if kiwi_wf.CLIP_LOWP < 95:
+                        kiwi_wf.CLIP_LOWP += 5
+                elif keys[pygame.K_COMMA] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                    if kiwi_wf.CLIP_LOWP > 5:
+                        kiwi_wf.CLIP_LOWP -= 5
 
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:
@@ -558,7 +566,7 @@ while not wf_quit:
                         kiwi_wf.set_white_flag()
 
                 # KIWI WF arrow step tune
-                elif keys[pygame.K_LEFT]:
+                if keys[pygame.K_LEFT]:
                     if not (keys[pygame.K_RCTRL] or keys[pygame.K_LCTRL]):
                         if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10:
                             if not fast_tune:
@@ -576,13 +584,14 @@ while not wf_quit:
                                 manual_snd_freq = kiwi_snd.freq//1 + 10
                         else:
                             manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 + (0.1001 if not fast_tune else 1.0)
-                elif keys[pygame.K_PAGEDOWN]:
+                
+                if keys[pygame.K_PAGEDOWN]:
                     manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/4
                 elif keys[pygame.K_PAGEUP]:
                     manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz/4
 
                 # KIWI RX mode change
-                elif keys[pygame.K_u]:
+                if keys[pygame.K_u]:
                     auto_mode = False
                     manual_mode = "USB"
                 elif keys[pygame.K_l]:
@@ -596,17 +605,12 @@ while not wf_quit:
                     manual_mode = "AM"
 
                 # KIWI WF manual tuning
-                elif keys[pygame.K_f]:
+                if keys[pygame.K_f]:
                     input_freq_flag = True
                     current_string = []
 
-                # Show help
-                elif keys[pygame.K_h]:
-                    if not before_help_flag:
-                        show_help_flag = True
-
                 # Start/stop audio recording to file
-                elif keys[pygame.K_e]:
+                if keys[pygame.K_e]:
                     if not kiwi_snd.audio_rec.recording_flag:
                         kiwi_snd.audio_rec.start()
                         show_bigmsg = "start_rec"
@@ -617,7 +621,7 @@ while not wf_quit:
                         run_index_bigmsg = run_index
 
                 # S-meter show/hide
-                elif keys[pygame.K_s] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                if keys[pygame.K_s] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
                     s_meter_show_flag = False if s_meter_show_flag else True
                 
                 elif keys[pygame.K_s]:
@@ -628,7 +632,7 @@ while not wf_quit:
                         force_sync_flag = True
 
                 # Automatic mode change ON/OFF
-                elif keys[pygame.K_x]:
+                if keys[pygame.K_x]:
                     show_bigmsg = "automode"
                     run_index_bigmsg = run_index
                     auto_mode = False if auto_mode else True
@@ -640,7 +644,7 @@ while not wf_quit:
                             cat_radio.set_mode(kiwi_snd.radio_mode)
 
                 # Quit SuperSDR
-                elif keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
+                if keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
 
                 elif keys[pygame.K_q]:# and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
@@ -714,7 +718,6 @@ while not wf_quit:
                 manual_wf_freq = kiwi_wf.freq - delta_freq
                 click_drag_flag = False
                     
-    
     if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
         show_help_flag = True
     else:
@@ -896,7 +899,8 @@ while not wf_quit:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
     plot_spectrum()
-    surface = pygame.surfarray.make_surface(np.flip(kiwi_wf.wf_data.T, axis=1))
+    #surface = pygame.surfarray.make_surface(np.flip(kiwi_wf.wf_data.T, axis=1))
+    surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
     surface.set_palette(palRGB)
     sdrdisplay.blit(surface, (0, WF_Y))
 
