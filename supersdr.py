@@ -31,7 +31,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
-            "wf_param": (GREEN, "WF:%d%%-%ddB"%(kiwi_wf.CLIP_LOWP, kiwi_wf.MIN_DYN_RANGE), (10,SPECTRUM_Y+1), "small", False),
+            "wf_param": (GREEN, "WF MIN:%ddB MAX:%ddB"%(kiwi_wf.delta_low_db, kiwi_wf.delta_high_db), (10,SPECTRUM_Y+1), "small", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
     if not s_meter_show_flag:
@@ -192,7 +192,7 @@ def plot_spectrum(t_avg=15, col=GREEN):
     global sdrdisplay
     spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
-    for x, v in enumerate(np.average(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
+    for x, v in enumerate(np.nanmean(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
         y = SPECTRUM_HEIGHT-1-int(v/255 *SPECTRUM_HEIGHT)
         pixarr[x,y] = col
     del pixarr
@@ -396,7 +396,6 @@ if dxclust:
 else:
     dx_cluster_msg = False
 
-
 kiwi_memory = memory()
 kiwi_wf.set_freq_zoom(freq, zoom)
 kiwi_snd.freq = freq
@@ -542,18 +541,18 @@ while not wf_quit:
 
                 # KIWI WF colormap dynamic range
                 if keys[pygame.K_PERIOD] and not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
-                    if kiwi_wf.MIN_DYN_RANGE < 150:
-                        kiwi_wf.MIN_DYN_RANGE += 5
+                    if kiwi_wf.delta_high_db < 30:
+                        kiwi_wf.delta_high_db += 1
                 elif keys[pygame.K_COMMA] and not (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
-                    if kiwi_wf.MIN_DYN_RANGE > 50:
-                        kiwi_wf.MIN_DYN_RANGE -= 5
+                    if kiwi_wf.delta_high_db > -30:
+                        kiwi_wf.delta_high_db -= 1
                 # KIWI WF colormap dynamic range
                 elif keys[pygame.K_PERIOD] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
-                    if kiwi_wf.CLIP_LOWP < 95:
-                        kiwi_wf.CLIP_LOWP += 5
+                    if kiwi_wf.delta_low_db < 30:
+                        kiwi_wf.delta_low_db += 1
                 elif keys[pygame.K_COMMA] and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
-                    if kiwi_wf.CLIP_LOWP > 5:
-                        kiwi_wf.CLIP_LOWP -= 5
+                    if kiwi_wf.delta_low_db > -30:
+                        kiwi_wf.delta_low_db -= 1
 
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:
@@ -898,8 +897,7 @@ while not wf_quit:
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-    plot_spectrum()
-    #surface = pygame.surfarray.make_surface(np.flip(kiwi_wf.wf_data.T, axis=1))
+    plot_spectrum()    
     surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
     surface.set_palette(palRGB)
     sdrdisplay.blit(surface, (0, WF_Y))
@@ -910,7 +908,6 @@ while not wf_quit:
     draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse)
     update_textsurfaces(kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width)
 
-#    draw_textsurfaces(draw_dict, ts_dict, sdrdisplay)
     if show_eibi_flag and kiwi_wf.zoom > 6:
         plot_eibi(sdrdisplay)
     elif show_dxcluster_flag and kiwi_wf.zoom > 3:
@@ -975,10 +972,6 @@ while not wf_quit:
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
-
-    # for thread in threading.enumerate(): 
-    #     print(thread.name)
-
 
 # close PyAudio
 play.terminate()

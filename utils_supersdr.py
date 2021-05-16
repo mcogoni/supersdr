@@ -2,12 +2,15 @@ import pygame
 import pyaudio
 import wave
 
+#from rtlsdr import RtlSdr
+
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
 from matplotlib import cm
 import numpy as np
-from scipy.signal import resample_poly
+from scipy.signal import resample_poly, welch
+
 import pickle
 
 import threading, queue
@@ -338,8 +341,9 @@ class kiwi_waterfall():
     MAX_ZOOM = 14
     WF_BINS = 1024
     MAX_FPS = 23
-    MIN_DYN_RANGE = 60. # minimum visual dynamic range in dB
+    MIN_DYN_RANGE = 40. # minimum visual dynamic range in dB
     CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
+    delta_low_db, delta_high_db = 0, 0
 
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
@@ -408,6 +412,7 @@ class kiwi_waterfall():
                 
         self.bins_per_khz = self.WF_BINS / self.span_khz
         self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
+        #self.sdr = rtlsdr()
 
 
     def gen_div(self):
@@ -490,31 +495,53 @@ class kiwi_waterfall():
         bins_per_khz_ = self.WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_)
 
+
+
     def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
             msg = msg[16:] # remove some header from each msg
             
-            spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data to uint8
+            spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data
             wf = spectrum
             wf = -(255 - wf)  # dBm
             wf_db = wf - 13 # typical Kiwi wf cal
-            dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
-            self.wf_color = (wf_db - np.min(wf_db[1:-1]))
-            # standardize the distribution between 0 and 1
-            self.wf_color /= np.max(self.wf_color[1:-1])
-            # clip extreme values
-            low_perc = np.percentile(self.wf_color,self.CLIP_LOWP)
-            high_perc = np.percentile(self.wf_color, self.CLIP_HIGHP)
-            self.wf_color = np.clip(self.wf_color, low_perc, high_perc)
+            wf_db[0] = -150 # first bin is broken
+
+            # compute min/max db of the power distribution at selected percentiles
+            low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
+            high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
+            # shift chosen min to zero
+            self.wf_color = (wf_db - (low_clip_db+self.delta_low_db))
+            # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap)
+            self.wf_color /= max(np.max(self.wf_color)+self.delta_high_db, self.MIN_DYN_RANGE)
             # standardize again between 0 and 255
-            self.wf_color -= np.min(self.wf_color[1:-1])
-            # expand between 0 and 255
-            self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
-            # avoid too bright colors with no signals
-            self.wf_color *= (min(dyn_range, self.MIN_DYN_RANGE)/self.MIN_DYN_RANGE)
-            # insert a full signal line to see freq/zoom changes
+            self.wf_color *= 255
+            # clip exceeding values
+            self.wf_color = np.clip(self.wf_color, 0, 255)
+
         self.keepalive()
+
+    def receive_spectrum_rtl(self):
+        wf = self.sdr.psd
+        print(min(wf), max(wf))
+        wf = -(255 - wf)  # dBm
+        wf_db = wf - 13 # typical Kiwi wf cal
+        dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
+        self.wf_color = (wf_db - np.min(wf_db[1:-1]))
+        # standardize the distribution between 0 and 1
+        self.wf_color /= np.max(self.wf_color[1:-1])
+        # clip extreme values
+        low_perc = np.percentile(self.wf_color,self.CLIP_LOWP)
+        high_perc = np.percentile(self.wf_color, self.CLIP_HIGHP)
+        self.wf_color = np.clip(self.wf_color, low_perc, high_perc)
+        # standardize again between 0 and 255
+        self.wf_color -= np.min(self.wf_color[1:-1])
+        # expand between 0 and 255
+        self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
+        # avoid too bright colors with no signals
+        self.wf_color *= (min(dyn_range, self.MIN_DYN_RANGE)/self.MIN_DYN_RANGE)
+        # insert a full signal line to see freq/zoom changes
 
     def set_freq_zoom(self, freq_, zoom_):
         self.freq = freq_
@@ -578,13 +605,14 @@ class kiwi_waterfall():
 
     def set_white_flag(self):
         self.wf_color = np.ones_like(self.wf_color)*255
-        self.wf_data[1,:] = self.wf_color
+        self.wf_data[0,:] = self.wf_color
 
     def run(self):
         while not self.terminate:
             self.receive_spectrum()
-            self.wf_data[0,:] = self.wf_color
-            self.wf_data = np.roll(self.wf_data, 1, axis=0)
+            #self.receive_spectrum_rtl()
+            self.wf_data[1:,:] = self.wf_data[0:-1,:] # scroll wf array 1 line down
+            self.wf_data[0,:] = self.wf_color # overwrite top line with new data
         return
 
 
@@ -933,4 +961,35 @@ def create_cm(which):
                 col = ( 255, 0, 128*(i-217)/38)
             colormap.append(col)
     return colormap
+
+
+class rtlsdr():
+    def __init__(self):
+        self.sdr = RtlSdr()
+        # configure device
+        self.sdr.sample_rate = 2.4e6
+        self.sdr.center_freq = 95e6
+        self.sdr.gain = 40
+        self.N_FFT = 2048 # FFT bins
+        self.N_WIN = 1024  # How many pixels to show from the FFT (around the center)
+        self.fft_ratio = 2.
+        self.samples = []
+        self.psd = np.random.random((1024))
+
+    def read(self):
+        self.samples = self.sdr.read_samples(1024)
+        
+    def run(self):
+        while True:
+            self.read()
+            sample_freq, spec = welch(self.samples, self.sdr.sample_rate, window="hamming", nperseg=self.N_FFT,  nfft=self.N_FFT)
+            spec = np.roll(spec, self.N_FFT//2, 0)[self.N_FFT//2-self.N_WIN//2:self.N_FFT//2+self.N_WIN//2]
+            
+            # get magnitude 
+            self.psd = abs(spec)
+            # convert to dB scale
+            self.psd = -20 * np.log10(self.psd)
+            self.psd *= -1
+
+        self.sdr.close()
 
