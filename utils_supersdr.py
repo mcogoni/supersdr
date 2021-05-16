@@ -496,7 +496,6 @@ class kiwi_waterfall():
         return (1./bins_per_khz_) * (bins_)
 
 
-
     def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
@@ -514,12 +513,11 @@ class kiwi_waterfall():
             # shift chosen min to zero
             self.wf_color = (wf_db - (low_clip_db+self.delta_low_db))
             # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap)
-            self.wf_color /= max(np.max(self.wf_color)+self.delta_high_db, self.MIN_DYN_RANGE)
+            self.wf_color /= max(np.max(self.wf_color), self.MIN_DYN_RANGE) + self.delta_high_db
             # standardize again between 0 and 255
             self.wf_color *= 255
             # clip exceeding values
             self.wf_color = np.clip(self.wf_color, 0, 255)
-
         self.keepalive()
 
     def receive_spectrum_rtl(self):
