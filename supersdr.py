@@ -109,6 +109,27 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     for x in kiwi_wf.subdiv_list:
         pygame.draw.line(surface_, WHITE, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+15), 1)
 
+def display_kiwi_box(screen, current_string_):
+    size = 550
+    y_size = size * 0.6
+    rec_pos = ((screen.get_width() / 2) - size/2, (screen.get_height() / 2) - size/4)
+    question = "Enter hostname [port] [password]"
+    message = question + ": " + "".join(current_string_)
+    pygame.draw.rect(screen, BLACK,
+                   (rec_pos[0], rec_pos[1],
+                    size,y_size), 0)
+    pygame.draw.rect(screen, WHITE,
+                   (rec_pos[0]-1, rec_pos[1]-1,
+                    size+2,y_size+2), 1)
+    pos = (rec_pos[0]+2, rec_pos[1]+y_size-20)
+    smallfont.render_to(sdrdisplay, pos, message, WHITE)
+    message = "Choose stored Kiwi number or enter new one (port and password are optional)"
+    smallfont.render_to(sdrdisplay, (pos[0], pos[1]-20), message, WHITE)
+    for i, kiwi in enumerate(kiwilist.mem_list):
+        pos = (rec_pos[0]+2, rec_pos[1]+5+i*20)
+        msg = "Kiwi server: %d -> %s:%d:%s"%(i, kiwi[0], kiwi[1], kiwi[2])
+        smallfont.render_to(sdrdisplay, pos, msg, GREY)
+
 
 def display_box(screen, message, size):
     pygame.draw.rect(screen, BLACK,
@@ -260,11 +281,11 @@ def plot_dxcluster(surface_):
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
-                  help="KiwiSDR password", dest="kiwipassword", default="")
+                  help="KiwiSDR password", dest="kiwipassword", default=default_kiwi_password)
 parser.add_option("-s", "--kiwiserver", type=str,
                   help="KiwiSDR server name", dest="kiwiserver", default="")
 parser.add_option("-p", "--kiwiport", type=int,
-                  help="port number", dest="kiwiport", default=8073)
+                  help="port number", dest="kiwiport", default=default_kiwi_port)
 parser.add_option("-S", "--radioserver", type=str,
                   help="RTX server name", dest="radioserver", default=None)
 parser.add_option("-P", "--radioport", type=int,
@@ -394,6 +415,9 @@ else:
     dx_cluster_msg = False
 
 kiwi_memory = memory()
+kiwilist = kiwi_list()
+kiwilist.load_from_disk()
+
 kiwi_wf.set_freq_zoom(freq, zoom)
 kiwi_snd.freq = freq
 kiwi_snd.radio_mode = radio_mode
@@ -741,7 +765,26 @@ while not wf_quit:
 
     if input_server_flag and input_new_server:
         pygame.event.clear()
-        input_text_list = input_new_server.rstrip().split(" ")
+        if len(input_new_server) == 1:
+            try:
+                input_text_list = list(kiwilist.mem_list[int(input_new_server)])
+            except:
+                input_server_flag = False
+                input_new_server = None
+                continue
+        elif len(input_new_server) == 2:
+            if input_new_server[0] == "d":
+                try:
+                    mem_index = int(input_new_server[1])
+                    kiwilist.delete_mem(mem_index)
+                    kiwilist.save_to_disk()
+                except:
+                    pass
+            input_server_flag = False
+            input_new_server = None
+            continue
+        else:
+            input_text_list = input_new_server.rstrip().split(" ")
 
         # close PyAudio
         play.terminate()
@@ -759,8 +802,8 @@ while not wf_quit:
 
         if len(input_text_list) >= 1:
             new_host = input_text_list[0]
-            new_port = int(kiwi_port)
-            new_password = kiwi_password
+            new_port = default_kiwi_port
+            new_password = default_kiwi_password
         if len(input_text_list) >= 2:
             new_port = int(input_text_list[1])
         if len(input_text_list) == 3:
@@ -786,6 +829,9 @@ while not wf_quit:
                 exit("Old kiwi server not available anymore!")
         else:
             kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
+            kiwilist.write_mem(kiwi_host, kiwi_port, kiwi_password)
+            kiwilist.save_to_disk()
+
 
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
         wf_t.start()
@@ -934,8 +980,7 @@ while not wf_quit:
         question = "Freq (kHz)"
         display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
     elif input_server_flag:
-        question = "hostname[ port][ password]"
-        display_box(sdrdisplay, question + ": " + "".join(current_string), 550)
+        display_kiwi_box(sdrdisplay, current_string)
     elif show_help_flag:
         display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_bigmsg:

@@ -69,6 +69,8 @@ LOW_CUT_CW=300 # Bandpass for CW
 HIGH_CUT_CW=800 # High end CW
 HIGHLOW_CUT_AM=6000 # Bandpass AM
 delta_low, delta_high = 0., 0. # bandpass tuning
+default_kiwi_port = 8073
+default_kiwi_password = ""
 
 # predefined RGB colors
 GREY = (200,200,200)
@@ -334,6 +336,42 @@ class memory():
                 self.mem_list = pickle.load(fd)
         except:
             print("No memory file found!")
+
+
+class kiwi_list():
+    def __init__(self):
+        self.mem_list = deque([], 10)
+        self.index = 0
+        try:
+            self.load_from_disk()
+        except:
+            pass
+        self.index = len(self.mem_list)
+
+    def write_mem(self, host_, port_, pass_):
+        self.mem_list.append((host_, port_, pass_))
+
+    def delete_mem(self, index):
+        try:
+            del self.mem_list[index]
+            return True
+        except:
+            return None
+
+    def save_to_disk(self):
+        try:
+            with open("kiwi.list", "wb") as fd:
+                pickle.dump(self.mem_list, fd)
+        except:
+            print("Cannot save kiwi list to disk!")
+
+    def load_from_disk(self):
+        try:
+            with open("kiwi.list", "rb") as fd:
+                self.mem_list = pickle.load(fd)
+        except:
+            print("No kiwi list file found!")
+
 
 class kiwi_waterfall():
     MAX_FREQ = 30000
