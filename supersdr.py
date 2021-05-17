@@ -480,14 +480,14 @@ while not wf_quit:
 
 
                 # Center RX freq on WF
-                if keys[pygame.K_z] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_z]:
                     wf_snd_link_flag = False if wf_snd_link_flag else True
                     force_sync_flag = True
                     show_bigmsg = "centertune"
                     run_index_bigmsg = run_index
 
                 # Memory read/write, reset, save to/load from disk
-                if keys[pygame.K_t] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_t]:
                         kiwi_memory.load_from_disk()
                         show_bigmsg = "loadmemorydisk"
                         run_index_bigmsg = run_index
@@ -515,11 +515,11 @@ while not wf_quit:
                             show_bigmsg = "emptymemory"
 
                 # KIWI RX passband change
-                if keys[pygame.K_o] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_o]:
                     change_passband_flag = True
                     delta_low = 0
                     delta_high = 0
-                if keys[pygame.K_j] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_j]:
                     change_passband_flag = True
                     delta = 100 if (event.mod & pygame.KMOD_SHIFT) else -100
                     delta_low += delta
@@ -527,7 +527,7 @@ while not wf_quit:
                         delta_low = 3000
                     elif delta_low < -3000:
                         delta_low = -3000
-                if keys[pygame.K_k] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_k]:
                     change_passband_flag = True
                     delta = -100 if (event.mod & pygame.KMOD_SHIFT) else 100
                     delta_high += delta
@@ -537,17 +537,17 @@ while not wf_quit:
                         delta_high = -3000.
                 
                 # KIWI RX volume UP/DOWN, Mute
-                if keys[pygame.K_v] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_v]:
                     if kiwi_snd.volume < 150:
                         kiwi_snd.volume += 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
-                elif keys[pygame.K_b] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_b]:
                     if kiwi_snd.volume > 0:
                         kiwi_snd.volume -= 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
-                elif keys[pygame.K_m] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_m]:
                     if kiwi_snd.volume > 0:
                         old_volume = kiwi_snd.volume
                         kiwi_snd.volume = 0
@@ -557,10 +557,10 @@ while not wf_quit:
                     run_index_bigmsg = run_index
 
                 # KIWI WF colormap dynamic range
-                if keys[pygame.K_PERIOD] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_PERIOD] and not (event.mod & pygame.KMOD_SHIFT):
                     if kiwi_wf.delta_high_db < 30:
                         kiwi_wf.delta_high_db += 1
-                elif keys[pygame.K_COMMA] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_COMMA] and not (event.mod & pygame.KMOD_SHIFT):
                     if kiwi_wf.delta_high_db > -30:
                         kiwi_wf.delta_high_db -= 1
                 # KIWI WF colormap dynamic range
@@ -572,11 +572,11 @@ while not wf_quit:
                         kiwi_wf.delta_low_db -= 1
 
                 # KIWI WF zoom
-                if keys[pygame.K_DOWN] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_DOWN] and not (event.mod & pygame.KMOD_SHIFT):
                     if kiwi_wf.zoom > 0:
                         kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom - 1)
                         kiwi_wf.set_white_flag()
-                elif keys[pygame.K_UP] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_UP] and not (event.mod & pygame.KMOD_SHIFT):
                     if kiwi_wf.zoom < kiwi_wf.MAX_ZOOM:
                         kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom + 1)
                         kiwi_wf.set_white_flag()
@@ -601,32 +601,32 @@ while not wf_quit:
                         else:
                             manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 + (0.1001 if not fast_tune else 1.0)
                 
-                if keys[pygame.K_PAGEDOWN] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_PAGEDOWN] and not (event.mod & pygame.KMOD_SHIFT):
                     manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/4
-                elif keys[pygame.K_PAGEUP] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_PAGEUP] and not (event.mod & pygame.KMOD_SHIFT):
                     manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz/4
 
                 # KIWI RX mode change
-                if keys[pygame.K_u] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_u] and not (event.mod & pygame.KMOD_SHIFT):
                     auto_mode = False
                     manual_mode = "USB"
-                elif keys[pygame.K_l] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_l] and not (event.mod & pygame.KMOD_SHIFT):
                     auto_mode = False
                     manual_mode = "LSB"
-                elif keys[pygame.K_c] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_c] and not (event.mod & pygame.KMOD_SHIFT):
                     auto_mode = False
                     manual_mode = "CW"
-                elif keys[pygame.K_a] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_a] and not (event.mod & pygame.KMOD_SHIFT):
                     auto_mode = False
                     manual_mode = "AM"
 
                 # KIWI WF manual tuning
-                if keys[pygame.K_f] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_f] and not (event.mod & pygame.KMOD_SHIFT):
                     input_freq_flag = True
                     current_string = []
 
                 # Start/stop audio recording to file
-                if keys[pygame.K_e] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_e] and not (event.mod & pygame.KMOD_SHIFT):
                     if not kiwi_snd.audio_rec.recording_flag:
                         kiwi_snd.audio_rec.start()
                         show_bigmsg = "start_rec"
@@ -640,7 +640,7 @@ while not wf_quit:
                 if keys[pygame.K_s] and (event.mod & pygame.KMOD_SHIFT):
                     s_meter_show_flag = False if s_meter_show_flag else True
                 
-                elif keys[pygame.K_s] and (event.mod == pygame.KMOD_NONE):
+                elif keys[pygame.K_s] and not (event.mod & pygame.KMOD_SHIFT):
                     if cat_radio:
                         show_bigmsg = "cat_rx_sync"
                         run_index_bigmsg = run_index
@@ -648,7 +648,7 @@ while not wf_quit:
                         force_sync_flag = True
 
                 # Automatic mode change ON/OFF
-                if keys[pygame.K_x] and (event.mod == pygame.KMOD_NONE):
+                if keys[pygame.K_x] and not (event.mod & pygame.KMOD_SHIFT):
                     show_bigmsg = "automode"
                     run_index_bigmsg = run_index
                     auto_mode = False if auto_mode else True
@@ -989,6 +989,7 @@ while not wf_quit:
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
+
 
 # close PyAudio
 play.terminate()
