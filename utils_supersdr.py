@@ -97,6 +97,8 @@ HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C/A: switches to USB, LSB, CW, AM",
         "- J/K/O: change low/high cut of RX (SHIFT inverts), O resets",
+        "- G/H: inc/dec spectrum and WF averaging to improve SNR",
+        "- ,/.(+SHIFT) change high(low) clip level for spectrum and WF",
         "- E: start/stop audio recording",
         "- F: enter frequency with keyboard",
         "- W/R: Write/Restore quick cyclic memory (up to 10)",
@@ -393,7 +395,8 @@ class kiwi_waterfall():
         print ("KiwiSDR Server: %s:%d" % (self.host, self.port))
         self.zoom = zoom_
         self.freq = freq_
-
+        self.averaging_n = 1
+        
         self.wf_white_flag = False
         self.terminate = False
 
@@ -533,30 +536,31 @@ class kiwi_waterfall():
         bins_per_khz_ = self.WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_)
 
-
     def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
             msg = msg[16:] # remove some header from each msg
             
-            spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data
-            wf = spectrum
-            wf = -(255 - wf)  # dBm
-            wf_db = wf - 13 # typical Kiwi wf cal
-            wf_db[0] = -150 # first bin is broken
-
-            # compute min/max db of the power distribution at selected percentiles
-            low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
-            high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
-            # shift chosen min to zero
-            self.wf_color = (wf_db - (low_clip_db+self.delta_low_db))
-            # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap)
-            self.wf_color /= max(np.max(self.wf_color), self.MIN_DYN_RANGE) + self.delta_high_db
-            # standardize again between 0 and 255
-            self.wf_color *= 255
-            # clip exceeding values
-            self.wf_color = np.clip(self.wf_color, 0, 255)
+            self.spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data
         self.keepalive()
+
+    def spectrum_db2col(self):
+        wf = self.spectrum
+        wf = -(255 - wf)  # dBm
+        wf_db = wf - 13 # typical Kiwi wf cal
+        wf_db[0] = -150 # first bin is broken
+
+        # compute min/max db of the power distribution at selected percentiles
+        low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
+        high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
+        # shift chosen min to zero
+        self.wf_color = (wf_db - (low_clip_db+self.delta_low_db))
+        # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap)
+        self.wf_color /= max(np.max(self.wf_color), self.MIN_DYN_RANGE) + self.delta_high_db
+        # standardize again between 0 and 255
+        self.wf_color *= 255
+        # clip exceeding values
+        self.wf_color = np.clip(self.wf_color, 0, 255)
 
     def receive_spectrum_rtl(self):
         wf = self.sdr.psd
@@ -645,7 +649,16 @@ class kiwi_waterfall():
 
     def run(self):
         while not self.terminate:
-            self.receive_spectrum()
+            if self.averaging_n>1:
+                self.avg_spectrum_deque = deque([], self.averaging_n)
+                for avg_idx in range(self.averaging_n):
+                    self.receive_spectrum()
+                    self.avg_spectrum_deque.append(self.spectrum)
+                self.spectrum = np.mean(self.avg_spectrum_deque, axis=0)
+            else:
+                self.receive_spectrum()
+            self.spectrum_db2col()
+
             #self.receive_spectrum_rtl()
             self.wf_data[1:,:] = self.wf_data[0:-1,:] # scroll wf array 1 line down
             self.wf_data[0,:] = self.wf_color # overwrite top line with new data
@@ -663,12 +676,12 @@ class kiwi_sound():
     KIWI_SAMPLES_PER_FRAME = 512
     FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
 
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf):
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100):
         # connect to kiwi server
         self.kiwi_wf = kiwi_wf
         self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
         self.terminate = False
-        self.volume = 100
+        self.volume = volume_
         
         self.rssi = -127
         self.freq = freq_
@@ -887,6 +900,8 @@ class cat:
             return "USB"
 
 
+# Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
+# and https://www.iaru-r1.org/reference/band-plans/hf-bandplan/
 def get_auto_mode(f):
     automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
                 "LSB": ((1840,1850),(3600,3800),(7060,7200)),

@@ -4,9 +4,6 @@ import _thread
 from optparse import OptionParser
 from utils_supersdr import *
 
-# Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
-# and https://www.iaru-r1.org/reference/band-plans/hf-bandplan/
-
 def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     global sdrdisplay
     mousex_pos = mouse[0]
@@ -39,6 +36,8 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     if click_drag_flag:
         delta_khz = kiwi_wf.deltabins_to_khz(start_drag_x-mousex_pos)
         ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,SPECTRUM_Y+20), "big", False)
+    if kiwi_wf.averaging_n>1:
+        ts_dict["avg"] = (RED, "AVG %dX"%kiwi_wf.averaging_n, (10,SPECTRUM_Y+13), "small", False)
     if len(kiwi_wf.div_list)>1:
         ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,SPECTRUM_Y+13), "small", False)
     else:
@@ -171,6 +170,9 @@ def display_msg_box(screen, message, pos=None, color=WHITE):
     
 def s_meter_draw(rssi_smooth):
     s_meter_radius = 50.
+    SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
+    smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
+
     s_meter_center = (s_meter_radius+10,s_meter_radius+8)
     alpha_rssi = rssi_smooth+127
     alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
@@ -183,16 +185,16 @@ def s_meter_draw(rssi_smooth):
         return s_meter_x, s_meter_y
     
     s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius* 0.95)
-    pygame.draw.rect(sdrdisplay, YELLOW,
-                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 0)
-    pygame.draw.rect(sdrdisplay, BLACK,
-                   (s_meter_center[0]-60, s_meter_center[1]-58, 2*s_meter_radius+20,s_meter_radius+20), 3)
+    pygame.draw.rect(smeter_surface, YELLOW,
+                   (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 0)
+    pygame.draw.rect(smeter_surface, BLACK,
+                   (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 3)
     
     angle_list = np.linspace(0.4, math.pi-0.4, 9)
     text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
     for alpha_seg, msg in zip(angle_list, text_list[::-1]):
         text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
-        nanofont.render_to(sdrdisplay, (text_x-6, text_y-2), msg, D_GREY)
+        nanofont.render_to(smeter_surface, (text_x-6, text_y-2), msg, D_GREY)
 
         seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
         color_ =  BLACK
@@ -200,14 +202,15 @@ def s_meter_draw(rssi_smooth):
         if alpha_seg < 1.4:
             color_ = RED
             tick_rad = 3
-        pygame.draw.circle(sdrdisplay, color_, (seg_x, seg_y), tick_rad)
-    pygame.draw.circle(sdrdisplay, D_GREY, s_meter_center, 4)
+        pygame.draw.circle(smeter_surface, color_, (seg_x, seg_y), tick_rad)
+    pygame.draw.circle(smeter_surface, D_GREY, s_meter_center, 4)
 
-    pygame.draw.line(sdrdisplay, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
+    pygame.draw.line(smeter_surface, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
     str_rssi = "%ddBm"%rssi_smooth
     str_len = len(str_rssi)
     pos = (s_meter_center[0]+13, s_meter_center[1])
-    microfont.render_to(sdrdisplay, pos, str_rssi, BLACK)
+    microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
+    return smeter_surface
 
 def plot_spectrum(t_avg=15, col=GREEN):
     global sdrdisplay
@@ -560,6 +563,18 @@ while not wf_quit:
                     elif delta_high < -3000:
                         delta_high = -3000.
                 
+                # KIWI WF averaging INC/DEC
+                if keys[pygame.K_g]:
+                    if kiwi_wf.averaging_n < 100:
+                        kiwi_wf.averaging_n += 1
+                    show_bigmsg = "WFAVG"
+                    run_index_bigmsg = run_index
+                elif keys[pygame.K_h]:
+                    if kiwi_wf.averaging_n > 1:
+                        kiwi_wf.averaging_n -= 1
+                    show_bigmsg = "WFAVG"
+                    run_index_bigmsg = run_index
+
                 # KIWI RX volume UP/DOWN, Mute
                 if keys[pygame.K_v]:
                     if kiwi_snd.volume < 150:
@@ -789,6 +804,7 @@ while not wf_quit:
         # close PyAudio
         play.terminate()
 
+        old_volume = kiwi_snd.volume
         kiwi_snd.terminate = True
         kiwi_wf.terminate = True
         time.sleep(1)
@@ -814,7 +830,7 @@ while not wf_quit:
 
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
-            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf)
+            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, old_volume)
             print("Changed server to: %s:%d" % (new_host,new_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
@@ -822,7 +838,7 @@ while not wf_quit:
             play = None
         if not play:
             kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
-            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
+            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, old_volume)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
             if not play:
@@ -991,6 +1007,9 @@ while not wf_quit:
         if "VOLUME" == show_bigmsg:
             msg_color = WHITE if kiwi_snd.volume <= 100 else RED
             msg_text = "VOLUME: %d"%(kiwi_snd.volume)+'%'
+        if "WFAVG" == show_bigmsg:
+            msg_color = WHITE if kiwi_wf.averaging_n == 1 else RED
+            msg_text = "WF AVG %dX"%(kiwi_wf.averaging_n)
         elif "cat_rx_sync" == show_bigmsg:
             msg_text = "CAT<->RX SYNC "+("ON" if cat_snd_link_flag else "OFF")
         elif "forcesync" == show_bigmsg:
@@ -1026,7 +1045,8 @@ while not wf_quit:
 
     rssi_smooth = np.mean(list(rssi_hist)[:])
     if s_meter_show_flag:
-        s_meter_draw(rssi_smooth)
+        smeter_surface = s_meter_draw(rssi_smooth)
+        sdrdisplay.blit(smeter_surface, (0, BOTTOMBAR_Y-80))
 
     mouse = pygame.mouse.get_pos()
     pygame.display.flip()
