@@ -16,7 +16,7 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            "rx_freq": (RED, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
+            "rx_freq": (GREEN if kiwi_snd.volume>0 else GREY, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
             "kiwi": (RED if buff_level<kiwi_snd.FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
@@ -31,6 +31,10 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             "wf_param": (GREEN, "WF MIN:%ddB MAX:%ddB"%(kiwi_wf.delta_low_db, kiwi_wf.delta_high_db), (10,SPECTRUM_Y+1), "small", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
+
+    if dualrx_flag and kiwi_snd2:
+        ts_dict["rx_freq2"]= (YELLOW if kiwi_snd2.volume>0 else GREY, "SUB:%.3fkHz %s"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-160,V_POS_TEXT), "small", False)
+        ts_dict["kiwi2"] = (RED if buff_level<kiwi_snd2.FULL_BUFF_LEN/2 else YELLOW, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(240,BOTTOMBAR_Y+6), "small", False)
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
     if click_drag_flag:
@@ -43,7 +47,6 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     else:
         ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-95,SPECTRUM_Y+13), "small", False)
 
-
     draw_dict = {}
     for k in ts_dict:
         if k == "p_freq" and not (pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y):
@@ -55,6 +58,33 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
         render_(sdrdisplay, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
 
 def draw_lines(surface_, wf_height, radio_mode, mouse):
+
+    def plot_bandpass(color_, kiwi_):
+        snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
+        if snd_freq_bin>0 and snd_freq_bin< kiwi_wf.WF_BINS:
+            # carrier line
+            pygame.draw.line(surface_, RED, (snd_freq_bin, TUNEBAR_Y), (snd_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+        if cat_radio and not cat_snd_link_flag:
+            tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
+            # tune wf line
+            pygame.draw.line(surface_, D_RED, (tune_freq_bin, TUNEBAR_Y), (tune_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 3)
+            
+        lc_bin = kiwi_wf.offset_to_bin(kiwi_.lc/1000.)
+        lc_bin = snd_freq_bin + lc_bin
+        if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
+            # low cut line
+            pygame.draw.line(surface_, color_, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+        
+        hc_bin = kiwi_wf.offset_to_bin(kiwi_.hc/1000)
+        hc_bin = snd_freq_bin + hc_bin
+        if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
+            # high cut line
+            pygame.draw.line(surface_, color_, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+        
+        pygame.draw.line(surface_, color_, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
+
+
+
     center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
     # center WF line
     pygame.draw.line(surface_, RED, (center_freq_bin, WF_Y), (center_freq_bin, WF_Y+6), 4)
@@ -62,30 +92,15 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     if pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y:
         pygame.draw.line(surface_, (250,0,0), (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
 
-    snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_snd.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
-    if snd_freq_bin>0 and snd_freq_bin< kiwi_wf.WF_BINS:
-        # carrier line
-        pygame.draw.line(surface_, RED, (snd_freq_bin, TUNEBAR_Y), (snd_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
-    if cat_radio and not cat_snd_link_flag:
-        tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
-        # tune wf line
-        pygame.draw.line(surface_, D_RED, (tune_freq_bin, TUNEBAR_Y), (tune_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 3)
-        
-    lc_bin = kiwi_wf.offset_to_bin(kiwi_snd.lc/1000.)
-    lc_bin = snd_freq_bin + lc_bin
-    if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
-        # low cut line
-        pygame.draw.line(surface_, GREEN, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
-    
-    hc_bin = kiwi_wf.offset_to_bin(kiwi_snd.hc/1000)
-    hc_bin = snd_freq_bin + hc_bin
-    if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
-        # high cut line
-        pygame.draw.line(surface_, GREEN, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
-    
-    pygame.draw.line(surface_, GREEN, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
+    plot_bandpass(GREEN, kiwi_snd)
+
+    # SUB RX
+    if dualrx_flag and kiwi_snd2:
+        plot_bandpass(YELLOW, kiwi_snd2)
+    #### CAT RADIO bandpass
 
     if cat_radio and not cat_snd_link_flag:
+        tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
         lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
         lc_bin = kiwi_wf.offset_to_bin(lc_/1000.)
         lc_bin = tune_freq_bin + lc_bin + 1
@@ -100,9 +115,11 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
             pygame.draw.line(surface_, YELLOW, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
         pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
 
+    # plot click and drag red horiz bar
     if click_drag_flag:
         pygame.draw.line(surface_, RED, (start_drag_x, SPECTRUM_Y+10), (mouse[0], SPECTRUM_Y+10), 4)
 
+    # plot tuning minor and major ticks
     for x in kiwi_wf.div_list:
         pygame.draw.line(surface_, YELLOW, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+5), 3)
     for x in kiwi_wf.subdiv_list:
@@ -146,7 +163,7 @@ def display_box(screen, message, size):
 def display_help_box(screen, message_list):
     font_size = font_size_dict["small"]
 
-    window_size = 455
+    window_size = 495
     pygame.draw.rect(screen, (0,0,0),
                    ((screen.get_width() / 2) - window_size/2,
                     (screen.get_height() / 2) - window_size/3,
@@ -299,13 +316,17 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
+parser.add_option("-d", "--dual",
+                  help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
 parser.add_option("-c", "--callsign", type=str,
                   help="DX CLUSTER Callsign", dest="callsign", default="")
 parser.add_option("-m", "--colormap", type=str,
                   help="colormap for waterfall", dest="colormap", default="cutesdr")
                   
+
 options = vars(parser.parse_args()[0])
 FPS = options['refresh']
+dualrx_flag = options['dualrx']
 
 CALLSIGN = options['callsign']
 try:
@@ -358,10 +379,9 @@ else:
         freq = 14200
     radio_mode = "USB"
 
-# kiwi_filter = filtering(KIWI_RATE/2, AUDIO_RATE)
-# audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"))
-
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
+kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
+
 #init KIWI WF and RX audio
 kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
@@ -371,10 +391,27 @@ kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
 if not kiwi_snd:
     print("Server not ready")
     exit()
+
+kiwi_snd2 = None
+if dualrx_flag:
+    time.sleep(1)
+    #kiwi_snd2 = kiwi_sound(14205, "USB", 30, 3000, "", kiwi_wf, 100, "oh2bua.fi", 8073)
+    kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
+    if not kiwi_snd2:
+        print("Server not ready")
+
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 if not play:
     del kiwi_snd
     exit("Chosen KIWI receiver is not ready!")
+
+if dualrx_flag:
+    play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
+    if not play2:
+        kiwi_snd2 = None
+
+
+old_volume = kiwi_snd.volume
 
 # init Pygame
 pygame.init()
@@ -698,6 +735,50 @@ while not wf_quit:
                         if cat_radio:
                             cat_radio.set_mode(kiwi_snd.radio_mode)
 
+                # Tune SUB RX on same freq on WF center
+                if keys[pygame.K_n]:
+                    if kiwi_snd2:
+                        kiwi_snd2.freq = kiwi_wf.freq
+                        kiwi_snd2.set_mode_freq_pb()
+
+                # Switch audio MAIN/SUB VFOs
+                if keys[pygame.K_y] and not (event.mod & pygame.KMOD_SHIFT):
+                    if kiwi_snd2:
+                        kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
+                        force_sync_flag = True
+                        show_bigmsg = "switchab"
+                        run_index_bigmsg = run_index
+                    else:
+                        kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000,  kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
+                        if not kiwi_snd2:
+                            print("Server not ready")
+                        play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
+                        if not play2:
+                            kiwi_snd2 = None
+                        else:
+                            print("Second RX active!")
+                            show_bigmsg = "enable2rx"
+                            run_index_bigmsg = run_index
+                            dualrx_flag = True
+                # Disable SUB RX
+                elif keys[pygame.K_y] and (event.mod & pygame.KMOD_SHIFT):
+                    if kiwi_snd2:
+                        if kiwi_snd.subrx:
+                            kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
+                        play2.terminate()
+                        kiwi_snd2.terminate = True
+                        time.sleep(1)
+                        kiwi_audio_stream2.stop_stream()
+                        kiwi_audio_stream2.close()
+                        kiwi_snd2.close_connection()
+                        kiwi_snd2.terminate = False
+
+                        dualrx_flag = False
+                        show_bigmsg = "disable2rx"
+                        run_index_bigmsg = run_index
+                        kiwi_snd2 = None
+
+
                 # Quit SuperSDR
                 if keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
@@ -795,6 +876,10 @@ while not wf_quit:
                     kiwilist.save_to_disk()
                 except:
                     pass
+            elif input_new_server[0] == "r":
+                if not kiwi_snd2:
+                    kiwi_host2, kiwi_port2, kiwi_password2 = list(kiwilist.mem_list[int(input_new_server[1])])
+
             input_server_flag = False
             input_new_server = None
             continue
@@ -803,18 +888,28 @@ while not wf_quit:
 
         # close PyAudio
         play.terminate()
+        if kiwi_snd2:
+            play2.terminate()
 
         old_volume = kiwi_snd.volume
         kiwi_snd.terminate = True
+        if kiwi_snd2:
+            kiwi_snd2.terminate = True
+
         kiwi_wf.terminate = True
         time.sleep(1)
 
         # stop stream
         kiwi_audio_stream.stop_stream()
         kiwi_audio_stream.close()
+        if kiwi_snd2:
+            kiwi_audio_stream2.stop_stream()
+            kiwi_audio_stream2.close()
 
         kiwi_wf.close_connection()
         kiwi_snd.close_connection()
+        if kiwi_snd2:
+            kiwi_snd2.close_connection()
 
         if len(input_text_list) >= 1:
             new_host = input_text_list[0]
@@ -826,6 +921,9 @@ while not wf_quit:
             new_password = input_text_list[2]
         
         kiwi_snd.terminate = False
+        if kiwi_snd2:
+            kiwi_snd2.terminate = False
+            dualrx_flag = False
         kiwi_wf.terminate = False
 
         try:
@@ -848,6 +946,8 @@ while not wf_quit:
             kiwilist.write_mem(kiwi_host, kiwi_port, kiwi_password)
             kiwilist.save_to_disk()
 
+
+        kiwi_snd2 = None
 
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
         wf_t.start()
@@ -1013,7 +1113,13 @@ while not wf_quit:
         elif "cat_rx_sync" == show_bigmsg:
             msg_text = "CAT<->RX SYNC "+("ON" if cat_snd_link_flag else "OFF")
         elif "forcesync" == show_bigmsg:
-            msg_text = "Force SYNC WF<-RX" if not cat_radio else "Force SYNC WF & RX -> CAT"
+            msg_text = "Center RX passband" if not cat_radio else "Force SYNC WF & RX -> CAT"
+        elif "switchab" == show_bigmsg:
+            msg_text = "Switch MAIN/SUB RXs"
+        elif "enable2rx" == show_bigmsg:
+            msg_text = "SUB RX enabled"
+        elif "disable2rx" == show_bigmsg:
+            msg_text = "SUB RX disabled"
         elif "automode" == show_bigmsg:
             msg_text = "AUTO MODE "+("ON" if auto_mode else "OFF")
         elif "changemode" == show_bigmsg:
@@ -1059,15 +1165,25 @@ while not wf_quit:
 # close PyAudio
 play.terminate()
 
+if kiwi_snd2:
+    play2.terminate()
+
 kiwi_snd.terminate = True
+if kiwi_snd2:
+    kiwi_snd2.terminate = True
+
 kiwi_wf.terminate = True
 time.sleep(0.5)
-
-# stop stream
+exit()
+# stop streams
 kiwi_audio_stream.stop_stream()
 kiwi_audio_stream.close()
-
+if kiwi_snd2:
+    kiwi_audio_stream2.stop_stream()
+    kiwi_audio_stream2.close()
 kiwi_wf.close_connection()
 kiwi_snd.close_connection()
+if kiwi_snd2:
+     kiwi_snd2.close_connection()
 
 pygame.quit()

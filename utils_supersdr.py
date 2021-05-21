@@ -104,7 +104,8 @@ HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
         "- W/R: Write/Restore quick cyclic memory (up to 10)",
         "- SHIFT+W: Deletes all stored memories",
         "- V/B: up/down volume 10%",
-        "- M: mute/unmute",
+        "- M: mute/unmute current RX",
+        "- Y: activate SUB RX or switch MAIN/SUB RX",        
         "- SHIFT+S: S-METER show/hide",
         "- S: SYNC CAT and KIWI RX ON/OFF",
         "- Z: Center KIWI RX, shift WF instead",
@@ -387,7 +388,6 @@ class kiwi_waterfall():
 
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
-
         # kiwi hostname and port
         self.host = host_
         self.port = port_
@@ -493,7 +493,9 @@ class kiwi_waterfall():
         stream_option_wf.unmask_receive = False
 
         self.wf_stream = Stream(request_wf, stream_option_wf)
-        print ("Waterfall data stream active...")
+        print(self.wf_stream)
+        if self.wf_stream:
+            print ("Waterfall data stream active...")
 
         # send a sequence of messages to the server, hardcoded for now
         # max wf speed, no compression
@@ -539,8 +541,7 @@ class kiwi_waterfall():
     def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
-            msg = msg[16:] # remove some header from each msg
-            
+            msg = msg[16:] # remove some header from each msg AND THE FIRST BIN!
             self.spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data
         self.keepalive()
 
@@ -548,7 +549,7 @@ class kiwi_waterfall():
         wf = self.spectrum
         wf = -(255 - wf)  # dBm
         wf_db = wf - 13 # typical Kiwi wf cal
-        wf_db[0] = -150 # first bin is broken
+        wf_db[0] = wf_db[1] # first bin is broken
 
         # compute min/max db of the power distribution at selected percentiles
         low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
@@ -672,13 +673,16 @@ class kiwi_sound():
     AUDIO_RATE = 48000
     KIWI_RATE = 12000
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-    CHUNKS = 2 # 10 or more for remote kiwis
+    CHUNKS = 2
     KIWI_SAMPLES_PER_FRAME = 512
-    FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
+    FULL_BUFF_LEN = 10 # 20 or more for remote kiwis (higher latency)
 
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100):
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100, host_=None, port_=None, subrx_=False):
+        self.subrx = subrx_
         # connect to kiwi server
         self.kiwi_wf = kiwi_wf
+        self.host = host_ if host_ else kiwi_wf.host
+        self.port = port_ if port_ else kiwi_wf.port
         self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
         self.terminate = False
         self.volume = volume_
@@ -691,10 +695,10 @@ class kiwi_sound():
         try:
             #self.socket = kiwi_wf.socket
             self.socket = socket.socket()
-            self.socket.connect((kiwi_wf.host, kiwi_wf.port)) # future: allow different kiwiserver for audio stream
+            self.socket.connect((self.host, self.port)) # future: allow different kiwiserver for audio stream
 
             uri = '/%d/%s' % (int(time.time()), 'SND')
-            handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, kiwi_wf.host, kiwi_wf.port)
+            handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
             handshake_snd.handshake(uri)
             request_snd = wsclient.ClientRequest(self.socket)
             request_snd.ws_version = mod_pywebsocket.common.VERSION_HYBI13
@@ -702,6 +706,7 @@ class kiwi_sound():
             stream_option_snd.mask_send = True
             stream_option_snd.unmask_receive = False
             self.stream = Stream(request_snd, stream_option_snd)
+            
             print ("Audio data stream active...")
 
             msg_list = ["SET auth t=kiwi p=%s"%password_, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
@@ -829,6 +834,12 @@ class kiwi_sound():
             self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
             pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
 
+        # stereo_signal = np.zeros([len(pyaudio_buffer), 2])
+        # if self.host == self.kiwi_wf.host:
+        #     stereo_signal[:, 1] = pyaudio_buffer[:]
+        # else:
+        #     stereo_signal[:, 0] = pyaudio_buffer[:]
+        # pyaudio_buffer = stereo_signal
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
