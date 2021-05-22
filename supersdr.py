@@ -12,12 +12,14 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
     elif mousex_pos >= DISPLAY_WIDTH - 80:
         mousex_pos = DISPLAY_WIDTH - 80
     buff_level = kiwi_snd.audio_buffer.qsize()
+    main_rx_color = RED if not kiwi_snd.subrx else GREEN
+    sub_rx_color = GREEN if not kiwi_snd.subrx else RED
     #           Label   Color   Freq/Mode                       Screen position
     ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            "rx_freq": (GREEN if kiwi_snd.volume>0 else GREY, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
-            "kiwi": (RED if buff_level<kiwi_snd.FULL_BUFF_LEN/2 else GREEN, ("kiwi:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
+            "rx_freq": (main_rx_color if kiwi_snd.volume>0 else GREY, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
+            "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
@@ -33,8 +35,8 @@ def update_textsurfaces(radio_mode, rssi, mouse, wf_width):
             }
 
     if dualrx_flag and kiwi_snd2:
-        ts_dict["rx_freq2"]= (YELLOW if kiwi_snd2.volume>0 else GREY, "SUB:%.3fkHz %s"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-160,V_POS_TEXT), "small", False)
-        ts_dict["kiwi2"] = (RED if buff_level<kiwi_snd2.FULL_BUFF_LEN/2 else YELLOW, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(240,BOTTOMBAR_Y+6), "small", False)
+        ts_dict["rx_freq2"]= (sub_rx_color if kiwi_snd2.volume>0 else GREY, "SUB:%.3fkHz %s"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-160,V_POS_TEXT), "small", False)
+        ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,BOTTOMBAR_Y+6), "small", False)
     if not s_meter_show_flag:
         ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
     if click_drag_flag:
@@ -92,11 +94,12 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     if pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y:
         pygame.draw.line(surface_, (250,0,0), (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
 
-    plot_bandpass(GREEN, kiwi_snd)
-
     # SUB RX
     if dualrx_flag and kiwi_snd2:
         plot_bandpass(YELLOW, kiwi_snd2)
+
+    plot_bandpass(WHITE, kiwi_snd)
+
     #### CAT RADIO bandpass
 
     if cat_radio and not cat_snd_link_flag:
@@ -106,14 +109,14 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
         lc_bin = tune_freq_bin + lc_bin + 1
         if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
             # low cut line
-            pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, ORANGE, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
         hc_bin = tune_freq_bin + hc_bin
         if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
             # high cut line
-            pygame.draw.line(surface_, YELLOW, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
-        pygame.draw.line(surface_, YELLOW, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
+            pygame.draw.line(surface_, ORANGE, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+        pygame.draw.line(surface_, ORANGE, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
 
     # plot click and drag red horiz bar
     if click_drag_flag:
@@ -394,7 +397,7 @@ if not kiwi_snd:
 
 kiwi_snd2 = None
 if dualrx_flag:
-    time.sleep(1)
+    time.sleep(2)
     #kiwi_snd2 = kiwi_sound(14205, "USB", 30, 3000, "", kiwi_wf, 100, "oh2bua.fi", 8073)
     kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
     if not kiwi_snd2:
