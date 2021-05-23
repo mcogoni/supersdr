@@ -455,7 +455,6 @@ class kiwi_waterfall():
         self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
         #self.sdr = rtlsdr()
 
-
     def gen_div(self):
         self.space_khz = 10
         self.div_list = []
@@ -500,7 +499,7 @@ class kiwi_waterfall():
         # send a sequence of messages to the server, hardcoded for now
         # max wf speed, no compression
         msg_list = ['SET auth t=kiwi p=%s'%self.password, 'SET zoom=%d start=%d'%(self.zoom,self.counter),\
-        'SET maxdb=-10 mindb=-110', 'SET wf_speed=4', 'SET wf_comp=0']
+        'SET maxdb=-10 mindb=-110', 'SET wf_speed=4', 'SET wf_comp=0', "SET interp=13"]
         for msg in msg_list:
             self.wf_stream.send_message(msg)
         print ("Starting to retrieve waterfall data...")
@@ -686,6 +685,9 @@ class kiwi_sound():
         self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
         self.terminate = False
         self.volume = volume_
+        self.max_rssi_before_mute = -20
+        self.mute_counter = 0
+        self.muting_delay = 15
         
         self.rssi = -127
         self.freq = freq_
@@ -842,6 +844,14 @@ class kiwi_sound():
         # pyaudio_buffer = stereo_signal
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
+
+        # mute on TX (over some rssi threshold)
+        if self.rssi > self.max_rssi_before_mute:
+            self.mute_counter = self.muting_delay
+        elif self.mute_counter > 0:
+            self.mute_counter -= 1
+        if self.mute_counter > 0:
+            pyaudio_buffer *= 0
 
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
