@@ -307,6 +307,9 @@ class KiwiSDRStream(KiwiSDRStreamBase):
     def _set_wf_speed(self, wf_speed):
         self._send_message('SET wf_speed=%d' % wf_speed)
 
+    def _set_wf_interp(self, interp):
+        self._send_message('SET interp=%d' % interp)
+
     def _process_msg_param(self, name, value):
         if name == 'load_cfg':
             logging.debug("load_cfg: (cfg info not printed)")
@@ -498,6 +501,7 @@ class KiwiSDRStream(KiwiSDRStreamBase):
             self._set_zoom_cf(0, 0)
             self._set_maxdb_mindb(-10, -110)
             self._set_wf_speed(1)
+            self._set_wf_interp(13)     # drop sampling + CIC compensation
         if self._type == 'SND':
             self._set_mod('am', 100, 2800, 4625.0)
             self._set_agc(True)
