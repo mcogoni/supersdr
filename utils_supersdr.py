@@ -2,11 +2,16 @@ import pygame
 import pyaudio
 import wave
 
+#from rtlsdr import RtlSdr
+
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
 from matplotlib import cm
 import numpy as np
+from scipy.signal import resample_poly, welch
+
+import pickle
 
 import threading, queue
 
@@ -28,32 +33,15 @@ import array
 import math
 from collections import deque, defaultdict
 
-
 from kiwi import wsclient
 import mod_pywebsocket.common
 from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-
-# Pyaudio options
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-AUDIO_RATE = 48000
-KIWI_RATE = 12000
-SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-CHUNKS = 2 # 10 or more for remote kiwis
-KIWI_SAMPLES_PER_FRAME = 512
-FULL_BUFF_LEN = 10 # 16 or more for remote kiwis
-
-# Hardcoded values for most kiwis
-MAX_FREQ = 30000. # 32000 # this should be dynamically set after connection
-MAX_ZOOM = 14
-WF_BINS  = 1024
-
 # SuperSDR constants
 WF_HEIGHT = 400
-DISPLAY_WIDTH = WF_BINS
+DISPLAY_WIDTH = 1024
 TOPBAR_HEIGHT = 20
 SPECTRUM_HEIGHT = 100
 BOTTOMBAR_HEIGHT = 20
@@ -65,10 +53,7 @@ TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
 WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
 BOTTOMBAR_Y = WF_Y + WF_HEIGHT
 V_POS_TEXT = 5
-MIN_DYN_RANGE = 90. # minimum visual dynamic range in dB
-CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-CAT_LOWEST_FREQ = 100 # 100 kHz is OK for most radio
 CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
@@ -84,6 +69,8 @@ LOW_CUT_CW=300 # Bandpass for CW
 HIGH_CUT_CW=800 # High end CW
 HIGHLOW_CUT_AM=6000 # Bandpass AM
 delta_low, delta_high = 0., 0. # bandpass tuning
+default_kiwi_port = 8073
+default_kiwi_password = ""
 
 # predefined RGB colors
 GREY = (200,200,200)
@@ -103,38 +90,41 @@ ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
 ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE, K_KP_ENTER]
 
-HELP_MESSAGE_LIST = ["COMMANDS HELP",
+HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
         "",
         "- LEFT/RIGHT: move KIWI RX freq +/- 1kHz (+SHIFT: X10)",
-        "- PAGE UP/DOWN: move WF freq +/- SPAN/2",
+        "- PAGE UP/DOWN: move WF freq +/- SPAN/4",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C/A: switches to USB, LSB, CW, AM",
         "- J/K/O: change low/high cut of RX (SHIFT inverts), O resets",
-        "- E: start audio recording",
+        "- G/H: inc/dec spectrum and WF averaging to improve SNR",
+        "- ,/.(+SHIFT) change high(low) clip level for spectrum and WF",
+        "- E: start/stop audio recording",
         "- F: enter frequency with keyboard",
-        "- W/R: Write/Restore quick memory (up to 10)",
+        "- W/R: Write/Restore quick cyclic memory (up to 10)",
         "- SHIFT+W: Deletes all stored memories",
         "- V/B: up/down volume 10%",
-        "- M: mute/unmute",
+        "- M: mute/unmute current RX",
+        "- Y: activate SUB RX or switch MAIN/SUB RX (+SHIFT kills it)",
         "- SHIFT+S: S-METER show/hide",
         "- S: SYNC CAT and KIWI RX ON/OFF",
         "- Z: Center KIWI RX, shift WF instead",
-        "- SPACE: FORCE SYNC of WF to RX if no CAT, else all to CAT",
+        "- SPACE: FORCE SYNC of WF to RX if no CAT, else sync to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- H: displays this help window",
-        "- I: displays EIBI DB labels",
+        "- I/D: displays EIBI/DXCLUSTER labels",
         "- Q: switch to a different KIWI server",
         "- SHIFT+ESC: quits",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
 
-font_size_dict = {"small": 12, "big": 18}
+font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
 class audio_recording():
-    def __init__(self, filename_):
+    def __init__(self, filename_, kiwi_snd):
         self.filename = filename_
         self.audio_buffer = []
-
+        self.kiwi_snd = kiwi_snd
         self.frames = []
         self.recording_flag = False
 
@@ -149,41 +139,146 @@ class audio_recording():
 
     def save(self, p_):
         self.wave = wave.open(self.filename, 'wb')
-        self.wave.setnchannels(CHANNELS)
-        self.wave.setsampwidth(p_.get_sample_size(FORMAT))
-        self.wave.setframerate(AUDIO_RATE)
+        self.wave.setnchannels(self.kiwi_snd.CHANNELS)
+        self.wave.setsampwidth(p_.get_sample_size(self.kiwi_snd.FORMAT))
+        self.wave.setframerate(self.kiwi_snd.AUDIO_RATE)
 
         # process audio data here
-
         self.wave.writeframes(b''.join(self.audio_buffer))
         self.wave.close()
         self.recording = False
 
+
 class dxcluster():
+    CLEANUP_TIME = 600
+    UPDATE_TIME = 5
+
     def __init__(self, mycall_):
+        if mycall_ == "":
+            raise
         self.mycall = mycall_
         host, port = 'dxfun.com', 8000
         self.server = (host, port)
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect()
-    
+        self.int_freq_dict = defaultdict(set)
+        self.spot_dict = {}
+        self.callsign_freq_dict = {}
+        self.terminate = False
+        self.failed_counter = 0
+
     def connect(self):
-        self.sock.connect(self.server)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connected = False
+        while not connected:
+            print(f'Connection to: {self.server}')
+            try:
+                self.sock.connect(self.server)
+            except:
+                print('Impossibile to connect')
+                sleep(5)     
+            else:       
+                print('Connected!!!')
+                connected = True
         self.send(self.mycall)
+        self.visible_stations = []
+        self.time_to_live = 1200 # seconds for a spot to live
+        self.last_update = datetime.utcnow()
+        self.last_cleanup = datetime.utcnow()
 
     def send(self, msg):
         msg = msg + '\n'
         self.sock.send(msg.encode())
 
+    def keepalive(self):
+        try:
+            self.send("\n")
+        except:
+            pass
+
     def receive(self):
         msg = self.sock.recv(2048)
-        return msg.decode("utf-8")
+        try:
+            msg = msg.decode("utf-8")
+        except:
+            msg = None
+            #print("DX cluster msg decode failed")
+        return msg
 
-    def run(self, kiwi_snd):
-        while not kiwi_snd.terminate:
+    def decode_spot(self, line):
+        els = line.split("  ")
+        els = [x for x in els if x]
+        spotter = els[0][6:].replace(":", "")
+        utc = datetime.utcnow()
+        try:
+            qrg = float(els[1].strip())
+            callsign = els[2].strip()
+            print(utc, qrg, callsign)
+        except:
+            qrg, callsign, utc = None, None, None
+            print("DX cluster msg decode failed: %s"%els)
+        return qrg, callsign, utc        
+
+    def clean_old_spots(self):
+        now  = datetime.utcnow()
+        del_list = []
+        for call in self.spot_dict:
+            spot_utc =self.spot_dict[call][1]
+            duration = now - spot_utc
+            duration_in_s = duration.total_seconds()
+            if duration_in_s > self.time_to_live:
+                del_list.append(call)
+        for call in del_list:
+            del self.spot_dict[call]
+        # for call in self.spot_dict:
+        #     f_, qrg_ = self.spot_dict[call]
+        #     self.int_freq_dict[int(f_)] = f_
+
+    def run(self, kiwi_wf):
+        while not self.terminate:
             dx_cluster_msg = self.receive()
-            print("%s"%dx_cluster_msg.rstrip('\r\n').replace("\x07", ""))
-            time.sleep(5)
+            if not dx_cluster_msg:
+                self.failed_counter += 1
+                print("DX Cluster void response")
+                if self.failed_counter > 5:
+                    self.sock.close()
+                    time.sleep(5)
+                    self.connect()
+                    time.sleep(5)
+                    continue
+            self.failed_counter = 0
+            spot_str = "%s"%dx_cluster_msg
+            for line in spot_str.replace("\x07", "").split("\n"):
+                #print ("%r"%line.rstrip('\r\n'))
+                if "DX de " in line:
+                    qrg, callsign, utc = self.decode_spot(line)
+                    if qrg and callsign:
+                        self.store_spot(qrg, callsign, utc)
+                    else:
+                        continue
+
+            delta_t = (datetime.utcnow() - self.last_cleanup).total_seconds()
+            if delta_t > self.CLEANUP_TIME: # cleanup db and keepalive msg
+                self.clean_old_spots()
+                self.last_cleanup = datetime.utcnow()
+                #print("cleaned old spots")
+            delta_t = (datetime.utcnow() - self.last_update).total_seconds()
+            if delta_t > self.UPDATE_TIME:
+                self.keepalive()
+                self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
+                #print("dx cluster updated")
+                self.last_update = datetime.utcnow()
+            #time.sleep(5)
+
+    def store_spot(self, qrg_, callsign_, utc_):
+        self.spot_dict[callsign_] = (qrg_, utc_)
+        self.callsign_freq_dict[qrg_] = callsign_
+        self.int_freq_dict[int(qrg_)].add(qrg_)
+
+    def get_stations(self, start_f, end_f):
+        inters = set(range(int(start_f), int(end_f))) & set(self.int_freq_dict.keys())
+        self.visible_stations = []
+        for int_freq in inters:
+            self.visible_stations.append(int_freq)
+        return self.visible_stations
 
 
 class filtering():
@@ -207,6 +302,11 @@ class memory():
     def __init__(self):
         self.mem_list = deque([], 10)
         self.index = 0
+        try:
+            self.load_from_disk()
+        except:
+            pass
+        self.index = len(self.mem_list)
 
     def write_mem(self, freq, radio_mode, lc, hc):
         self.mem_list.append((freq, radio_mode, lc, hc))
@@ -222,7 +322,70 @@ class memory():
     def reset_all_mem(self):
         self.mem_list = deque([], 10)
 
+    def save_to_disk(self):
+        current_mem = self.mem_list
+        self.load_from_disk()
+        self.mem_list += current_mem
+        self.mem_list = list(set(self.mem_list))
+        try:
+            with open("supersdr.memory", "wb") as fd:
+                pickle.dump(self.mem_list, fd)
+        except:
+            print("Cannot save memory file!")
+
+    def load_from_disk(self):
+        try:
+            with open("supersdr.memory", "rb") as fd:
+                self.mem_list = pickle.load(fd)
+        except:
+            print("No memory file found!")
+
+
+class kiwi_list():
+    def __init__(self):
+        self.mem_list = deque([], 10)
+        self.index = 0
+        try:
+            self.load_from_disk()
+        except:
+            pass
+        self.index = len(self.mem_list)
+
+    def write_mem(self, host_, port_, pass_):
+        self.mem_list.append((host_, port_, pass_))
+
+    def delete_mem(self, index):
+        try:
+            del self.mem_list[index]
+            return True
+        except:
+            return None
+
+    def save_to_disk(self):
+        try:
+            with open("kiwi.list", "wb") as fd:
+                pickle.dump(self.mem_list, fd)
+        except:
+            print("Cannot save kiwi list to disk!")
+
+    def load_from_disk(self):
+        try:
+            with open("kiwi.list", "rb") as fd:
+                self.mem_list = pickle.load(fd)
+        except:
+            print("No kiwi list file found!")
+
+
 class kiwi_waterfall():
+    MAX_FREQ = 30000
+    CENTER_FREQ = int(MAX_FREQ/2)
+    MAX_ZOOM = 14
+    WF_BINS = 1024
+    MAX_FPS = 23
+    MIN_DYN_RANGE = 40. # minimum visual dynamic range in dB
+    CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
+    delta_low_db, delta_high_db = 0, 0
+
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
         # kiwi hostname and port
@@ -232,7 +395,8 @@ class kiwi_waterfall():
         print ("KiwiSDR Server: %s:%d" % (self.host, self.port))
         self.zoom = zoom_
         self.freq = freq_
-
+        self.averaging_n = 1
+        
         self.wf_white_flag = False
         self.terminate = False
 
@@ -245,14 +409,18 @@ class kiwi_waterfall():
         self.span_khz = self.zoom_to_span()
         self.start_f_khz = self.start_freq()
         self.end_f_khz = self.end_freq()
+        
+        self.div_list = []
+        self.subdiv_list = []
+        self.min_bin_spacing = 100 # minimum pixels between major ticks (/10 for minor ticks)
+        self.space_khz = 10 # initial proposed spacing between major ticks in kHz
+
         self.counter, self.actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         print ("Actual frequency:", self.actual_freq, "kHz")
         self.socket = None
         self.wf_stream = None
         self.wf_color = None
         self.wf_buffer = queue.Queue(maxsize=200)
-
-        self.wf_data = np.zeros((WF_HEIGHT, WF_BINS))
 
         # connect to kiwi WF server
         print ("Trying to contact %s..."%self.host)
@@ -268,8 +436,47 @@ class kiwi_waterfall():
 
         while True:
             msg = self.wf_stream.receive_message()
-            if msg and bytearray2str(msg[0:3]) == "W/F":
-                break
+            #print(msg)
+            if msg:
+                if bytearray2str(msg[0:3]) == "W/F":
+                    break
+                elif "MSG center_freq" in bytearray2str(msg):
+                    els = bytearray2str(msg[4:]).split()                
+                    self.MAX_FREQ = int(int(els[1].split("=")[1])/1000)
+                    self.CENTER_FREQ = int(int(self.MAX_FREQ)/2)
+                elif "MSG wf_fft_size" in bytearray2str(msg):
+                    els = bytearray2str(msg[4:]).split()
+                    print(els)
+                    self.MAX_ZOOM = int(els[3].split("=")[1])
+                    self.WF_BINS = int(els[0].split("=")[1])
+                    self.MAX_FPS = int(els[2].split("=")[1])
+                
+        self.bins_per_khz = self.WF_BINS / self.span_khz
+        self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
+        #self.sdr = rtlsdr()
+
+
+    def gen_div(self):
+        self.space_khz = 10
+        self.div_list = []
+        self.subdiv_list = []
+        self.div_list = []
+        f_s = int(self.start_f_khz)
+        f_e = int(self.end_f_khz)
+    
+        while self.div_list == [] and self.subdiv_list == []:
+            if self.bins_per_khz*self.space_khz > self.min_bin_spacing:
+                for f in range(f_s, f_e+1):
+                    if not f%self.space_khz:
+                        fbin = int(self.offset_to_bin(f-self.start_f_khz))
+                        self.div_list.append(fbin)
+
+            if self.bins_per_khz*self.space_khz/10 > self.min_bin_spacing/10:
+                for f in range(f_s, f_e+1):
+                    if not f%(self.space_khz/10):
+                        fbin = int(self.offset_to_bin(f-self.start_f_khz))
+                        self.subdiv_list.append(fbin)
+            self.space_khz *= 10                
 
     def start_stream(self):
 
@@ -286,7 +493,9 @@ class kiwi_waterfall():
         stream_option_wf.unmask_receive = False
 
         self.wf_stream = Stream(request_wf, stream_option_wf)
-        print ("Waterfall data stream active...")
+        print(self.wf_stream)
+        if self.wf_stream:
+            print ("Waterfall data stream active...")
 
         # send a sequence of messages to the server, hardcoded for now
         # max wf speed, no compression
@@ -298,15 +507,15 @@ class kiwi_waterfall():
 
     def zoom_to_span(self):
             """return frequency span in kHz for a given zoom level"""
-            assert(self.zoom >= 0 and self.zoom <= MAX_ZOOM)
-            self.span_khz = MAX_FREQ / 2**self.zoom
+            assert(self.zoom >= 0 and self.zoom <= self.MAX_ZOOM)
+            self.span_khz = self.MAX_FREQ / 2**self.zoom
             return self.span_khz
 
     def start_frequency_to_counter(self, start_frequency_):
         """convert a given start frequency in kHz to the counter value used in _set_zoom_start"""
-        assert(start_frequency_ >= 0 and start_frequency_ <= MAX_FREQ)
-        self.counter = round(start_frequency_/MAX_FREQ * 2**MAX_ZOOM * WF_BINS)
-        start_frequency_ = self.counter * MAX_FREQ / WF_BINS / 2**MAX_ZOOM
+        assert(start_frequency_ >= 0 and start_frequency_ <= self.MAX_FREQ)
+        self.counter = round(start_frequency_/self.MAX_FREQ * 2**self.MAX_ZOOM * self.WF_BINS)
+        start_frequency_ = self.counter * self.MAX_FREQ / self.WF_BINS / 2**self.MAX_ZOOM
         return self.counter, start_frequency_
 
     def start_freq(self):
@@ -318,36 +527,62 @@ class kiwi_waterfall():
         return self.end_f_khz
 
     def offset_to_bin(self, offset_khz_):
-        bins_per_khz_ = WF_BINS / self.span_khz
+        bins_per_khz_ = self.WF_BINS / self.span_khz
         return bins_per_khz_ * (offset_khz_)
 
     def bins_to_khz(self, bins_):
-        bins_per_khz_ = WF_BINS / self.span_khz
+        bins_per_khz_ = self.WF_BINS / self.span_khz
         return (1./bins_per_khz_) * (bins_) + self.start_f_khz
+
+    def deltabins_to_khz(self, bins_):
+        bins_per_khz_ = self.WF_BINS / self.span_khz
+        return (1./bins_per_khz_) * (bins_)
 
     def receive_spectrum(self):
         msg = self.wf_stream.receive_message()
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
-            msg = msg[16:] # remove some header from each msg
-            
-            spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data to uint8
-            wf = spectrum
-            wf = -(255 - wf)  # dBm
-            wf_db = wf - 13 # typical Kiwi wf cal
-            dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
-            self.wf_color = (wf_db - np.min(wf_db[1:-1]))
-            # standardize the distribution between 0 and 1
-            self.wf_color /= np.max(self.wf_color[1:-1])
-            # clip extreme values
-            self.wf_color = np.clip(self.wf_color, np.percentile(self.wf_color,CLIP_LOWP), np.percentile(self.wf_color, CLIP_HIGHP))
-            # standardize again between 0 and 255
-            self.wf_color -= np.min(self.wf_color[1:-1])
-            # expand between 0 and 255
-            self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
-            # avoid too bright colors with no signals
-            self.wf_color *= (min(dyn_range, MIN_DYN_RANGE)/MIN_DYN_RANGE)
-            # insert a full signal line to see freq/zoom changes
+            msg = msg[16:] # remove some header from each msg AND THE FIRST BIN!
+            self.spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data
         self.keepalive()
+
+    def spectrum_db2col(self):
+        wf = self.spectrum
+        wf = -(255 - wf)  # dBm
+        wf_db = wf - 13 # typical Kiwi wf cal
+        wf_db[0] = wf_db[1] # first bin is broken
+
+        # compute min/max db of the power distribution at selected percentiles
+        low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
+        high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
+        # shift chosen min to zero
+        self.wf_color = (wf_db - (low_clip_db+self.delta_low_db))
+        # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap)
+        self.wf_color /= max(np.max(self.wf_color), self.MIN_DYN_RANGE) + self.delta_high_db
+        # standardize again between 0 and 255
+        self.wf_color *= 255
+        # clip exceeding values
+        self.wf_color = np.clip(self.wf_color, 0, 255)
+
+    def receive_spectrum_rtl(self):
+        wf = self.sdr.psd
+        print(min(wf), max(wf))
+        wf = -(255 - wf)  # dBm
+        wf_db = wf - 13 # typical Kiwi wf cal
+        dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
+        self.wf_color = (wf_db - np.min(wf_db[1:-1]))
+        # standardize the distribution between 0 and 1
+        self.wf_color /= np.max(self.wf_color[1:-1])
+        # clip extreme values
+        low_perc = np.percentile(self.wf_color,self.CLIP_LOWP)
+        high_perc = np.percentile(self.wf_color, self.CLIP_HIGHP)
+        self.wf_color = np.clip(self.wf_color, low_perc, high_perc)
+        # standardize again between 0 and 255
+        self.wf_color -= np.min(self.wf_color[1:-1])
+        # expand between 0 and 255
+        self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
+        # avoid too bright colors with no signals
+        self.wf_color *= (min(dyn_range, self.MIN_DYN_RANGE)/self.MIN_DYN_RANGE)
+        # insert a full signal line to see freq/zoom changes
 
     def set_freq_zoom(self, freq_, zoom_):
         self.freq = freq_
@@ -355,34 +590,29 @@ class kiwi_waterfall():
         self.zoom_to_span()
         self.start_freq()
         self.end_freq()
-        if zoom_ == 0:
-            print("zoom 0 detected!")
-            self.freq = 15000
+        if zoom_ == 0: # 30 MHz span, WF freq should be 15 MHz
+            self.freq = self.CENTER_FREQ
             self.start_freq()
             self.end_freq()
-            self.span_khz = MAX_FREQ
-            #self.zoom_to_span()
-        else:
-            if self.start_f_khz<0:
-                self.freq -= self.start_f_khz
+            self.span_khz = self.MAX_FREQ
+        else: # zoom level > 0
+            if self.start_f_khz<0: # did we hit the left limit?
+                #self.freq -= self.start_f_khz
+                self.freq = self.zoom_to_span()/2
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
-
-            if self.end_f_khz>MAX_FREQ:
-                self.freq -= self.end_f_khz - MAX_FREQ
+            elif self.end_f_khz>self.MAX_FREQ: # did we hit the right limit?
+                self.freq = self.MAX_FREQ - self.zoom_to_span()/2 
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
         self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
-        if zoom_>0 and actual_freq<=0:
-            self.freq = self.zoom_to_span()
-            self.start_freq()
-            self.end_freq()
-            self.counter, actual_freq = self.start_frequency_to_counter(self.start_f_khz)
         msg = "SET zoom=%d start=%d" % (self.zoom, self.counter)
         self.wf_stream.send_message(msg)
         self.eibi.get_stations(self.start_f_khz, self.end_f_khz)
+        self.bins_per_khz = self.WF_BINS / self.span_khz
+        self.gen_div()
 
         return self.freq
 
@@ -416,28 +646,46 @@ class kiwi_waterfall():
 
     def set_white_flag(self):
         self.wf_color = np.ones_like(self.wf_color)*255
-        self.wf_data[-2,:] = self.wf_color
+        self.wf_data[0,:] = self.wf_color
 
     def run(self):
         while not self.terminate:
-            self.receive_spectrum()
-            self.wf_data[-1,:] = self.wf_color
-            self.wf_data[0:WF_HEIGHT-1,:] = self.wf_data[1:WF_HEIGHT,:]
+            if self.averaging_n>1:
+                self.avg_spectrum_deque = deque([], self.averaging_n)
+                for avg_idx in range(self.averaging_n):
+                    self.receive_spectrum()
+                    self.avg_spectrum_deque.append(self.spectrum)
+                self.spectrum = np.mean(self.avg_spectrum_deque, axis=0)
+            else:
+                self.receive_spectrum()
+            self.spectrum_db2col()
+
+            #self.receive_spectrum_rtl()
+            self.wf_data[1:,:] = self.wf_data[0:-1,:] # scroll wf array 1 line down
+            self.wf_data[0,:] = self.wf_color # overwrite top line with new data
         return
 
 
 class kiwi_sound():
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, kiwi_filter, audio_rec_):
+    # Pyaudio options
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    AUDIO_RATE = 48000
+    KIWI_RATE = 12000
+    SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
+    CHUNKS = 2
+    KIWI_SAMPLES_PER_FRAME = 512
+    FULL_BUFF_LEN = 10 # 20 or more for remote kiwis (higher latency)
+
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100, host_=None, port_=None, subrx_=False):
+        self.subrx = subrx_
         # connect to kiwi server
         self.kiwi_wf = kiwi_wf
-        self.n_tap = kiwi_filter.n_tap
-        self.lowpass = kiwi_filter.lowpass
-        self.audio_rec_ = audio_rec_
-        self.audio_buffer = queue.Queue(maxsize=FULL_BUFF_LEN)
+        self.host = host_ if host_ else kiwi_wf.host
+        self.port = port_ if port_ else kiwi_wf.port
+        self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
         self.terminate = False
-
-        self.old_buffer = np.zeros((self.n_tap))
-        self.volume = 100
+        self.volume = volume_
         
         self.rssi = -127
         self.freq = freq_
@@ -447,10 +695,10 @@ class kiwi_sound():
         try:
             #self.socket = kiwi_wf.socket
             self.socket = socket.socket()
-            self.socket.connect((kiwi_wf.host, kiwi_wf.port)) # future: allow different kiwiserver for audio stream
+            self.socket.connect((self.host, self.port)) # future: allow different kiwiserver for audio stream
 
             uri = '/%d/%s' % (int(time.time()), 'SND')
-            handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, kiwi_wf.host, kiwi_wf.port)
+            handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
             handshake_snd.handshake(uri)
             request_snd = wsclient.ClientRequest(self.socket)
             request_snd.ws_version = mod_pywebsocket.common.VERSION_HYBI13
@@ -458,23 +706,41 @@ class kiwi_sound():
             stream_option_snd.mask_send = True
             stream_option_snd.unmask_receive = False
             self.stream = Stream(request_snd, stream_option_snd)
+            
             print ("Audio data stream active...")
 
             msg_list = ["SET auth t=kiwi p=%s"%password_, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
             (self.radio_mode.lower(), self.lc, self.hc, self.freq),
             "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
             "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
-            "SET AR OK in=%d out=%d" % (KIWI_RATE, AUDIO_RATE)]
+            "SET AR OK in=%d out=%d" % (self.KIWI_RATE, self.AUDIO_RATE)]
             
             for msg in msg_list:
                 self.stream.send_message(msg)
-            data = ""
-            while "MSG" in data:
-                data = self.stream.receive_message()
 
+            while True:
+                msg = self.stream.receive_message()
+                if msg and "SND" == bytearray2str(msg[:3]):
+                    break
+                elif msg and "MSG audio_init" in bytearray2str(msg):
+                    msg = bytearray2str(msg)
+                    els = msg[4:].split()                
+                    self.KIWI_RATE = int(int(els[1].split("=")[1]))
+                    self.SAMPLE_RATIO = self.AUDIO_RATE/self.KIWI_RATE
         except:
             print ("Failed to connect to Kiwi audio stream")
             raise
+        
+        self.kiwi_filter = filtering(self.KIWI_RATE/2, self.AUDIO_RATE)
+        gcd = np.gcd(self.KIWI_RATE,self.AUDIO_RATE)
+        self.n_low, self.n_high = int(self.KIWI_RATE/gcd), int(self.AUDIO_RATE/gcd)
+
+        self.n_tap = self.kiwi_filter.n_tap
+        self.lowpass = self.kiwi_filter.lowpass
+        self.old_buffer = np.zeros((self.n_tap))
+
+        self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"), self)
+
 
     def set_mode_freq_pb(self):
         #print (self.radio_mode, self.lc, self.hc, self.freq)
@@ -548,25 +814,34 @@ class kiwi_sound():
         except Exception as e:
             print ("exception: %s" % e)
 
-    def callback(self, in_data, frame_count, time_info, status):
+    def play_buffer(self, in_data, frame_count, time_info, status):
         popped = []
-        for _ in range(CHUNKS):
+        for _ in range(self.CHUNKS):
             popped.append( self.audio_buffer.get() )
 
         popped = np.array(popped).flatten()
-        popped = popped.astype(np.float64) * (self.volume/100)        
+        popped = popped.astype(np.float64) * (self.volume/100)
 
         n = len(popped)
-        # oversample
-        pyaudio_buffer = np.zeros((SAMPLE_RATIO*n))
-        pyaudio_buffer[::SAMPLE_RATIO] = popped
-        pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
-        
-        # low pass filter
-        self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
-        pyaudio_buffer = self.lowpass(pyaudio_buffer) * SAMPLE_RATIO
-        if self.audio_rec_.recording_flag:
-            self.audio_rec_.audio_buffer.append(pyaudio_buffer.astype(np.int16))
+        if self.SAMPLE_RATIO % 1: # high bandwidth kiwis (3ch 20kHz)
+            pyaudio_buffer = resample_poly(popped, self.n_high, self.n_low, padtype="line")
+        else: # normal 12kHz kiwis
+            pyaudio_buffer = np.zeros(int(self.SAMPLE_RATIO*n))
+            pyaudio_buffer[::int(self.SAMPLE_RATIO)] = popped
+            pyaudio_buffer = np.concatenate([self.old_buffer, pyaudio_buffer])
+
+            # low pass filter
+            self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
+            pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
+
+        # stereo_signal = np.zeros([len(pyaudio_buffer), 2])
+        # if self.host == self.kiwi_wf.host:
+        #     stereo_signal[:, 1] = pyaudio_buffer[:]
+        # else:
+        #     stereo_signal[:, 0] = pyaudio_buffer[:]
+        # pyaudio_buffer = stereo_signal
+        if self.audio_rec.recording_flag:
+            self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
         return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
 
@@ -579,6 +854,8 @@ class kiwi_sound():
 
 
 class cat:
+    CAT_MIN_FREQ = 100 # 100 kHz is OK for most radios
+    CAT_MAX_FREQ = 30000
     def __init__(self, radiohost_, radioport_):
         self.KNOWN_MODES = {"USB", "LSB", "CW", "AM"}
         self.radiohost, self.radioport = radiohost_, radioport_
@@ -607,7 +884,7 @@ class cat:
             self.reply = out        
 
     def set_freq(self, freq_):
-        if freq_ >= CAT_LOWEST_FREQ:
+        if freq_ >= self.CAT_MIN_FREQ and freq_ <= self.CAT_MAX_FREQ:
             self.send_msg(("\\set_freq %d" % (freq_*1000)))
             #if self.reply: # to be verified!
             #    self.freq = freq_
@@ -634,6 +911,8 @@ class cat:
             return "USB"
 
 
+# Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
+# and https://www.iaru-r1.org/reference/band-plans/hf-bandplan/
 def get_auto_mode(f):
     automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
                 "LSB": ((1840,1850),(3600,3800),(7060,7200)),
@@ -657,7 +936,7 @@ def start_audio_stream(kiwi_snd):
     rx_t.start()
 
     print("Filling audio buffer...")
-    while kiwi_snd.audio_buffer.qsize()<FULL_BUFF_LEN and not kiwi_snd.terminate:
+    while kiwi_snd.audio_buffer.qsize() < kiwi_snd.FULL_BUFF_LEN and not kiwi_snd.terminate:
         pass
 
     if kiwi_snd.terminate:
@@ -673,14 +952,13 @@ def start_audio_stream(kiwi_snd):
         else:
             CARD_INDEX = None
 
-    # open stream using callback (3)
-    kiwi_audio_stream = play.open(format=FORMAT,
-                    channels=CHANNELS,
-                    rate=AUDIO_RATE,
+    kiwi_audio_stream = play.open(format=kiwi_snd.FORMAT,
+                    channels=kiwi_snd.CHANNELS,
+                    rate=kiwi_snd.AUDIO_RATE,
                     output=True,
                     output_device_index=CARD_INDEX,
-                    frames_per_buffer= int(KIWI_SAMPLES_PER_FRAME*CHUNKS*SAMPLE_RATIO),
-                    stream_callback=kiwi_snd.callback)
+                    frames_per_buffer= int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
+                    stream_callback=kiwi_snd.play_buffer)
     kiwi_audio_stream.start_stream()
 
     return play, kiwi_audio_stream
@@ -695,21 +973,23 @@ class eibi_db():
             return None
         label_list = data[0].rstrip().split(";")
         self.station_dict = defaultdict(list)
-        self.intfreq_dict = defaultdict(list)
+        self.int_freq_dict = defaultdict(list)
+        self.station_freq_dict = {}
         self.visible_stations = []
 
         for el in data[1:]:
             els = el.rstrip().split(";")
-            self.intfreq_dict[int(round(float(els[0])))].append(float(els[0])) # store or each integer freqeuncy key all float freq in kHz
+            self.int_freq_dict[int(round(float(els[0])))].append(float(els[0])) # store or each integer freqeuncy key all float freq in kHz
             self.station_dict[float(els[0])].append(els[1:]) # store all stations' data using the float freq in kHz as key (multiple)
+            self.station_freq_dict[float(els[0])] = els[1:]
 
-        self.freq_set = set(self.intfreq_dict.keys())
+        self.freq_set = set(self.int_freq_dict.keys())
 
     def get_stations(self, start_f, end_f):
         inters = set(range(int(start_f), int(end_f))) & self.freq_set
         self.visible_stations = []
         for intf in inters:
-            record = self.intfreq_dict[intf]
+            record = self.int_freq_dict[intf]
             for f_khz in record:
                 self.visible_stations.append(f_khz) #self.station_dict[f_khz])
         return self.visible_stations
@@ -743,3 +1023,35 @@ def create_cm(which):
                 col = ( 255, 0, 128*(i-217)/38)
             colormap.append(col)
     return colormap
+
+
+class rtlsdr():
+    def __init__(self):
+        self.sdr = RtlSdr()
+        # configure device
+        self.sdr.sample_rate = 2.4e6
+        self.sdr.center_freq = 95e6
+        self.sdr.gain = 40
+        self.N_FFT = 2048 # FFT bins
+        self.N_WIN = 1024  # How many pixels to show from the FFT (around the center)
+        self.fft_ratio = 2.
+        self.samples = []
+        self.psd = np.random.random((1024))
+
+    def read(self):
+        self.samples = self.sdr.read_samples(1024)
+        
+    def run(self):
+        while True:
+            self.read()
+            sample_freq, spec = welch(self.samples, self.sdr.sample_rate, window="hamming", nperseg=self.N_FFT,  nfft=self.N_FFT)
+            spec = np.roll(spec, self.N_FFT//2, 0)[self.N_FFT//2-self.N_WIN//2:self.N_FFT//2+self.N_WIN//2]
+            
+            # get magnitude 
+            self.psd = abs(spec)
+            # convert to dB scale
+            self.psd = -20 * np.log10(self.psd)
+            self.psd *= -1
+
+        self.sdr.close()
+
