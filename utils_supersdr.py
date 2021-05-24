@@ -12,7 +12,6 @@ import numpy as np
 from scipy.signal import resample_poly, welch
 
 import pickle
-
 import threading, queue
 
 import socket
@@ -40,7 +39,7 @@ from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
 # SuperSDR constants
-WF_HEIGHT = 400
+WF_HEIGHT = 440
 DISPLAY_WIDTH = 1024
 TOPBAR_HEIGHT = 20
 SPECTRUM_HEIGHT = 100
