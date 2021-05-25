@@ -38,6 +38,8 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
+VERSION = "v2.1"
+
 # SuperSDR constants
 WF_HEIGHT = 440
 DISPLAY_WIDTH = 1024
@@ -89,7 +91,7 @@ ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
 ALLOWED_KEYS += [K_BACKSPACE, K_RETURN, K_ESCAPE, K_KP_ENTER]
 
-HELP_MESSAGE_LIST = ["SuperSDR v2.0 HELP",
+HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "",
         "- LEFT/RIGHT: move KIWI RX freq +/- 1kHz (+SHIFT: X10)",
         "- PAGE UP/DOWN: move WF freq +/- SPAN/4",

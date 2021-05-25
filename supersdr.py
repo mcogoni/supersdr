@@ -56,7 +56,7 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
 
     draw_dict = {}
     for k in ts_dict:
-        if k == "p_freq" and not (pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y):
+        if k == "p_freq" and not (pygame.mouse.get_focused() and (WF_Y <= mouse[1] <= BOTTOMBAR_Y or TOPBAR_HEIGHT <= mouse[1] <= TUNEBAR_Y)):
             continue
         if "small" in ts_dict[k][3]:
             render_ = smallfont.render_to
@@ -97,12 +97,14 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     pygame.draw.line(surface_, RED, (center_freq_bin, WF_Y), (center_freq_bin, WF_Y+6), 4)
     # mouse click_freq line
     if pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y:
-        pygame.draw.line(surface_, (250,0,0), (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+        pygame.draw.line(surface_, RED, (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+BOTTOMBAR_Y), 1)
+    elif pygame.mouse.get_focused() and TOPBAR_HEIGHT <= mouse[1] <= TUNEBAR_Y:
+        pygame.draw.line(surface_, GREEN, (mouse[0], TOPBAR_HEIGHT), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
 
     # SUB RX
     if dualrx_flag and kiwi_snd2:
         _plot_bandpass(YELLOW, kiwi_snd2)
-
+    # MAIN RX        
     _plot_bandpass(WHITE, kiwi_snd)
 
     #### CAT RADIO bandpass
@@ -184,7 +186,7 @@ def display_help_box(screen, message_list):
     if len(message_list) != 0:
         for ii, msg in enumerate(message_list):
             pos = (screen.get_width() / 2 - window_size/2 + font_size, 
-                    screen.get_height() / 2-window_size/3 + ii*font_size + font_size)
+                    screen.get_height() / 2-window_size/3 + ii*(font_size+1) + font_size)
             smallfont.render_to(sdrdisplay, pos, msg, WHITE)
 
 def display_msg_box(screen, message, pos=None, color=WHITE):
@@ -403,7 +405,6 @@ if not kiwi_snd:
 kiwi_snd2 = None
 if dualrx_flag:
     time.sleep(2)
-    #kiwi_snd2 = kiwi_sound(14205, "USB", 30, 3000, "", kiwi_wf, 100, "oh2bua.fi", 8073)
     kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
     if not kiwi_snd2:
         print("Server not ready")
@@ -430,7 +431,7 @@ wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
-pygame.display.set_caption("SuperSDR v2.0")
+pygame.display.set_caption("SuperSDR %s"%VERSION)
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 nanofont = pygame.freetype.SysFont('Mono', 8)
