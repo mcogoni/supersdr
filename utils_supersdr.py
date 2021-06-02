@@ -397,6 +397,8 @@ class kiwi_waterfall():
         self.zoom = zoom_
         self.freq = freq_
         self.averaging_n = 1
+        self.old_averaging_n = self.averaging_n
+
         
         self.wf_white_flag = False
         self.terminate = False
@@ -454,6 +456,7 @@ class kiwi_waterfall():
                 
         self.bins_per_khz = self.WF_BINS / self.span_khz
         self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
+        self.avg_spectrum_deque = deque([], self.averaging_n)
         #self.sdr = rtlsdr()
 
     def gen_div(self):
@@ -499,7 +502,7 @@ class kiwi_waterfall():
 
         # send a sequence of messages to the server, hardcoded for now
         # max wf speed, no compression
-        msg_list = ['SET auth t=kiwi p=%s'%self.password, 'SET zoom=%d start=%d'%(self.zoom,self.counter),\
+        msg_list = ['SET auth t=kiwi p=%s ipl=%s'%(self.password, self.password), 'SET zoom=%d start=%d'%(self.zoom,self.counter),\
         'SET maxdb=-10 mindb=-110', 'SET wf_speed=4', 'SET wf_comp=0', "SET interp=13"]
         for msg in msg_list:
             self.wf_stream.send_message(msg)
@@ -650,6 +653,13 @@ class kiwi_waterfall():
 
     def run(self):
         while not self.terminate:
+            # if self.old_averaging_n != self.averaging_n:
+            #     self.avg_spectrum_deque = deque([], self.averaging_n)
+            #     self.old_averaging_n = self.averaging_n
+            # self.receive_spectrum()
+            # self.avg_spectrum_deque.append(self.spectrum)
+            # self.spectrum = np.mean(self.avg_spectrum_deque, axis=0)
+
             if self.averaging_n>1:
                 self.avg_spectrum_deque = deque([], self.averaging_n)
                 for avg_idx in range(self.averaging_n):
@@ -658,6 +668,8 @@ class kiwi_waterfall():
                 self.spectrum = np.mean(self.avg_spectrum_deque, axis=0)
             else:
                 self.receive_spectrum()
+
+
             self.spectrum_db2col()
 
             #self.receive_spectrum_rtl()
@@ -712,7 +724,7 @@ class kiwi_sound():
             
             print ("Audio data stream active...")
 
-            msg_list = ["SET auth t=kiwi p=%s"%password_, "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
+            msg_list = ["SET auth t=kiwi p=%s ipl=%s"%(password_, password_), "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
             (self.radio_mode.lower(), self.lc, self.hc, self.freq),
             "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
             "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),

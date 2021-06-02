@@ -97,7 +97,7 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     pygame.draw.line(surface_, RED, (center_freq_bin, WF_Y), (center_freq_bin, WF_Y+6), 4)
     # mouse click_freq line
     if pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y:
-        pygame.draw.line(surface_, RED, (mouse[0], TUNEBAR_Y), (mouse[0], TUNEBAR_Y+BOTTOMBAR_Y), 1)
+        pygame.draw.line(surface_, RED, (mouse[0], TUNEBAR_Y), (mouse[0], BOTTOMBAR_Y), 1)
     elif pygame.mouse.get_focused() and TOPBAR_HEIGHT <= mouse[1] <= TUNEBAR_Y:
         pygame.draw.line(surface_, GREEN, (mouse[0], TOPBAR_HEIGHT), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
 
