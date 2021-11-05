@@ -16,7 +16,7 @@ There are three main items that may be independently controlled:
  - the RX and the CAT radio are both active on different frequencies while you can explore the bands moving around the WF window and its span.
  In the future I plan to support multiple KIWI channels both for the WF and the RX. 
  
-![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/supersdr_screenshot.png)
+![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
 
 ## Prerequisites:
 Install Python 3 along with PYGAME, PYAUDIO, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;) If you use Linux I hope I don't have to tell you how to install librearies and Python components: I presonally use a Arch based distro and pip to keep everything updated.
