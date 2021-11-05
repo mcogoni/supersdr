@@ -17,12 +17,13 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
     ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            "rx_freq": (main_rx_color if kiwi_snd.volume>0 else GREY, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
+            #"rx_freq": (main_rx_color if kiwi_snd.volume>0 else GREY, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
+            "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-50,V_POS_TEXT), "small", False),
             "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
-            "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+210, V_POS_TEXT), "small", False),
+            "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, V_POS_TEXT), "small", False),
             "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
-            "auto": ((GREEN if auto_mode else RED), "[AUTO]", (wf_width/2+165, V_POS_TEXT), "small", False),
+            "auto": ((GREEN if auto_mode else RED), "[AUTO]" if auto_mode else "[MANU]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-145, SPECTRUM_Y+2), "small", False),
             "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
             "cat": (GREEN if cat_radio else GREY, "CAT", (5,BOTTOMBAR_Y+4), "big", False), 
@@ -34,7 +35,8 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             }
 
     if dualrx_flag and kiwi_snd2:
-        ts_dict["rx_freq2"]= (sub_rx_color if kiwi_snd2.volume>0 else GREY, "SUB:%.3fkHz %s"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-160,V_POS_TEXT), "small", False)
+        #ts_dict["rx_freq2"] = (sub_rx_color if kiwi_snd2.volume>0 else GREY, "SUB:%.3fkHz %s"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-160,V_POS_TEXT), "small", False)
+        ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-240,V_POS_TEXT), "small", False)
         ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,BOTTOMBAR_Y+6), "small", False)
     if not s_meter_show_flag:
         s_value = (rssi_smooth+120)//6 # signal in S units of 6dB
@@ -103,9 +105,9 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
 
     # SUB RX
     if dualrx_flag and kiwi_snd2:
-        _plot_bandpass(YELLOW, kiwi_snd2)
+        _plot_bandpass(GREEN, kiwi_snd2)
     # MAIN RX        
-    _plot_bandpass(WHITE, kiwi_snd)
+    _plot_bandpass(RED, kiwi_snd)
 
     #### CAT RADIO bandpass
 
@@ -772,7 +774,7 @@ while not wf_quit:
                 elif keys[pygame.K_y]:
                     if kiwi_snd2:
                         kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
-                        force_sync_flag = True
+                        #force_sync_flag = True
                         show_bigmsg = "switchab"
                         run_index_bigmsg = run_index
                     else:
