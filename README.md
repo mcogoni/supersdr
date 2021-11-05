@@ -18,6 +18,8 @@ There are three main items that may be independently controlled:
 In the screenshot you can see both KiwiSDR receivers active at the same time (green and red passbands), while the CAT Radio is the orange one on the right. Synchronization between Kiwi RXs and CAT VFO is disabled (press S to enable SYNC) in this case (CAT SYNC grayed out) so the three are working independently. You can switch MAIN/SUB Kiwi RX frequencies by pressing Y. Pressing M (un)mutes the current MAIN RX.
 
 Notice how the lower waterfall half is noisier than the upper half thanks to 10X sample averaging (time binning). You can change averaging by pressing G/H to increase/decrease it.
+
+Mouse over the HELP label on the bottom right corner will show you the main keyboard commands.
  
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
 
@@ -48,14 +50,17 @@ To launch the program:
 ```
 ./supersdr.py --kiwiserver 192.168.1.82 --kiwiport 8073 -z 9 -f 198 -w password
 ```
-to just explore your local kiwisdr, or:
+to just explore your local kiwisdr (defaults to kiwisdr.local if not specified), or:
 
 ```
 ./supersdr.py --kiwiserver sibamanna.duckdns.org --kiwiport 8073 -S 192.168.1.89 -P 4532 -z 9 -f 198
 ```
 to connect to a remote kiwi AND to a local CAT radio for which ```rigctld``` is running on the server located at ```192.168.1.89```.
 
+To start rigctld use somthing like: ```rigctld -m 237 -r /dev/ttyUSB0``` if you use a Kenwood TS-590SG (model nr. 237) and it is connected to the USB of your local computer. Run ```rigctld -l``` to show a list of supported radios. 
+
 Just use ```--help``` to show all available command line options.
+
 
 Main key commands during use are shown by pressing H or moving the mouse to the HELP label on the bottom right.
 
