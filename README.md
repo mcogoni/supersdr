@@ -1,5 +1,7 @@
 # SuperSDR
 
+![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
+
 There are two main scenarios in which you'd like to use SuperSDR:
  - you've got a *radio without a panadapter* or you're simply *not happy with it* (in my case I have a Kenwood TS-590SG), in this case this application can help you to use your (or someone else's) KiwiSDR as a powerful panadapter and multiple receiver and to have all seamlessly synchronized: you may control your Kiwi from the radio or vice versa; you may also transmit with the radio and have your Kiwi RX muted automatically;
  - you've got a KiwiSDR and you're sick of using its stock web interface, you'd like to have near zero latency, waterfall immunity from thunderstorms, simple keyboard shortcuts, VERY low CPU usage, much improved waterfall averaging to detect even the faintest signals (à la LINRAD), ability to receive from multiple remote KiwiSDRs, you want a low resources app able to run from a Raspberry Pi to a Windows PC to a Macbook Pro, you want a very compact code that you can tweak even not being a Python programmer. 
@@ -20,8 +22,6 @@ In the screenshot you can see both KiwiSDR receivers active at the same time (gr
 Notice how the lower waterfall half is noisier than the upper half thanks to 10X sample averaging (time binning). You can change averaging by pressing G/H to increase/decrease it.
 
 Mouse over the HELP label on the bottom right corner will show you the main keyboard commands.
- 
-![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
 
 ## Prerequisites:
 Install Python 3 along with PYGAME, PYAUDIO, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;) If you use Linux I hope I don't have to tell you how to install librearies and Python components: I presonally use a Arch based distro and pip to keep everything updated.
