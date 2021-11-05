@@ -4,17 +4,18 @@ There are two main scenarios in which you'd like to use SuperSDR:
  - you've got a *radio without a panadapter* or you're simply *not happy with it* (in my case I have a Kenwood TS-590SG), in this case this application can help you to use your (or someone else's) KiwiSDR as a powerful panadapter and multiple receiver and to have all seamlessly synchronized: you may control your Kiwi from the radio or vice versa; you may also transmit with the radio and have your Kiwi RX muted automatically;
  - you've got a KiwiSDR and you're sick of using its stock web interface, you'd like to have near zero latency, waterfall immunity from thunderstorms, simple keyboard shortcuts, VERY low CPU usage, much improved waterfall averaging to detect even the faintest signals (à la LINRAD), ability to receive from multiple remote KiwiSDRs, you want a low resources app able to run from a Raspberry Pi to a Windows PC to a Macbook Pro, you want a very compact code that you can tweak even not being a Python programmer. 
 
-SuperSDR integrates a realtime spectrum waterfall and audio receive from any KiwiSDR around the world, together with a local (or remote) controlled CAT transceiver.
+SuperSDR integrates a realtime spectrum waterfall and (dual) audio receive from any KiwiSDR around the world, together with a local (or remote) controlled CAT transceiver.
 There are three main items that may be independently controlled:
  - the KIWI WATERFALL, that may be linked to the CAT radio or to the mouse/keyboard tuning;
- - the KIWI RECEIVER, that may be tuned everywhere on the HF bands;
+ - the (dual) KIWI RECEIVER, that may be tuned everywhere on the HF bands;
  - the CAT radio that serves as the main tuning method.
  
  All three may be strictly intelinked, or set up separately depending on the operating convenience:
  - the WF is usually tuned by the VFO on the CAT radio to serve as a panadapter and the KIWI RX may be turned off if not necessary;
  - the KIWI RX may be tuned on a secondary frequency with keyboard and mouse or with the VFO, then the CAT radio is unlinked from the RX and is free to explore other frequencies;
  - the RX and the CAT radio are both active on different frequencies while you can explore the bands moving around the WF window and its span.
- In the future I plan to support multiple KIWI channels both for the WF and the RX. 
+ In the screenshot you can see both KiwiSDR receivers active at the same time (green and red passbands), while the CAT Radio is the orange one on the right. Synchronization between Kiwi RXs and CAT VFO is disabled (press S to enable SYNC) in this case (CAT SYNC grayed out) so the three are working independently. You can switch MAIN/SUB Kiwi RX frequencies by pressing Y. Pressing M (un)mutes the current MAIN RX.
+Notice how the lower waterfall half is noisier than the upper half thanks to 10X sample averaging (time binning). You can change averaging by pressing G/H to increase/decrease it.
  
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
 
