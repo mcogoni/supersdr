@@ -1,5 +1,9 @@
 # SuperSDR
 
+There are two main scenarios in which you'd like to use SuperSDR:
+ - you've got a *radio without a panadapter* or you're simply *not happy with it* (in my case I have a Kenwood TS-590SG), in this case this application can help you to use your (or someone else's) KiwiSDR as a powerful panadapter and multiple receiver and to have all seamlessly synchronized: you may control your Kiwi from the radio or vice versa; you may also transmit with the radio and have your Kiwi RX muted automatically;
+ - you've got a KiwiSDR and you're sick of using its stock web interface, you'd like to have near zero latency, waterfall immunity from thunderstorms, simple keyboard shortcuts, VERY low CPU usage, much improved waterfall averaging to detect even the faintest signals (à la LINRAD), ability to receive from multiple remote KiwiSDRs, you want a low resources app able to run from a Raspberry Pi to a Windows PC to a Macbook Pro, you want a very compact code that you can tweak even not being a Python programmer. 
+
 SuperSDR integrates a realtime spectrum waterfall and audio receive from any KiwiSDR around the world, together with a local (or remote) controlled CAT transceiver.
 There are three main items that may be independently controlled:
  - the KIWI WATERFALL, that may be linked to the CAT radio or to the mouse/keyboard tuning;
