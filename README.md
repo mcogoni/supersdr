@@ -61,9 +61,6 @@ To start rigctld use somthing like: ```rigctld -m 237 -r /dev/ttyUSB0``` if you 
 
 Just use ```--help``` to show all available command line options.
 
-
-Main key commands during use are shown by pressing H or moving the mouse to the HELP label on the bottom right.
-
 When connected to both a kiwisdr and to a CAT radio any click on the waterfall synchronizes the radio and, vice versa, moving the VFO on the radio, changes the tuning on the waterfall causing the WF window to follow when outside the span.
 
 
