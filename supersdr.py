@@ -313,7 +313,7 @@ parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
                   help="KiwiSDR password", dest="kiwipassword", default=default_kiwi_password)
 parser.add_option("-s", "--kiwiserver", type=str,
-                  help="KiwiSDR server name", dest="kiwiserver", default="")
+                  help="KiwiSDR server name", dest="kiwiserver", default="kiwisdr.local")
 parser.add_option("-p", "--kiwiport", type=int,
                   help="port number", dest="kiwiport", default=default_kiwi_port)
 parser.add_option("-S", "--radioserver", type=str,
@@ -641,20 +641,20 @@ while not wf_quit:
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
 
-                # KIWI WF colormap dynamic range
-                if keys[pygame.K_PERIOD]:
-                    if kiwi_wf.delta_high_db < 30:
-                        kiwi_wf.delta_high_db += 1
-                elif keys[pygame.K_COMMA]:
-                    if kiwi_wf.delta_high_db > -30:
-                        kiwi_wf.delta_high_db -= 1
-                # KIWI WF colormap dynamic range
-                elif keys[pygame.K_PERIOD] and (mods & pygame.KMOD_SHIFT):
+                # KIWI WF colormap dynamic range (lower limit)
+                if keys[pygame.K_PERIOD] and (mods & pygame.KMOD_SHIFT):
                     if kiwi_wf.delta_low_db < 30:
                         kiwi_wf.delta_low_db += 1
                 elif keys[pygame.K_COMMA] and (mods & pygame.KMOD_SHIFT):
                     if kiwi_wf.delta_low_db > -30:
                         kiwi_wf.delta_low_db -= 1
+                # KIWI WF colormap dynamic range (upper limit)
+                elif keys[pygame.K_PERIOD]:
+                    if kiwi_wf.delta_high_db < 30:
+                        kiwi_wf.delta_high_db += 1
+                elif keys[pygame.K_COMMA]:
+                    if kiwi_wf.delta_high_db > -30:
+                        kiwi_wf.delta_high_db -= 1
 
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:
@@ -863,7 +863,7 @@ while not wf_quit:
                 delta_freq = kiwi_wf.deltabins_to_khz(delta_x)
                 manual_wf_freq = kiwi_wf.freq - delta_freq
                 click_drag_flag = False
-                    
+    
     if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
         show_help_flag = True
     else:
@@ -991,6 +991,8 @@ while not wf_quit:
         kiwi_snd.set_mode_freq_pb()
         input_freq_flag = False
         kiwi_wf.set_white_flag()
+        if dxclust:
+            dxclust.update_now = True
 
     # Change KIWI RX mode
     if manual_mode:

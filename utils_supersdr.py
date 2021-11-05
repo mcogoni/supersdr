@@ -112,10 +112,10 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- Z: Center KIWI RX, shift WF instead",
         "- SPACE: FORCE SYNC of WF to RX if no CAT, else sync to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
-        "- H: displays this help window",
         "- I/D: displays EIBI/DXCLUSTER labels",
         "- Q: switch to a different KIWI server",
         "- SHIFT+ESC: quits",
+        "",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
 
@@ -165,6 +165,7 @@ class dxcluster():
         self.callsign_freq_dict = {}
         self.terminate = False
         self.failed_counter = 0
+        self.update_now = False
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -260,13 +261,14 @@ class dxcluster():
             if delta_t > self.CLEANUP_TIME: # cleanup db and keepalive msg
                 self.clean_old_spots()
                 self.last_cleanup = datetime.utcnow()
-                #print("cleaned old spots")
+                print("DXCLUST: cleaned old spots")
             delta_t = (datetime.utcnow() - self.last_update).total_seconds()
-            if delta_t > self.UPDATE_TIME:
+            if delta_t > self.UPDATE_TIME or self.update_now:
                 self.keepalive()
                 self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
-                #print("dx cluster updated")
+                print("DXCLUST: updated visible spots")
                 self.last_update = datetime.utcnow()
+                self.update_now = False
             #time.sleep(5)
 
     def store_spot(self, qrg_, callsign_, utc_):
@@ -920,7 +922,10 @@ class cat:
     def get_freq(self):
         self.send_msg("\\get_freq")
         if self.reply:
-            self.freq = int(self.reply)/1000.
+            try:
+                self.freq = int(self.reply)/1000.
+            except:
+                self.cat_ok = False
         return self.freq
 
     def get_mode(self):
