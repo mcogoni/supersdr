@@ -17,7 +17,6 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
     ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            #"rx_freq": (main_rx_color if kiwi_snd.volume>0 else GREY, "%.3fkHz %s"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2,V_POS_TEXT), "big", False),
             "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-50,V_POS_TEXT), "small", False),
             "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
@@ -35,7 +34,6 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             }
 
     if dualrx_flag and kiwi_snd2:
-        #ts_dict["rx_freq2"] = (sub_rx_color if kiwi_snd2.volume>0 else GREY, "SUB:%.3fkHz %s"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-160,V_POS_TEXT), "small", False)
         ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-240,V_POS_TEXT), "small", False)
         ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,BOTTOMBAR_Y+6), "small", False)
     if not s_meter_show_flag:
@@ -197,7 +195,7 @@ def display_msg_box(screen, message, pos=None, color=WHITE):
     if len(message) != 0:
         hugefont.render_to(sdrdisplay, pos, message, color)
     
-def s_meter_draw(rssi_smooth):
+def s_meter_draw(rssi_smooth, agc_threshold):
     s_meter_radius = 50.
     SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
     smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
@@ -205,6 +203,9 @@ def s_meter_draw(rssi_smooth):
     s_meter_center = (s_meter_radius+10,s_meter_radius+8)
     alpha_rssi = rssi_smooth+127
     alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
+
+    alpha_agc = agc_threshold+127
+    alpha_agc = -math.radians(alpha_agc* 180/127.)-math.pi
 
     def _coords_from_angle(angle, s_meter_radius_):
         x_ = s_meter_radius_ * math.cos(angle)
@@ -214,6 +215,7 @@ def s_meter_draw(rssi_smooth):
         return s_meter_x, s_meter_y
     
     s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius* 0.95)
+    agc_meter_x, agc_meter_y = _coords_from_angle(alpha_agc, s_meter_radius* 0.7)
     pygame.draw.rect(smeter_surface, YELLOW,
                    (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 0)
     pygame.draw.rect(smeter_surface, BLACK,
@@ -235,6 +237,7 @@ def s_meter_draw(rssi_smooth):
     pygame.draw.circle(smeter_surface, D_GREY, s_meter_center, 4)
 
     pygame.draw.line(smeter_surface, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
+    pygame.draw.line(smeter_surface, BLUE, s_meter_center, (agc_meter_x, agc_meter_y), 2)
     str_rssi = "%ddBm"%rssi_smooth
     str_len = len(str_rssi)
     pos = (s_meter_center[0]+13, s_meter_center[1])
@@ -747,6 +750,22 @@ while not wf_quit:
                         if cat_radio:
                             cat_radio.set_mode(kiwi_snd.radio_mode)
 
+                # Change AGC threshold for the current KIWI receiver
+                if keys[pygame.K_1]:
+                    if kiwi_snd.thresh>-135:
+                        kiwi_snd.thresh -= 1
+                        show_bigmsg = "agc"
+                        run_index_bigmsg = run_index
+                    if kiwi_snd:
+                        kiwi_snd.set_agc_params()
+                if keys[pygame.K_2]:
+                    if kiwi_snd.thresh<-20:
+                        kiwi_snd.thresh += 1
+                        show_bigmsg = "agc"
+                        run_index_bigmsg = run_index
+                if kiwi_snd:
+                        kiwi_snd.set_agc_params()
+
                 # Tune SUB RX on same freq on WF center
                 if keys[pygame.K_n]:
                     if kiwi_snd2:
@@ -1160,12 +1179,14 @@ while not wf_quit:
             msg_text = "Save recording"
         elif "centertune" == show_bigmsg:
             msg_text = "WF center tune mode " + ("ON" if wf_snd_link_flag else "OFF")
+        elif "agc" == show_bigmsg:
+            msg_text = "AGC threshold: %d dBm" % kiwi_snd.thresh
 
         display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
-    rssi_smooth = np.mean(list(rssi_hist)[:])
+    rssi_smooth = np.mean(list(rssi_hist)[:])+10 # +10 is to approximately recalibrate the S-meter after averaging over time
     if s_meter_show_flag:
-        smeter_surface = s_meter_draw(rssi_smooth)
+        smeter_surface = s_meter_draw(rssi_smooth, kiwi_snd.thresh)
         sdrdisplay.blit(smeter_surface, (0, BOTTOMBAR_Y-80))
 
     mouse = pygame.mouse.get_pos()

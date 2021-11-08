@@ -58,12 +58,6 @@ TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
-on=True # AGC auto mode
-hang=False # AGC hang
-thresh=-75 # AGC threshold in dBm
-slope=6 # AGC slope decay
-decay=4000 # AGC decay time constant
-gain=50 # AGC manual gain
 LOW_CUT_SSB=30 # Bandpass low end SSB
 HIGH_CUT_SSB=3000 # Bandpass high end
 LOW_CUT_CW=300 # Bandpass for CW
@@ -708,6 +702,15 @@ class kiwi_sound():
         self.freq = freq_
         self.radio_mode = mode_
         self.lc, self.hc = lc_, hc_
+
+        # Kiwi parameters
+        self.on=True # AGC auto mode
+        self.hang=False # AGC hang
+        self.thresh=-80 # AGC threshold in dBm
+        self.slope=6 # AGC slope decay
+        self.decay=4000 # AGC decay time constant
+        self.gain=50 # AGC manual gain
+
         print ("Trying to contact server...")
         try:
             #self.socket = kiwi_wf.socket
@@ -729,7 +732,7 @@ class kiwi_sound():
             msg_list = ["SET auth t=kiwi p=%s ipl=%s"%(password_, password_), "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
             (self.radio_mode.lower(), self.lc, self.hc, self.freq),
             "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
-            "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (on, hang, thresh, slope, decay, gain),
+            "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain),
             "SET AR OK in=%d out=%d" % (self.KIWI_RATE, self.AUDIO_RATE)]
             
             for msg in msg_list:
@@ -758,6 +761,9 @@ class kiwi_sound():
 
         self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"), self)
 
+    def set_agc_params(self):
+        msg = "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain)
+        self.stream.send_message(msg)
 
     def set_mode_freq_pb(self):
         #print (self.radio_mode, self.lc, self.hc, self.freq)
