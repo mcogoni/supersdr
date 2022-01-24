@@ -1,8 +1,7 @@
 import pygame
-import pyaudio
-import wave
+import sounddevice as sd
 
-#from rtlsdr import RtlSdr
+import wave
 
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
@@ -38,13 +37,13 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v2.1"
+VERSION = "v2.1+"
 
 # SuperSDR constants
 WF_HEIGHT = 440
 DISPLAY_WIDTH = 1024
 TOPBAR_HEIGHT = 20
-SPECTRUM_HEIGHT = 100
+SPECTRUM_HEIGHT = 200
 BOTTOMBAR_HEIGHT = 20
 TUNEBAR_HEIGHT = 20
 DISPLAY_HEIGHT = WF_HEIGHT + SPECTRUM_HEIGHT + TOPBAR_HEIGHT + BOTTOMBAR_HEIGHT + TUNEBAR_HEIGHT
@@ -108,8 +107,8 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- I/D: displays EIBI/DXCLUSTER labels",
         "- Q: switch to a different KIWI server",
+        "- 1/2: adjust AGC threshold",
         "- SHIFT+ESC: quits",
-        "",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
 
@@ -542,7 +541,7 @@ class kiwi_waterfall():
         if msg and bytearray2str(msg[0:3]) == "W/F": # this is one waterfall line
             msg = msg[16:] # remove some header from each msg AND THE FIRST BIN!
             self.spectrum = np.ndarray(len(msg), dtype='B', buffer=msg).astype(np.float32) # convert from binary data
-        self.keepalive()
+            self.keepalive()
 
     def spectrum_db2col(self):
         wf = self.spectrum
@@ -665,7 +664,6 @@ class kiwi_waterfall():
             else:
                 self.receive_spectrum()
 
-
             self.spectrum_db2col()
 
             #self.receive_spectrum_rtl()
@@ -675,8 +673,8 @@ class kiwi_waterfall():
 
 
 class kiwi_sound():
-    # Pyaudio options
-    FORMAT = pyaudio.paInt16
+    # Soundedevice options
+    FORMAT = np.int16
     CHANNELS = 1
     AUDIO_RATE = 48000
     KIWI_RATE = 12000
@@ -836,8 +834,8 @@ class kiwi_sound():
             self.socket.close()
         except Exception as e:
             print ("exception: %s" % e)
-
-    def play_buffer(self, in_data, frame_count, time_info, status):
+    
+    def play_buffer(self, outdata, frame_count, time_info, status):
         popped = []
         for _ in range(self.CHUNKS):
             popped.append( self.audio_buffer.get() )
@@ -857,12 +855,6 @@ class kiwi_sound():
             self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
             pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
 
-        # stereo_signal = np.zeros([len(pyaudio_buffer), 2])
-        # if self.host == self.kiwi_wf.host:
-        #     stereo_signal[:, 1] = pyaudio_buffer[:]
-        # else:
-        #     stereo_signal[:, 0] = pyaudio_buffer[:]
-        # pyaudio_buffer = stereo_signal
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
 
@@ -873,8 +865,7 @@ class kiwi_sound():
             self.mute_counter -= 1
         if self.mute_counter > 0:
             pyaudio_buffer *= 0
-
-        return (pyaudio_buffer.astype(np.int16), pyaudio.paContinue)
+        outdata[:,0] = pyaudio_buffer[:int(self.KIWI_SAMPLES_PER_FRAME*self.CHUNKS*self.SAMPLE_RATIO)].astype(np.int16)
 
     def run(self):
         while not self.terminate:
@@ -978,24 +969,11 @@ def start_audio_stream(kiwi_snd):
         del kiwi_snd
         return (None, None)
 
-    play = pyaudio.PyAudio()
-    for i in range(play.get_device_count()):
-        #print(play.get_device_info_by_index(i))
-        if play.get_device_info_by_index(i)['name'] == "pulse":
-            CARD_INDEX = i
-        else:
-            CARD_INDEX = None
+    kiwi_audio_stream = sd.OutputStream(blocksize = int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
+                        device=7, dtype=kiwi_snd.FORMAT, samplerate=kiwi_snd.AUDIO_RATE, channels=kiwi_snd.CHANNELS, callback = kiwi_snd.play_buffer)
+    kiwi_audio_stream.start()
 
-    kiwi_audio_stream = play.open(format=kiwi_snd.FORMAT,
-                    channels=kiwi_snd.CHANNELS,
-                    rate=kiwi_snd.AUDIO_RATE,
-                    output=True,
-                    output_device_index=CARD_INDEX,
-                    frames_per_buffer= int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
-                    stream_callback=kiwi_snd.play_buffer)
-    kiwi_audio_stream.start_stream()
-
-    return play, kiwi_audio_stream
+    return True, kiwi_audio_stream
 
 
 class eibi_db():
@@ -1070,10 +1048,10 @@ class rtlsdr():
         self.N_WIN = 1024  # How many pixels to show from the FFT (around the center)
         self.fft_ratio = 2.
         self.samples = []
-        self.psd = np.random.random((1024))
+        self.psd = np.random.random((self.N_WIN))
 
     def read(self):
-        self.samples = self.sdr.read_samples(1024)
+        self.samples = self.sdr.read_samples(self.N_WIN)
         
     def run(self):
         while True:
