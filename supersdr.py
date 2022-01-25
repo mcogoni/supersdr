@@ -777,13 +777,11 @@ while not wf_quit:
                     if kiwi_snd2:
                         if kiwi_snd.subrx:
                             kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
-                        kiwi_audio_stream2.stop()
                         kiwi_snd2.terminate = True
-                        time.sleep(1)
-                        kiwi_audio_stream2.stop_stream()
-                        kiwi_audio_stream2.close()
+                        kiwi_audio_stream2.stop()
                         kiwi_snd2.close_connection()
                         kiwi_snd2.terminate = False
+                        print("Second RX disabled!")
 
                         dualrx_flag = False
                         show_bigmsg = "disable2rx"
@@ -1190,7 +1188,7 @@ while not wf_quit:
         cat_radio = None
 
 
-# close PyAudio
+# close audio stream
 kiwi_audio_stream.stop()
 
 if kiwi_snd2:
