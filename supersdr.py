@@ -330,7 +330,7 @@ parser.add_option("-z", "--zoom", type=int,
 parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=23)
+                  help="screen refresh rate", dest="refresh", default=20)
 parser.add_option("-d", "--dual",
                   help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
 parser.add_option("-c", "--callsign", type=str,
@@ -430,7 +430,7 @@ old_volume = kiwi_snd.volume
 # init Pygame
 pygame.init()
 sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
-    pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF, vsync=1)
+    pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF)
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
@@ -777,7 +777,7 @@ while not wf_quit:
                     if kiwi_snd2:
                         if kiwi_snd.subrx:
                             kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
-                        play2.terminate()
+                        kiwi_audio_stream2.stop()
                         kiwi_snd2.terminate = True
                         time.sleep(1)
                         kiwi_audio_stream2.stop_stream()
@@ -917,10 +917,10 @@ while not wf_quit:
         else:
             input_text_list = input_new_server.rstrip().split(" ")
 
-        # close PyAudio
-        play.terminate()
+        # close audio stream
+        kiwi_audio_stream.stop()
         if kiwi_snd2:
-            play2.terminate()
+            kiwi_audio_stream2.stop()
 
         old_volume = kiwi_snd.volume
         kiwi_snd.terminate = True
@@ -929,13 +929,6 @@ while not wf_quit:
 
         kiwi_wf.terminate = True
         time.sleep(1)
-
-        # stop stream
-        kiwi_audio_stream.stop_stream()
-        kiwi_audio_stream.close()
-        if kiwi_snd2:
-            kiwi_audio_stream2.stop_stream()
-            kiwi_audio_stream2.close()
 
         kiwi_wf.close_connection()
         kiwi_snd.close_connection()
@@ -1198,10 +1191,10 @@ while not wf_quit:
 
 
 # close PyAudio
-play.terminate()
+kiwi_audio_stream.stop()
 
 if kiwi_snd2:
-    play2.terminate()
+    kiwi_audio_stream2.stop()
 
 kiwi_snd.terminate = True
 if kiwi_snd2:
@@ -1210,12 +1203,7 @@ if kiwi_snd2:
 kiwi_wf.terminate = True
 time.sleep(0.5)
 exit()
-# stop streams
-kiwi_audio_stream.stop_stream()
-kiwi_audio_stream.close()
-if kiwi_snd2:
-    kiwi_audio_stream2.stop_stream()
-    kiwi_audio_stream2.close()
+
 kiwi_wf.close_connection()
 kiwi_snd.close_connection()
 if kiwi_snd2:

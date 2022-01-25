@@ -681,7 +681,7 @@ class kiwi_sound():
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
     CHUNKS = 2
     KIWI_SAMPLES_PER_FRAME = 512
-    FULL_BUFF_LEN = 10 # 20 or more for remote kiwis (higher latency)
+    FULL_BUFF_LEN = 20 # 20 or more for remote kiwis (higher latency)
 
     def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100, host_=None, port_=None, subrx_=False):
         self.subrx = subrx_
@@ -702,12 +702,12 @@ class kiwi_sound():
         self.lc, self.hc = lc_, hc_
 
         # Kiwi parameters
-        self.on=True # AGC auto mode
-        self.hang=False # AGC hang
-        self.thresh=-80 # AGC threshold in dBm
-        self.slope=6 # AGC slope decay
-        self.decay=4000 # AGC decay time constant
-        self.gain=50 # AGC manual gain
+        self.on = True # AGC auto mode
+        self.hang = False # AGC hang
+        self.thresh = -80 # AGC threshold in dBm
+        self.slope = 6 # AGC slope decay
+        self.decay = 4000 # AGC decay time constant
+        self.gain = 50 # AGC manual gain
 
         print ("Trying to contact server...")
         try:
@@ -755,7 +755,7 @@ class kiwi_sound():
 
         self.n_tap = self.kiwi_filter.n_tap
         self.lowpass = self.kiwi_filter.lowpass
-        self.old_buffer = np.zeros((self.n_tap))
+        self.old_buffer = np.zeros((self.n_tap-1))
 
         self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"), self)
 
@@ -865,8 +865,8 @@ class kiwi_sound():
             self.mute_counter -= 1
         if self.mute_counter > 0:
             pyaudio_buffer *= 0
-        outdata[:,0] = pyaudio_buffer[:int(self.KIWI_SAMPLES_PER_FRAME*self.CHUNKS*self.SAMPLE_RATIO)].astype(np.int16)
-
+        outdata[:,0] = pyaudio_buffer.astype(np.int16)
+        
     def run(self):
         while not self.terminate:
             snd_buf = self.get_audio_chunk()
@@ -957,6 +957,13 @@ def get_auto_mode(f):
 
 
 def start_audio_stream(kiwi_snd):
+    def _get_std_input_dev():
+         devices = sd.query_devices()
+         for dev_id, device in enumerate(devices):
+             if device["max_input_channels"] > 0 and "pulse" in device["name"]:
+                 std_dev_id = dev_id
+         return std_dev_id
+
     rx_t = threading.Thread(target=kiwi_snd.run, daemon=True)
     rx_t.start()
 
@@ -969,8 +976,9 @@ def start_audio_stream(kiwi_snd):
         del kiwi_snd
         return (None, None)
 
+    std_dev_id = _get_std_input_dev()
     kiwi_audio_stream = sd.OutputStream(blocksize = int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
-                        device=7, dtype=kiwi_snd.FORMAT, samplerate=kiwi_snd.AUDIO_RATE, channels=kiwi_snd.CHANNELS, callback = kiwi_snd.play_buffer)
+                        device=std_dev_id, dtype=kiwi_snd.FORMAT, latency="low", samplerate=kiwi_snd.AUDIO_RATE, channels=kiwi_snd.CHANNELS, callback = kiwi_snd.play_buffer)
     kiwi_audio_stream.start()
 
     return True, kiwi_audio_stream
