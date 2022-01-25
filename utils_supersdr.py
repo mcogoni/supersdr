@@ -958,11 +958,13 @@ def get_auto_mode(f):
 
 def start_audio_stream(kiwi_snd):
     def _get_std_input_dev():
-         devices = sd.query_devices()
-         for dev_id, device in enumerate(devices):
-             if device["max_input_channels"] > 0 and "pulse" in device["name"]:
-                 std_dev_id = dev_id
-         return std_dev_id
+        devices = sd.query_devices()
+        for dev_id, device in enumerate(devices):
+            if device["max_input_channels"] > 0 and "pulse" in device["name"]:
+                std_dev_id = dev_id
+            else:
+                std_dev_id = None
+        return std_dev_id
 
     rx_t = threading.Thread(target=kiwi_snd.run, daemon=True)
     rx_t.start()
