@@ -126,15 +126,15 @@ class audio_recording():
         print("start recording")
         self.recording_flag = True
 
-    def stop(self, p_):
+    def stop(self):
         print("stop recording")
         self.recording_flag = False
-        self.save(p_)
+        self.save()
 
-    def save(self, p_):
+    def save(self):
         self.wave = wave.open(self.filename, 'wb')
         self.wave.setnchannels(self.kiwi_snd.CHANNELS)
-        self.wave.setsampwidth(p_.get_sample_size(self.kiwi_snd.FORMAT))
+        self.wave.setsampwidth(2) # two bytes per sample (int16)
         self.wave.setframerate(self.kiwi_snd.AUDIO_RATE)
 
         # process audio data here

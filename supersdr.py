@@ -724,7 +724,7 @@ while not wf_quit:
                         show_bigmsg = "start_rec"
                         run_index_bigmsg = run_index
                     else:
-                        kiwi_snd.audio_rec.stop(play)
+                        kiwi_snd.audio_rec.stop()
                         show_bigmsg = "stop_rec"
                         run_index_bigmsg = run_index
 
