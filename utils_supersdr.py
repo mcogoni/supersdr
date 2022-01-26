@@ -294,6 +294,7 @@ class filtering():
         filtered_sig = np.convolve(signal, self.h, mode="valid")
         return filtered_sig
 
+
 class memory():
     def __init__(self):
         self.mem_list = deque([], 10)
@@ -434,7 +435,6 @@ class kiwi_waterfall():
 
         while True:
             msg = self.wf_stream.receive_message()
-            #print(msg)
             if msg:
                 if bytearray2str(msg[0:3]) == "W/F":
                     break
@@ -452,7 +452,6 @@ class kiwi_waterfall():
         self.bins_per_khz = self.WF_BINS / self.span_khz
         self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
         self.avg_spectrum_deque = deque([], self.averaging_n)
-        #self.sdr = rtlsdr()
 
     def gen_div(self):
         self.space_khz = 10
@@ -681,7 +680,7 @@ class kiwi_sound():
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
     CHUNKS = 2
     KIWI_SAMPLES_PER_FRAME = 512
-    FULL_BUFF_LEN = 20 # 20 or more for remote kiwis (higher latency)
+    FULL_BUFF_LEN = 2 # 20 or more for remote kiwis (higher latency)
 
     def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100, host_=None, port_=None, subrx_=False):
         self.subrx = subrx_

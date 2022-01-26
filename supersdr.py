@@ -330,7 +330,7 @@ parser.add_option("-z", "--zoom", type=int,
 parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=20)
+                  help="screen refresh rate", dest="refresh", default=23)
 parser.add_option("-d", "--dual",
                   help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
 parser.add_option("-c", "--callsign", type=str,
@@ -485,7 +485,8 @@ cat_snd_link_flag = True if cat_radio else False
 print("SYNC OPTIONS:")
 print("WF<>CAT", wf_cat_link_flag, "WF<>RX", wf_snd_link_flag, "CAT<>RX", cat_snd_link_flag)
 
-rssi_maxlen = kiwi_snd.FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
+# rssi_maxlen = kiwi_snd.FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
+rssi_maxlen = 10 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
 run_index = 0
