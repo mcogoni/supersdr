@@ -257,7 +257,7 @@ def plot_spectrum(t_avg=15, col=GREEN):
     for x, v in enumerate(np.nanmean(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
         y = SPECTRUM_HEIGHT-1-int(v/255 * SPECTRUM_HEIGHT)
         pixarr[x,y] = col
-        if not kiwi_wf.wf_auto_scaling and not x%20:
+        if not kiwi_wf.wf_auto_scaling and not x%5:
             for y_div in subdiv_list:
                 pixarr[x,y_div] = BLUE
     del pixarr
@@ -519,7 +519,7 @@ while not wf_quit:
     force_sync_flag = None
 
     rssi = kiwi_snd.rssi
-    rssi_hist.append(rssi)
+    rssi_hist.append(rssi+10)
     mouse = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
@@ -641,7 +641,15 @@ while not wf_quit:
                     run_index_bigmsg = run_index
 
                 # KIWI RX volume UP/DOWN, Mute
-                if keys[pygame.K_v]:
+                if keys[pygame.K_v] and (mods & pygame.KMOD_SHIFT):
+                    if kiwi_snd.volume > 0:
+                        old_volume = kiwi_snd.volume
+                        kiwi_snd.volume = 0
+                    else:
+                        kiwi_snd.volume = old_volume
+                    show_bigmsg = "VOLUME"
+                    run_index_bigmsg = run_index
+                elif keys[pygame.K_v]:
                     if kiwi_snd.volume < 150:
                         kiwi_snd.volume += 10
                     show_bigmsg = "VOLUME"
@@ -651,15 +659,7 @@ while not wf_quit:
                         kiwi_snd.volume -= 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
-                elif keys[pygame.K_m]:
-                    if kiwi_snd.volume > 0:
-                        old_volume = kiwi_snd.volume
-                        kiwi_snd.volume = 0
-                    else:
-                        kiwi_snd.volume = old_volume
-                    show_bigmsg = "VOLUME"
-                    run_index_bigmsg = run_index
-
+                
                 if keys[pygame.K_3]:
                     kiwi_wf.wf_auto_scaling = False if kiwi_wf.wf_auto_scaling else True
                     kiwi_wf.delta_low_db, kiwi_wf.delta_high_db = 0, 0
@@ -747,14 +747,14 @@ while not wf_quit:
                         run_index_bigmsg = run_index
 
                 # S-meter show/hide
-                if keys[pygame.K_s]:
-                    if (mods & pygame.KMOD_SHIFT):
-                        s_meter_show_flag = False if s_meter_show_flag else True
-                    elif cat_radio:
-                        show_bigmsg = "cat_rx_sync"
-                        run_index_bigmsg = run_index
-                        cat_snd_link_flag = False if cat_snd_link_flag else True
-                        force_sync_flag = True
+                if keys[pygame.K_m]:
+                    s_meter_show_flag = False if s_meter_show_flag else True
+                
+                if keys[pygame.K_s] and cat_radio:
+                    show_bigmsg = "cat_rx_sync"
+                    run_index_bigmsg = run_index
+                    cat_snd_link_flag = False if cat_snd_link_flag else True
+                    force_sync_flag = True
 
                 # Automatic mode change ON/OFF
                 if keys[pygame.K_x]:
@@ -1193,7 +1193,14 @@ while not wf_quit:
 
         display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
-    rssi_smooth = np.mean(list(rssi_hist)[:])+10 # +10 is to approximately recalibrate the S-meter after averaging over time
+    # rssi_smooth = np.mean(list(rssi_hist)[:])+10 # +10 is to approximately recalibrate the S-meter after averaging over time
+
+    rssi_last = rssi_hist[-1]
+    if math.fabs(rssi_last)>math.fabs(rssi_smooth):
+        rssi_smooth -= 0.3
+    else:
+        rssi_smooth = (rssi_last+rssi_smooth)/2
+
     if s_meter_show_flag:
         smeter_surface = s_meter_draw(rssi_smooth, kiwi_snd.thresh)
         sdrdisplay.blit(smeter_surface, (0, BOTTOMBAR_Y-80))

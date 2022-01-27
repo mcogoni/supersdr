@@ -37,7 +37,7 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v2.1+"
+VERSION = "v3.0b"
 
 # SuperSDR constants
 WF_HEIGHT = 440
@@ -445,7 +445,6 @@ class kiwi_waterfall():
                     self.CENTER_FREQ = int(int(self.MAX_FREQ)/2)
                 elif "MSG wf_fft_size" in bytearray2str(msg):
                     els = bytearray2str(msg[4:]).split()
-                    print(els)
                     self.MAX_ZOOM = int(els[3].split("=")[1])
                     self.WF_BINS = int(els[0].split("=")[1])
                     self.MAX_FPS = int(els[2].split("=")[1])
