@@ -37,7 +37,7 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v3.0b"
+VERSION = "v3.0pre"
 
 # SuperSDR constants
 WF_HEIGHT = 440
@@ -223,9 +223,6 @@ class dxcluster():
                 del_list.append(call)
         for call in del_list:
             del self.spot_dict[call]
-        # for call in self.spot_dict:
-        #     f_, qrg_ = self.spot_dict[call]
-        #     self.int_freq_dict[int(f_)] = f_
 
     def run(self, kiwi_wf):
         while not self.terminate:
@@ -242,7 +239,6 @@ class dxcluster():
             self.failed_counter = 0
             spot_str = "%s"%dx_cluster_msg
             for line in spot_str.replace("\x07", "").split("\n"):
-                #print ("%r"%line.rstrip('\r\n'))
                 if "DX de " in line:
                     qrg, callsign, utc = self.decode_spot(line)
                     if qrg and callsign:
@@ -262,7 +258,6 @@ class dxcluster():
                 print("DXCLUST: updated visible spots")
                 self.last_update = datetime.utcnow()
                 self.update_now = False
-            #time.sleep(5)
 
     def store_spot(self, qrg_, callsign_, utc_):
         self.spot_dict[callsign_] = (qrg_, utc_)
@@ -638,13 +633,6 @@ class kiwi_waterfall():
 
     def run(self):
         while not self.terminate:
-            # if self.old_averaging_n != self.averaging_n:
-            #     self.avg_spectrum_deque = deque([], self.averaging_n)
-            #     self.old_averaging_n = self.averaging_n
-            # self.receive_spectrum()
-            # self.avg_spectrum_deque.append(self.spectrum)
-            # self.spectrum = np.mean(self.avg_spectrum_deque, axis=0)
-
             if self.averaging_n>1:
                 self.avg_spectrum_deque = deque([], self.averaging_n)
                 for avg_idx in range(self.averaging_n):
@@ -656,7 +644,6 @@ class kiwi_waterfall():
 
             self.spectrum_db2col()
 
-            #self.receive_spectrum_rtl()
             self.wf_data[1:,:] = self.wf_data[0:-1,:] # scroll wf array 1 line down
             self.wf_data[0,:] = self.wf_color # overwrite top line with new data
         return
@@ -754,7 +741,6 @@ class kiwi_sound():
         self.stream.send_message(msg)
 
     def set_mode_freq_pb(self):
-        #print (self.radio_mode, self.lc, self.hc, self.freq)
         msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (self.radio_mode.lower(), self.lc, self.hc, self.freq)
         self.stream.send_message(msg)
 
@@ -768,7 +754,7 @@ class kiwi_sound():
         if snd_buf is not None:
             self.keepalive()
         else:
-            snd_buf = None #= np.zeros((KIWI_SAMPLES_PER_FRAME)).astype(np.int16)
+            snd_buf = None
         return snd_buf
 
     def process_audio_stream(self):
@@ -892,14 +878,11 @@ class cat:
              self.cat_ok = False
              self.reply = None
         else:
-            #print(out)
             self.reply = out        
 
     def set_freq(self, freq_):
         if freq_ >= self.CAT_MIN_FREQ and freq_ <= self.CAT_MAX_FREQ:
             self.send_msg(("\\set_freq %d" % (freq_*1000)))
-            #if self.reply: # to be verified!
-            #    self.freq = freq_
 
     def set_mode(self, radio_mode_):
         self.send_msg(("\\set_mode %s 2400"%radio_mode_))
@@ -1035,35 +1018,3 @@ def create_cm(which):
                 col = ( 255, 0, 128*(i-217)/38)
             colormap.append(col)
     return colormap
-
-
-class rtlsdr():
-    def __init__(self):
-        self.sdr = RtlSdr()
-        # configure device
-        self.sdr.sample_rate = 2.4e6
-        self.sdr.center_freq = 95e6
-        self.sdr.gain = 40
-        self.N_FFT = 2048 # FFT bins
-        self.N_WIN = 1024  # How many pixels to show from the FFT (around the center)
-        self.fft_ratio = 2.
-        self.samples = []
-        self.psd = np.random.random((self.N_WIN))
-
-    def read(self):
-        self.samples = self.sdr.read_samples(self.N_WIN)
-        
-    def run(self):
-        while True:
-            self.read()
-            sample_freq, spec = welch(self.samples, self.sdr.sample_rate, window="hamming", nperseg=self.N_FFT,  nfft=self.N_FFT)
-            spec = np.roll(spec, self.N_FFT//2, 0)[self.N_FFT//2-self.N_WIN//2:self.N_FFT//2+self.N_WIN//2]
-            
-            # get magnitude 
-            self.psd = abs(spec)
-            # convert to dB scale
-            self.psd = -20 * np.log10(self.psd)
-            self.psd *= -1
-
-        self.sdr.close()
-

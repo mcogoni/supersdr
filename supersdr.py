@@ -43,7 +43,6 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             s_value = "S"+str(int(s_value))
         else:
             s_value = "S9+"+str(int((s_value-9)*6))+"dB"
-        #ts_dict["smeter"] = (GREEN, "%.0fdBm"%rssi_smooth, (20,V_POS_TEXT), "big", False)
         ts_dict["smeter"] = (GREEN, s_value, (20,V_POS_TEXT), "big", False)
     if click_drag_flag:
         delta_khz = kiwi_wf.deltabins_to_khz(start_drag_x-mousex_pos)
@@ -155,7 +154,6 @@ def display_kiwi_box(screen, current_string_):
         pos = (rec_pos[0]+2, rec_pos[1]+5+i*20)
         msg = "Kiwi server: %d -> %s:%d:%s"%(i, kiwi[0], kiwi[1], kiwi[2])
         smallfont.render_to(sdrdisplay, pos, msg, GREY)
-
 
 def display_box(screen, message, size):
     pygame.draw.rect(screen, BLACK,
@@ -293,6 +291,7 @@ def plot_eibi(surface_):
                 pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
             except:
                 pass
+
 def plot_dxcluster(surface_):
     y_offset = 0
     old_fbin = -100
@@ -320,7 +319,6 @@ def plot_dxcluster(surface_):
                 pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
             except:
                 pass
-
 
 
 ##############################################################################################################################
@@ -571,7 +569,6 @@ while not wf_quit:
 
                             except:
                                 dxclust = None
-
 
                 # Center RX freq on WF
                 if keys[pygame.K_z]:
@@ -832,7 +829,7 @@ while not wf_quit:
                 if keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
 
-                elif keys[pygame.K_q]:# and (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]):
+                elif keys[pygame.K_q]:
                     input_server_flag = True
                     current_string = []
 
