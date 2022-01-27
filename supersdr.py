@@ -109,7 +109,6 @@ def draw_lines(surface_, wf_height, radio_mode, mouse):
     _plot_bandpass(RED, kiwi_snd)
 
     #### CAT RADIO bandpass
-
     if cat_radio and not cat_snd_link_flag:
         tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
         lc_, hc_ = kiwi_wf.change_passband(delta_low, delta_high)
@@ -246,7 +245,6 @@ def s_meter_draw(rssi_smooth, agc_threshold):
     return smeter_surface
 
 def plot_spectrum(t_avg=15, col=GREEN):
-    #global sdrdisplay
     spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
     wf_dyn_range = kiwi_wf.wf_max_db-kiwi_wf.wf_min_db
@@ -322,6 +320,12 @@ def plot_dxcluster(surface_):
                 pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
             except:
                 pass
+
+
+
+##############################################################################################################################
+##############################################################################################################################
+##############################################################################################################################
 
 parser = OptionParser()
 parser.add_option("-w", "--password", type=str,
@@ -498,7 +502,6 @@ cat_snd_link_flag = True if cat_radio else False
 print("SYNC OPTIONS:")
 print("WF<>CAT", wf_cat_link_flag, "WF<>RX", wf_snd_link_flag, "CAT<>RX", cat_snd_link_flag)
 
-# rssi_maxlen = kiwi_snd.FULL_BUFF_LEN*2 # buffer length used to smoothen the s-meter
 rssi_maxlen = 10 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
@@ -532,7 +535,6 @@ while not wf_quit:
                 keys = pygame.key.get_pressed()
                 mods = pygame.key.get_mods()
 
-                #event.unicode== (pygame.K_Z | pygame.KMOD_SHIFT)
                 # Force SYNC WF to RX freq if no CAT, else WF and RX to CAT
                 if keys[pygame.K_SPACE]:
                     force_sync_flag = True
