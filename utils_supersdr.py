@@ -73,7 +73,7 @@ BLACK = (0,0,0)
 D_GREY = (50,50,50)
 D_RED = (200,0,0)
 D_BLUE = (0,0,200)
-D_GREEN = (0,200,0)
+D_GREEN = (0,120,0)
 RED = (255,0,0)
 BLUE = (0,0,255)
 GREEN = (0,255,0)
@@ -382,7 +382,9 @@ class kiwi_waterfall():
     MIN_DYN_RANGE = 40. # minimum visual dynamic range in dB
     CLIP_LOWP, CLIP_HIGHP = 40., 100 # clipping percentile levels for waterfall colors
     delta_low_db, delta_high_db = 0, 0
-
+    low_clip_db, high_clip_db = -120, -60 # tentative initial values for wf db limits
+    wf_min_db, wf_max_db = low_clip_db, low_clip_db+MIN_DYN_RANGE
+    
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
         self.eibi = eibi
         # kiwi hostname and port
@@ -393,8 +395,8 @@ class kiwi_waterfall():
         self.zoom = zoom_
         self.freq = freq_
         self.averaging_n = 1
+        self.wf_auto_scaling = True
         self.old_averaging_n = self.averaging_n
-
         
         self.wf_white_flag = False
         self.terminate = False
@@ -419,7 +421,6 @@ class kiwi_waterfall():
         self.socket = None
         self.wf_stream = None
         self.wf_color = None
-        self.wf_buffer = queue.Queue(maxsize=200)
 
         # connect to kiwi WF server
         print ("Trying to contact %s..."%self.host)
@@ -545,41 +546,32 @@ class kiwi_waterfall():
     def spectrum_db2col(self):
         wf = self.spectrum
         wf = -(255 - wf)  # dBm
-        wf_db = wf - 13 # typical Kiwi wf cal
+        wf_db = wf - 13 + (3*self.zoom) # typical Kiwi wf cal
         wf_db[0] = wf_db[1] # first bin is broken
+        
+        min_db, max_db = np.min(wf_db), np.max(wf_db)
+        wf_db = np.clip(wf_db, min_db+self.delta_low_db, max_db+self.delta_high_db)
 
-        # compute min/max db of the power distribution at selected percentiles
-        low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
-        high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
+        if self.wf_auto_scaling:
+            # compute min/max db of the power distribution at selected percentiles
+            self.low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
+            self.high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
+
         # shift chosen min to zero
-        self.wf_color = (wf_db - (low_clip_db+self.delta_low_db))
-        # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap)
-        self.wf_color /= max(np.max(self.wf_color), self.MIN_DYN_RANGE) + self.delta_high_db
+        wf_color_db = (wf_db - (self.low_clip_db+self.delta_low_db))
+        # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap if delta=0)
+        normal_factor_db = max(self.high_clip_db-(self.low_clip_db+self.delta_low_db), self.MIN_DYN_RANGE)+self.delta_high_db
+        self.wf_color = wf_color_db / normal_factor_db
+
+        self.wf_color = np.clip(self.wf_color, 0.0, 1.0)
+
+        self.wf_min_db = self.low_clip_db + self.delta_low_db - (3*self.zoom)
+        self.wf_max_db = self.low_clip_db + normal_factor_db - (3*self.zoom)
+
         # standardize again between 0 and 255
         self.wf_color *= 255
         # clip exceeding values
         self.wf_color = np.clip(self.wf_color, 0, 255)
-
-    def receive_spectrum_rtl(self):
-        wf = self.sdr.psd
-        print(min(wf), max(wf))
-        wf = -(255 - wf)  # dBm
-        wf_db = wf - 13 # typical Kiwi wf cal
-        dyn_range = (np.max(wf_db[1:-1])-np.min(wf_db[1:-1]))
-        self.wf_color = (wf_db - np.min(wf_db[1:-1]))
-        # standardize the distribution between 0 and 1
-        self.wf_color /= np.max(self.wf_color[1:-1])
-        # clip extreme values
-        low_perc = np.percentile(self.wf_color,self.CLIP_LOWP)
-        high_perc = np.percentile(self.wf_color, self.CLIP_HIGHP)
-        self.wf_color = np.clip(self.wf_color, low_perc, high_perc)
-        # standardize again between 0 and 255
-        self.wf_color -= np.min(self.wf_color[1:-1])
-        # expand between 0 and 255
-        self.wf_color /= (np.max(self.wf_color[1:-1])/255.)
-        # avoid too bright colors with no signals
-        self.wf_color *= (min(dyn_range, self.MIN_DYN_RANGE)/self.MIN_DYN_RANGE)
-        # insert a full signal line to see freq/zoom changes
 
     def set_freq_zoom(self, freq_, zoom_):
         self.freq = freq_
@@ -680,7 +672,7 @@ class kiwi_sound():
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
     CHUNKS = 2
     KIWI_SAMPLES_PER_FRAME = 512
-    FULL_BUFF_LEN = 2 # 20 or more for remote kiwis (higher latency)
+    FULL_BUFF_LEN = 20 # 20 or more for remote kiwis (higher latency)
 
     def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100, host_=None, port_=None, subrx_=False):
         self.subrx = subrx_

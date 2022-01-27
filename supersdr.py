@@ -29,7 +29,8 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
-            "wf_param": (GREEN, "WF MIN:%ddB MAX:%ddB"%(kiwi_wf.delta_low_db, kiwi_wf.delta_high_db), (10,SPECTRUM_Y+1), "small", False),
+            "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,TUNEBAR_Y-12), "small", False),
+            "wf_param": (WHITE, "%ddB [AUTOSCALE: %s]"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,SPECTRUM_Y+1), "small", False),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
 
@@ -245,12 +246,20 @@ def s_meter_draw(rssi_smooth, agc_threshold):
     return smeter_surface
 
 def plot_spectrum(t_avg=15, col=GREEN):
-    global sdrdisplay
+    #global sdrdisplay
     spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
+    wf_dyn_range = kiwi_wf.wf_max_db-kiwi_wf.wf_min_db
+    min_wf_10 = int(kiwi_wf.wf_min_db/10)*10
+    max_wf_10 = int(kiwi_wf.wf_max_db/10)*10
+    subdiv_list = [SPECTRUM_HEIGHT-1-int((v-kiwi_wf.wf_min_db)/wf_dyn_range * SPECTRUM_HEIGHT) for v in range(min_wf_10, max_wf_10, 10)]
+
     for x, v in enumerate(np.nanmean(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
-        y = SPECTRUM_HEIGHT-1-int(v/255 *SPECTRUM_HEIGHT)
+        y = SPECTRUM_HEIGHT-1-int(v/255 * SPECTRUM_HEIGHT)
         pixarr[x,y] = col
+        if not kiwi_wf.wf_auto_scaling and not x%20:
+            for y_div in subdiv_list:
+                pixarr[x,y_div] = BLUE
     del pixarr
     sdrdisplay.blit(spectrum_surf, (0, SPECTRUM_Y))
 
@@ -331,6 +340,8 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
+parser.add_option("-b", "--buffer", type=int,
+                  help="buffer size", dest="audio_buffer", default=20)
 parser.add_option("-d", "--dual",
                   help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
 parser.add_option("-c", "--callsign", type=str,
@@ -403,6 +414,7 @@ wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
+kiwi_snd.FULL_BUFF_LEN = options["audio_buffer"]
 if not kiwi_snd:
     print("Server not ready")
     exit()
@@ -411,6 +423,7 @@ kiwi_snd2 = None
 if dualrx_flag:
     time.sleep(2)
     kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
+    kiwi_snd2.FULL_BUFF_LEN = options["audio_buffer"]
     if not kiwi_snd2:
         print("Server not ready")
 
@@ -647,6 +660,10 @@ while not wf_quit:
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
 
+                if keys[pygame.K_3]:
+                    kiwi_wf.wf_auto_scaling = False if kiwi_wf.wf_auto_scaling else True
+                    kiwi_wf.delta_low_db, kiwi_wf.delta_high_db = 0, 0
+                    
                 # KIWI WF colormap dynamic range (lower limit)
                 if keys[pygame.K_PERIOD] and (mods & pygame.KMOD_SHIFT):
                     if kiwi_wf.delta_low_db < 30:
