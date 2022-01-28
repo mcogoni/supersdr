@@ -115,14 +115,15 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
 font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
 class audio_recording():
-    def __init__(self, filename_, kiwi_snd):
-        self.filename = filename_
+    def __init__(self, kiwi_snd):
+        self.filename = ""
         self.audio_buffer = []
         self.kiwi_snd = kiwi_snd
         self.frames = []
         self.recording_flag = False
 
     def start(self):
+        self.filename = "supersdr_%sUTC.wav"%datetime.utcnow().isoformat().split(".")[0].replace(":", "_")
         print("start recording")
         self.recording_flag = True
 
@@ -734,7 +735,7 @@ class kiwi_sound():
         self.lowpass = self.kiwi_filter.lowpass
         self.old_buffer = np.zeros((self.n_tap-1))
 
-        self.audio_rec = audio_recording("supersdr_%s.wav"%datetime.now().isoformat().split(".")[0].replace(":", "_"), self)
+        self.audio_rec = audio_recording(self)
 
     def set_agc_params(self):
         msg = "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain)
