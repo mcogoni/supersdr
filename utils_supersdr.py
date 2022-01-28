@@ -15,7 +15,7 @@ import threading, queue
 
 import socket
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 if sys.version_info > (3,):
     buffer = memoryview
@@ -1018,3 +1018,39 @@ def create_cm(which):
                 col = ( 255, 0, 128*(i-217)/38)
             colormap.append(col)
     return colormap
+
+
+class beacons():
+    beacon_calls = ["4U1UN","VE8AT","W6WX","KH6WO","ZL6B","VK6RBP","JA2IGY","RR9O",
+    "VR2B","4S7B","ZS6DN","5Z4B","4X6TU","OH2B","CS3B","LU4AA","OA4B","YV5B"]
+    bands = [14, 18, 21, 24, 28]
+    freq_dict = {14:14100, 18:18110, 21:21150, 24:24930, 28:28200}
+    beacons_dict = {14:"", 18:"", 21:"", 24:"", 28:""}
+
+    def which_beacons(self):
+        time_now = datetime.utcnow()
+        delta_seconds = timedelta(minutes=time_now.minute%3, seconds=time_now.second).total_seconds()
+        index = int(delta_seconds // 10)
+        cycle = time_now.minute // 3
+        self.beacons_dict = {}
+        for i, band in enumerate(self.bands):
+            self.beacons_dict[band] = self.beacon_calls[(index-i)]
+        
+# 4U1UN   YV5B    OA4B    LU4AA   CS3B    0:00:00 0:03:00 0:06:00 0:09:00 0:12:00 0:15:00 0:18:00 0:21:00 0:24:00 0:27:00
+# VE8AT   4U1UN   YV5B    OA4B    LU4AA   0:00:10 0:03:10 0:06:10 0:09:10 0:12:10 0:15:10 0:18:10 0:21:10 0:24:10 0:27:10
+# W6WX    VE8AT   4U1UN   YV5B    OA4B    0:00:20 0:03:20 0:06:20 0:09:20 0:12:20 0:15:20 0:18:20 0:21:20 0:24:20 0:27:20
+# KH6WO   W6WX    VE8AT   4U1UN   YV5B    0:00:30 0:03:30 0:06:30 0:09:30 0:12:30 0:15:30 0:18:30 0:21:30 0:24:30 0:27:30
+# ZL6B    KH6WO   W6WX    VE8AT   4U1UN   0:00:40 0:03:40 0:06:40 0:09:40 0:12:40 0:15:40 0:18:40 0:21:40 0:24:40 0:27:40
+# VK6RBP  ZL6B    KH6WO   W6WX    VE8AT   0:00:50 0:03:50 0:06:50 0:09:50 0:12:50 0:15:50 0:18:50 0:21:50 0:24:50 0:27:50
+# JA2IGY  VK6RBP  ZL6B    KH6WO   W6WX    0:01:00 0:04:00 0:07:00 0:10:00 0:13:00 0:16:00 0:19:00 0:22:00 0:25:00 0:28:00
+# RR9O    JA2IGY  VK6RBP  ZL6B    KH6WO   0:01:10 0:04:10 0:07:10 0:10:10 0:13:10 0:16:10 0:19:10 0:22:10 0:25:10 0:28:10
+# VR2B    RR9O    JA2IGY  VK6RBP  ZL6B    0:01:20 0:04:20 0:07:20 0:10:20 0:13:20 0:16:20 0:19:20 0:22:20 0:25:20 0:28:20
+# 4S7B    VR2B    RR9O    JA2IGY  VK6RBP  0:01:30 0:04:30 0:07:30 0:10:30 0:13:30 0:16:30 0:19:30 0:22:30 0:25:30 0:28:30
+# ZS6DN   4S7B    VR2B    RR9O    JA2IGY  0:01:40 0:04:40 0:07:40 0:10:40 0:13:40 0:16:40 0:19:40 0:22:40 0:25:40 0:28:40
+# 5Z4B    ZS6DN   4S7B    VR2B    RR9O    0:01:50 0:04:50 0:07:50 0:10:50 0:13:50 0:16:50 0:19:50 0:22:50 0:25:50 0:28:50
+# 4X6TU   5Z4B    ZS6DN   4S7B    VR2B    0:02:00 0:05:00 0:08:00 0:11:00 0:14:00 0:17:00 0:20:00 0:23:00 0:26:00 0:29:00
+# OH2B    4X6TU   5Z4B    ZS6DN   4S7B    0:02:10 0:05:10 0:08:10 0:11:10 0:14:10 0:17:10 0:20:10 0:23:10 0:26:10 0:29:10
+# CS3B    OH2B    4X6TU   5Z4B    ZS6DN   0:02:20 0:05:20 0:08:20 0:11:20 0:14:20 0:17:20 0:20:20 0:23:20 0:26:20 0:29:20
+# LU4AA   CS3B    OH2B    4X6TU   5Z4B    0:02:30 0:05:30 0:08:30 0:11:30 0:14:30 0:17:30 0:20:30 0:23:30 0:26:30 0:29:30
+# OA4B    LU4AA   CS3B    OH2B    4X6TU   0:02:40 0:05:40 0:08:40 0:11:40 0:14:40 0:17:40 0:20:40 0:23:40 0:26:40 0:29:40
+# YV5B    OA4B    LU4AA   CS3B    OH2B    0:02:50 0:05:50 0:08:50 0:11:50 0:14:50 0:17:50 0:20:50 0:23:50 0:26:50 0:29:50

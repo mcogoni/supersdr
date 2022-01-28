@@ -29,8 +29,8 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
             "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
-            "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,TUNEBAR_Y-12), "small", False),
-            "wf_param": (WHITE, "%ddB [AUTOSCALE: %s]"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,SPECTRUM_Y+1), "small", False),
+            "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,TUNEBAR_Y-12), "small", False, "BLACK"),
+            "wf_param": (WHITE, "%ddB [AUTOSCALE: %s]"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,SPECTRUM_Y+1), "small", False, "BLACK"),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
 
@@ -62,7 +62,11 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             render_ = smallfont.render_to
         elif "big" in ts_dict[k][3]:
             render_ = bigfont.render_to
-        render_(surface_, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0])
+        try:
+            bg_col = ts_dict[k][5]
+        except:
+            bg_col = None
+        render_(surface_, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0], bgcolor=bg_col)
 
 def draw_lines(surface_, wf_height, radio_mode, mouse):
 
@@ -320,7 +324,23 @@ def plot_dxcluster(surface_):
             except:
                 pass
 
-
+def plot_beacons(surface_):
+    y_offset = 0
+    old_fbin = -100
+    fontsize = font_size_dict["medium"]
+    
+    for band in beacon_project.freq_dict:
+        if math.fabs(kiwi_wf.freq - beacon_project.freq_dict[band])<100:    
+            f_khz_float = float(beacon_project.freq_dict[band])
+            f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
+            ts = (GREEN, beacon_project.beacons_dict[band], (f_bin,(SPECTRUM_Y+TUNEBAR_Y)/2), "small")
+            render_ = midfont.render_to
+            str_len = len(ts[1])
+            x, y = ts[2]
+            if x>fontsize*str_len/2 and x<DISPLAY_WIDTH-10:
+                old_fbin = f_bin
+                render_(surface_, (x-str_len*fontsize/2-10, y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                
 ##############################################################################################################################
 ##############################################################################################################################
 ##############################################################################################################################
@@ -493,6 +513,8 @@ kiwi_snd.radio_mode = radio_mode
 lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
 kiwi_snd.set_mode_freq_pb()
 
+beacon_project = beacons()
+
 # Operating modes:
 wf_cat_link_flag = True if cat_radio else False
 wf_snd_link_flag = False
@@ -508,6 +530,8 @@ run_index_automode = 0
 show_bigmsg = None
 msg_text = ""
 click_drag_flag = False
+
+check_time = datetime.utcnow()
 
 while not wf_quit:
     run_index += 1
@@ -845,6 +869,8 @@ while not wf_quit:
                         try:
                             if input_freq_flag:
                                 manual_snd_freq = int(current_string)
+                                if kiwi_snd.radio_mode == "CW":
+                                    manual_snd_freq -= CW_PITCH # tune CW signal taking into account cw offset
                             elif input_server_flag:
                                 input_new_server = current_string
                         except:
@@ -1004,10 +1030,10 @@ while not wf_quit:
             kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
             kiwi_snd.radio_mode = get_auto_mode(kiwi_wf.freq)
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
-            kiwi_snd.freq = kiwi_wf.freq
+            kiwi_snd.freq = kiwi_wf.freq + CW_PITCH if kiwi_snd.radio_mode=="CW" else 0
             kiwi_snd.set_mode_freq_pb()
         else:
-            kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
+            kiwi_wf.set_freq_zoom(kiwi_snd.freq + CW_PITCH if kiwi_snd.radio_mode=="CW" else 0, kiwi_wf.zoom)
         force_sync_flag = False
         kiwi_wf.set_white_flag()
 
@@ -1133,6 +1159,14 @@ while not wf_quit:
     elif show_dxcluster_flag and kiwi_wf.zoom > 3:
         plot_dxcluster(sdrdisplay)
 
+    time_now = datetime.utcnow()
+    if check_time.second != time_now.second and not time_now.second % 10:
+        check_time = time_now
+        beacon_project.which_beacons()
+        # print(beacon_project.beacons_dict)
+    if kiwi_wf.zoom > 8:
+        plot_beacons(sdrdisplay)
+
     if input_freq_flag:
         question = "Freq (kHz)"
         display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
@@ -1150,7 +1184,7 @@ while not wf_quit:
             msg_text = "VOLUME: %d"%(kiwi_snd.volume)+'%'
         if "WFAVG" == show_bigmsg:
             msg_color = WHITE if kiwi_wf.averaging_n == 1 else RED
-            msg_text = "WF AVG %dX"%(kiwi_wf.averaging_n)
+            msg_text = "WF AVG %dX -> %.2fs"%(kiwi_wf.averaging_n, kiwi_wf.averaging_n/FPS)
         elif "cat_rx_sync" == show_bigmsg:
             msg_text = "CAT<->RX SYNC "+("ON" if cat_snd_link_flag else "OFF")
         elif "forcesync" == show_bigmsg:
@@ -1210,7 +1244,6 @@ while not wf_quit:
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
-
 
 # close audio stream
 kiwi_audio_stream.stop()
