@@ -59,8 +59,8 @@ CW_PITCH = 0.6 # CW offset from carrier in kHz
 # Initial KIWI receiver parameters
 LOW_CUT_SSB=30 # Bandpass low end SSB
 HIGH_CUT_SSB=3000 # Bandpass high end
-LOW_CUT_CW=300 # Bandpass for CW
-HIGH_CUT_CW=800 # High end CW
+LOW_CUT_CW=int(CW_PITCH*1000-200) # Bandpass for CW
+HIGH_CUT_CW=int(CW_PITCH*1000+200) # High end CW
 HIGHLOW_CUT_AM=6000 # Bandpass AM
 delta_low, delta_high = 0., 0. # bandpass tuning
 default_kiwi_port = 8073
@@ -107,7 +107,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
         "- I/D: displays EIBI/DXCLUSTER labels",
         "- Q: switch to a different KIWI server",
-        "- 1/2 & 3: adjust AGC threshold, 3 swtich WF autoscale",
+        "- 1/2 & 3: adjust AGC threshold, 3 switch WF autoscale",
         "- SHIFT+ESC: quits",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]

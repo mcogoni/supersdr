@@ -30,7 +30,7 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             "dxcluster": (GREEN if show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
             "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,TUNEBAR_Y-12), "small", False, "BLACK"),
-            "wf_param": (WHITE, "%ddB [AUTOSCALE: %s]"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,SPECTRUM_Y+1), "small", False, "BLACK"),
+            "wf_param": (WHITE, "%ddB AUTO %s"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,SPECTRUM_Y+1), "small", False, "BLACK"),
             "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
             }
 
@@ -634,23 +634,75 @@ while not wf_quit:
                     change_passband_flag = True
                     delta_low = 0
                     delta_high = 0
-                if keys[pygame.K_j]:
-                    change_passband_flag = True
+
+                elif keys[pygame.K_j]:
+                    old_delta_low, old_delta_high = delta_low, delta_high
+                    min_pb_flag = False
+                    max_pb_flag = False
                     delta = 100 if (event.mod & pygame.KMOD_SHIFT) else -100
-                    delta_low += delta
-                    if delta_low > 3000:
-                        delta_low = 3000
-                    elif delta_low < -3000:
-                        delta_low = -3000
-                if keys[pygame.K_k]:
-                    change_passband_flag = True
+                    if kiwi_snd.radio_mode == "CW":
+                        delta = int(delta/5)
+                    if (event.mod & pygame.KMOD_CTRL):
+                        delta_low += delta
+                        delta_high -= delta
+                    else:
+                        delta_low += delta
+
+                    if kiwi_snd.radio_mode == "CW":
+                        old_passband = (HIGH_CUT_CW+old_delta_high) - (LOW_CUT_CW + old_delta_low)
+                        passband = (HIGH_CUT_CW+delta_high) - (LOW_CUT_CW + delta_low)
+                        if passband < 50 and passband<old_passband:
+                            min_pb_flag = True
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                        elif passband > 1600 and passband>old_passband:
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                            max_pb_flag = True
+                    else:
+                        old_passband = (HIGH_CUT_SSB+old_delta_high) - (LOW_CUT_SSB + old_delta_low)
+                        passband = (HIGH_CUT_SSB+delta_high) - (LOW_CUT_SSB + delta_low)
+                        if passband < 50 and passband<old_passband:
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                            min_pb_flag = True
+                        elif passband > 6000 and passband>old_passband:
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                            max_pb_flag = True
+                    if not min_pb_flag and not max_pb_flag:
+                        change_passband_flag = True
+
+                elif keys[pygame.K_k]:
+                    old_delta_low, old_delta_high = delta_low, delta_high
+                    min_pb_flag = False
+                    max_pb_flag = False
                     delta = -100 if (event.mod & pygame.KMOD_SHIFT) else 100
-                    delta_high += delta
-                    if delta_high > 3000:
-                        delta_high = 3000
-                    elif delta_high < -3000:
-                        delta_high = -3000.
-                
+                    if kiwi_snd.radio_mode == "CW":
+                        delta = int(delta/5)
+                    if (event.mod & pygame.KMOD_CTRL):
+                        delta_low += delta
+                        delta_high -= delta
+                    else:
+                        delta_high += delta
+
+                    if kiwi_snd.radio_mode == "CW":
+                        old_passband = (HIGH_CUT_CW+old_delta_high) - (LOW_CUT_CW + old_delta_low)
+                        passband = (HIGH_CUT_CW+delta_high) - (LOW_CUT_CW + delta_low)
+                        if passband < 50 and passband<old_passband:
+                            min_pb_flag = True
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                        elif passband > 1600 and passband>old_passband:
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                            max_pb_flag = True
+                    else:
+                        old_passband = (HIGH_CUT_SSB+old_delta_high) - (LOW_CUT_SSB + old_delta_low)
+                        passband = (HIGH_CUT_SSB+delta_high) - (LOW_CUT_SSB + delta_low)
+                        if passband < 50 and passband<old_passband:
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                            min_pb_flag = True
+                        elif passband > 6000 and passband>old_passband:
+                            delta_low, delta_high = old_delta_low, old_delta_high
+                            max_pb_flag = True
+                    if not min_pb_flag and not max_pb_flag:
+                        change_passband_flag = True
+
                 # KIWI WF averaging INC/DEC
                 if keys[pygame.K_g]:
                     if kiwi_wf.averaging_n < 100:
@@ -820,6 +872,7 @@ while not wf_quit:
                             kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
                         kiwi_snd2.terminate = True
                         kiwi_audio_stream2.stop()
+                        time.sleep(1)
                         kiwi_snd2.close_connection()
                         kiwi_snd2.terminate = False
                         print("Second RX disabled!")
@@ -1030,10 +1083,10 @@ while not wf_quit:
             kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
             kiwi_snd.radio_mode = get_auto_mode(kiwi_wf.freq)
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
-            kiwi_snd.freq = kiwi_wf.freq + CW_PITCH if kiwi_snd.radio_mode=="CW" else 0
+            kiwi_snd.freq = kiwi_wf.freq
             kiwi_snd.set_mode_freq_pb()
         else:
-            kiwi_wf.set_freq_zoom(kiwi_snd.freq + CW_PITCH if kiwi_snd.radio_mode=="CW" else 0, kiwi_wf.zoom)
+            kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
         force_sync_flag = False
         kiwi_wf.set_white_flag()
 
