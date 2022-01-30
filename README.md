@@ -2,9 +2,10 @@
 
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
 
-There are two main scenarios in which you'd like to use SuperSDR:
- - you've got a *radio without a panadapter* or you're simply *not happy with it* (in my case I have a Kenwood TS-590SG), in this case this application can help you to use your (or someone else's) KiwiSDR as a powerful panadapter and multiple receiver and to have all seamlessly synchronized: you may control your Kiwi from the radio or vice versa; you may also transmit with the radio and have your Kiwi RX muted automatically;
- - you've got a KiwiSDR and you're sick of using its stock web interface, you'd like to have near zero latency, waterfall immunity from thunderstorms, simple keyboard shortcuts, VERY low CPU usage, much improved waterfall averaging to detect even the faintest signals (à la LINRAD), ability to receive from multiple remote KiwiSDRs, you want a low resources app able to run from a Raspberry Pi to a Windows PC to a Macbook Pro, you want a very compact code that you can tweak even not being a Python programmer. 
+There are three main scenarios in which you'd like to use SuperSDR:
+ - you've got a *radio without a panadapter* (I have a Kenwood TS-590SG) or you're simply *not happy with it*, in this case this application can help you to use your (or someone else's!) KiwiSDR as a powerful panadapter and multiple receiver and to have all seamlessly synchronized: you may control your Kiwi by tuning the radio or vice versa; you may also transmit with the radio and have your Kiwi RX muted automatically;
+ - you've got a KiwiSDR and you're sick of using its stock web interface, you'd like to have near-zero latency, waterfall immunity from thunderstorms, powerful keyboard shortcuts, VERY low CPU usage (you may run dozens of instances on a powerful PC), much improved waterfall averaging to detect even the faintest signals (à la LINRAD), ability to receive from multiple remote KiwiSDRs, you want a low resources app able to run from a Raspberry Pi to a Windows PC to a Macbook Pro, you want a very compact code that you can tweak to your needs even not being a Python programmer; 
+ - your HF radio is connected to a very directional antenna and you don't want to lose those faint signals from every direction: in this case you may connect your Kiwi RX to a good omnidirectional wide band receive antenna and explore the bands with it, then, when you find something interesting, you turn to your directional antenna on the CAT radio and you make the contact.
 
 SuperSDR integrates a realtime spectrum waterfall and (dual) audio receive from any KiwiSDR around the world, together with a local (or remote) controlled CAT transceiver.
 There are three main items that may be independently controlled:
@@ -15,11 +16,11 @@ There are three main items that may be independently controlled:
  All three may be strictly intelinked, or set up separately depending on the operating convenience:
  - the WF is usually tuned by the VFO on the CAT radio to serve as a panadapter and the KIWI RX may be turned off if not necessary;
  - the KIWI RX may be tuned on a secondary frequency with keyboard and mouse or with the VFO, then the CAT radio is unlinked from the RX and is free to explore other frequencies;
- - the RX and the CAT radio are both active on different frequencies while you can explore the bands moving around the WF window and its span.
+ - the RX and the CAT radio are both active on different frequencies while you can explore the bands moving around the WF window (left/right keys) and its span (up/down).
 
 In the screenshot you can see both KiwiSDR receivers active at the same time (green and red passbands), while the CAT Radio is the orange one on the right. Synchronization between Kiwi RXs and CAT VFO is disabled (press S to enable SYNC) in this case (CAT SYNC grayed out) so the three are working independently. You can switch MAIN/SUB Kiwi RX frequencies by pressing Y. Pressing M (un)mutes the current MAIN RX.
 
-Notice how the lower waterfall half is noisier than the upper half thanks to 10X sample averaging (time binning). You can change averaging by pressing G/H to increase/decrease it.
+Notice how the lower waterfall half is noisier than the upper half thanks to 10X sample averaging (time binning). You can change averaging by pressing G/H to increase/decrease it. In this way you may also monitor a wide frequency band for several hours (e.g. you could monitor the whole MW band through the night).
 
 Mouse over the HELP label on the bottom right corner will show you the main keyboard commands.
 
@@ -44,7 +45,7 @@ I don't personally use Windows, but a beta tester let me know that you can run i
 ## Use:
 [![SuperSDR tutorial](https://studio.youtube.com/video/q27zInnop8g/0.jpg)](https://studio.youtube.com/video/q27zInnop8g "SuperSDR tutorial")
 
-There is now the possibility to launch the program with no command line options and select the kiwi server at the start or change it at runtime (still buggy, but it mostly works). To use the CAT, at least for now, you have to specify it from the command line.
+There is now the possibility to launch the program *with no command line options* and select the kiwi server at the start or change it at runtime (still buggy, but it mostly works). To use the CAT, at least for now, you have to specify it from the command line.
 
 To launch the program:
 ```
