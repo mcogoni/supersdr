@@ -21,7 +21,7 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width):
             "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, V_POS_TEXT), "small", False),
-            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-20), "small", False),
+            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-50), "small", False, "BLACK"),
             "auto": ((GREEN if auto_mode else RED), "[AUTO]" if auto_mode else "[MANU]", (wf_width/2+165, V_POS_TEXT), "small", False),
             "center": ((GREEN if wf_snd_link_flag else GREY), "CENTER", (wf_width-145, SPECTRUM_Y+2), "small", False),
             "sync": ((GREEN if cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
@@ -246,7 +246,7 @@ def s_meter_draw(rssi_smooth, agc_threshold):
     microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
     return smeter_surface
 
-def plot_spectrum(t_avg=15, col=GREEN):
+def plot_spectrum(t_avg=15, col=YELLOW, filled=False):
     spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
     pixarr = pygame.PixelArray (spectrum_surf)
     wf_dyn_range = kiwi_wf.wf_max_db-kiwi_wf.wf_min_db
@@ -256,10 +256,14 @@ def plot_spectrum(t_avg=15, col=GREEN):
 
     for x, v in enumerate(np.nanmean(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
         y = SPECTRUM_HEIGHT-1-int(v/255 * SPECTRUM_HEIGHT)
-        pixarr[x,y] = col
-        if not kiwi_wf.wf_auto_scaling and not x%5:
+        if filled:
+            pixarr[x,y:SPECTRUM_HEIGHT] = col
+        else:
+            pixarr[x,y] = col
+
+        if not kiwi_wf.wf_auto_scaling and not x%3:
             for y_div in subdiv_list:
-                pixarr[x,y_div] = BLUE
+                pixarr[x,y_div] = D_GREEN
     del pixarr
     sdrdisplay.blit(spectrum_surf, (0, SPECTRUM_Y))
 
@@ -490,6 +494,7 @@ show_help_flag =  False
 s_meter_show_flag = False
 show_eibi_flag = False
 show_dxcluster_flag = False
+input_callsign_flag = False
 
 input_new_server = None
 current_string = []
@@ -553,7 +558,7 @@ while not wf_quit:
         if event.type == pygame.KEYDOWN:
             before_help_flag = show_help_flag
             show_help_flag = False
-            if not input_freq_flag and not input_server_flag:
+            if not input_freq_flag and not input_server_flag and not input_callsign_flag:
                 keys = pygame.key.get_pressed()
                 mods = pygame.key.get_mods()
 
@@ -576,23 +581,8 @@ while not wf_quit:
                         else:
                             dxclust.terminate = True
                     else:
-                        if not CALLSIGN:
-                            print("*"*20)
-                            CALLSIGN = input("Please enter your CALLSIGN to access DXCLUSTER: ")
-                            try:
-                                dxclust = dxcluster(CALLSIGN)
-                                if dxclust:
-                                    print(dxclust)
-                                    dxclust.connect()
-                                    dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
-                                    dx_t.start()
-                                    dx_cluster_msg = True
-                                    show_dxcluster_flag = True
-                                else:
-                                    dx_cluster_msg = False
-
-                            except:
-                                dxclust = None
+                        input_callsign_flag = True
+                        current_string = []
 
                 # Center RX freq on WF
                 if keys[pygame.K_z]:
@@ -644,7 +634,7 @@ while not wf_quit:
                         delta = int(delta/5)
                     if (event.mod & pygame.KMOD_CTRL):
                         delta_low += delta
-                        delta_high -= delta
+                        delta_high -= delta if kiwi_snd.radio_mode != "AM" else -delta
                     else:
                         delta_low += delta
 
@@ -678,7 +668,7 @@ while not wf_quit:
                         delta = int(delta/5)
                     if (event.mod & pygame.KMOD_CTRL):
                         delta_low += delta
-                        delta_high -= delta
+                        delta_high -= delta if kiwi_snd.radio_mode != "AM" else -delta
                     else:
                         delta_high += delta
 
@@ -810,6 +800,10 @@ while not wf_quit:
                     input_freq_flag = True
                     current_string = []
 
+                # WF fill spectrum ON/OFF
+                if keys[pygame.K_4]:
+                    SPECTRUM_FILLED = False if SPECTRUM_FILLED else True
+
                 # Start/stop audio recording to file
                 if keys[pygame.K_e]:
                     if not kiwi_snd.audio_rec.recording_flag:
@@ -914,7 +908,7 @@ while not wf_quit:
             else:
                 pygame.key.set_repeat(0) # disabe key repeat
                 inkey = event.key
-                if inkey in ALLOWED_KEYS or input_server_flag:
+                if inkey in ALLOWED_KEYS or input_server_flag or input_callsign_flag:
                     if inkey == pygame.K_BACKSPACE:
                         current_string = current_string[0:-1]
                     elif inkey == pygame.K_RETURN:
@@ -926,6 +920,8 @@ while not wf_quit:
                                     manual_snd_freq -= CW_PITCH # tune CW signal taking into account cw offset
                             elif input_server_flag:
                                 input_new_server = current_string
+                            elif input_callsign_flag:
+                                CALLSIGN = current_string
                         except:
                             pass
                             #click_freq = kiwi_wf.freq
@@ -933,13 +929,14 @@ while not wf_quit:
                     elif inkey == pygame.K_ESCAPE:
                         input_freq_flag = False if input_freq_flag else False
                         input_server_flag = False if input_server_flag else False
+                        input_callsign_flag = False if input_callsign_flag else False
 
                         pygame.key.set_repeat(200, 50)
                         print("ESCAPE!")
                     else:
                         if len(current_string)<10 or input_server_flag:
                             try:
-                                current_string.append(chr(inkey))
+                                current_string.append(chr(inkey).upper())
                             except:
                                 pass
 
@@ -983,6 +980,23 @@ while not wf_quit:
         show_help_flag = True
     else:
         show_help_flag = False
+
+    if input_callsign_flag and CALLSIGN != "":
+        try:
+            dxclust = dxcluster(CALLSIGN)
+            if dxclust:
+                print(dxclust)
+                dxclust.connect()
+                dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
+                dx_t.start()
+                dx_cluster_msg = True
+                show_dxcluster_flag = True
+            else:
+                dx_cluster_msg = False
+
+        except:
+            dxclust = None
+        input_callsign_flag = False
 
     if input_server_flag and input_new_server:
         pygame.event.clear()
@@ -1196,10 +1210,11 @@ while not wf_quit:
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-    plot_spectrum()    
-    surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
-    surface.set_palette(palRGB)
-    sdrdisplay.blit(surface, (0, WF_Y))
+    if not run_index%kiwi_wf.averaging_n:
+        plot_spectrum(filled=SPECTRUM_FILLED, col=ORANGE)
+        surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
+        surface.set_palette(palRGB)
+        sdrdisplay.blit(surface, (0, WF_Y))
 
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,TOPBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,TUNEBAR_Y,DISPLAY_WIDTH,TUNEBAR_HEIGHT), 0)
@@ -1223,6 +1238,9 @@ while not wf_quit:
     if input_freq_flag:
         question = "Freq (kHz)"
         display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
+    elif input_callsign_flag:
+        question = "DXCLuster CALLSIGN"
+        display_box(sdrdisplay, question + ": " + "".join(current_string), 300)
     elif input_server_flag:
         display_kiwi_box(sdrdisplay, current_string)
     elif show_help_flag:
@@ -1283,9 +1301,9 @@ while not wf_quit:
 
     rssi_last = rssi_hist[-1]
     if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= 0.3
+        rssi_smooth -= 0.5 # s-meter decay rate
     else:
-        rssi_smooth = (rssi_last+rssi_smooth)/2
+        rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
 
     if s_meter_show_flag:
         smeter_surface = s_meter_draw(rssi_smooth, kiwi_snd.thresh)

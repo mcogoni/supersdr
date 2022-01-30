@@ -52,6 +52,7 @@ SPECTRUM_Y = TOPBAR_HEIGHT
 TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
 WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
 BOTTOMBAR_Y = WF_Y + WF_HEIGHT
+SPECTRUM_FILLED = True
 V_POS_TEXT = 5
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.6 # CW offset from carrier in kHz
@@ -393,6 +394,7 @@ class kiwi_waterfall():
         self.averaging_n = 1
         self.wf_auto_scaling = True
         self.old_averaging_n = self.averaging_n
+        self.dynamic_range = self.MIN_DYN_RANGE
         
         self.wf_white_flag = False
         self.terminate = False
@@ -545,17 +547,19 @@ class kiwi_waterfall():
         wf_db[0] = wf_db[1] # first bin is broken
         
         min_db, max_db = np.min(wf_db), np.max(wf_db)
-        wf_db = np.clip(wf_db, min_db+self.delta_low_db, max_db+self.delta_high_db)
+        #wf_db = np.clip(wf_db, min_db+self.delta_low_db, max_db+self.delta_high_db)
 
         if self.wf_auto_scaling:
             # compute min/max db of the power distribution at selected percentiles
             self.low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
             self.high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
+            self.dynamic_range = max(self.high_clip_db-(self.low_clip_db+self.delta_low_db), self.MIN_DYN_RANGE)
 
         # shift chosen min to zero
         wf_color_db = (wf_db - (self.low_clip_db+self.delta_low_db))
         # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap if delta=0)
-        normal_factor_db = max(self.high_clip_db-(self.low_clip_db+self.delta_low_db), self.MIN_DYN_RANGE)+self.delta_high_db
+        # normal_factor_db = max(self.high_clip_db-(self.low_clip_db+self.delta_low_db), self.MIN_DYN_RANGE)+self.delta_high_db
+        normal_factor_db = self.dynamic_range+self.delta_high_db
         self.wf_color = wf_color_db / normal_factor_db
 
         self.wf_color = np.clip(self.wf_color, 0.0, 1.0)
@@ -564,7 +568,7 @@ class kiwi_waterfall():
         self.wf_max_db = self.low_clip_db + normal_factor_db - (3*self.zoom)
 
         # standardize again between 0 and 255
-        self.wf_color *= 255
+        self.wf_color *= 254
         # clip exceeding values
         self.wf_color = np.clip(self.wf_color, 0, 255)
 
