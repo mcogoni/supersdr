@@ -367,7 +367,7 @@ parser.add_option("-f", "--freq", type=int,
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
 parser.add_option("-b", "--buffer", type=int,
-                  help="buffer size", dest="audio_buffer", default=20)
+                  help="buffer size", dest="audio_buffer", default=10)
 parser.add_option("-d", "--dual",
                   help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
 parser.add_option("-c", "--callsign", type=str,
@@ -375,6 +375,42 @@ parser.add_option("-c", "--callsign", type=str,
 parser.add_option("-m", "--colormap", type=str,
                   help="colormap for waterfall", dest="colormap", default="cutesdr")
                   
+
+# init Pygame
+pygame.init()
+sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
+    pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF)
+wf_width = sdrdisplay.get_width()
+wf_height = sdrdisplay.get_height()
+i_icon = "icon.jpg"
+icon = pygame.image.load(i_icon)
+pygame.display.set_icon(icon)
+pygame.display.set_caption("SuperSDR %s"%VERSION)
+clock = pygame.time.Clock()
+pygame.key.set_repeat(200, 50)
+nanofont = pygame.freetype.SysFont('Mono', 8)
+microfont = pygame.freetype.SysFont('Mono', 10)
+smallfont = pygame.freetype.SysFont('Mono', 12)
+midfont = pygame.freetype.SysFont('Mono', 14)
+bigfont = pygame.freetype.SysFont('Mono', 16)
+hugefont = pygame.freetype.SysFont('Mono', 35)
+
+font = pygame.font.Font(None, 50)
+sdrdisplay.fill((0, 0, 0))
+block = font.render(" - SUPERSDR - ", True, ORANGE)
+rect = block.get_rect()
+rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2-90))
+sdrdisplay.blit(block, rect)
+block = font.render("...CONNECTING...", True, YELLOW)
+rect = block.get_rect()
+rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2))
+sdrdisplay.blit(block, rect)
+block = font.render("marco cogoni - IS0KYB", True, BLUE)
+rect = block.get_rect()
+rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2+90))
+sdrdisplay.blit(block, rect)
+pygame.display.flip()
+time.sleep(1)
 
 options = vars(parser.parse_args()[0])
 FPS = options['refresh']
@@ -435,7 +471,43 @@ print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
 
 #init KIWI WF and RX audio
-kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
+kiwi_wf = None
+while not kiwi_wf:
+    print(kiwi_wf)
+    try:
+        kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
+    except:
+        kiwi_address = ""
+        complete = False
+        while True:
+            for evt in pygame.event.get():
+                if evt.type == KEYDOWN:
+                    if evt.unicode.isprintable():
+                        kiwi_address += evt.unicode
+                    elif evt.key == K_BACKSPACE:
+                        kiwi_address = kiwi_address[:-1]
+                    elif evt.key == K_RETURN:
+                        complete = True
+                        break
+                elif evt.type == QUIT:
+                    break
+            sdrdisplay.fill((0, 0, 0))
+            block = font.render("Enter KIWI address:port ->" + kiwi_address, True, (255, 255, 255))
+            rect = block.get_rect()
+            rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2))
+            sdrdisplay.blit(block, rect)
+            pygame.display.flip()
+            if complete:
+                print(kiwi_address)
+                if ":" in kiwi_address:
+                    kiwi_host, kiwi_port = kiwi_address.split(":")
+                    kiwi_port = int(kiwi_port)
+                else:
+                    kiwi_host = kiwi_address
+
+                print(kiwi_host, kiwi_port)
+                break
+
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
@@ -463,27 +535,7 @@ if dualrx_flag:
     if not play2:
         kiwi_snd2 = None
 
-
 old_volume = kiwi_snd.volume
-
-# init Pygame
-pygame.init()
-sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
-    pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF)
-wf_width = sdrdisplay.get_width()
-wf_height = sdrdisplay.get_height()
-i_icon = "icon.jpg"
-icon = pygame.image.load(i_icon)
-pygame.display.set_icon(icon)
-pygame.display.set_caption("SuperSDR %s"%VERSION)
-clock = pygame.time.Clock()
-pygame.key.set_repeat(200, 50)
-nanofont = pygame.freetype.SysFont('Mono', 8)
-microfont = pygame.freetype.SysFont('Mono', 10)
-smallfont = pygame.freetype.SysFont('Mono', 12)
-midfont = pygame.freetype.SysFont('Mono', 14)
-bigfont = pygame.freetype.SysFont('Mono', 16)
-hugefont = pygame.freetype.SysFont('Mono', 35)
 
 wf_quit = False
 
@@ -1213,8 +1265,8 @@ while not wf_quit:
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-    if not run_index%kiwi_wf.averaging_n:
-        plot_spectrum(filled=SPECTRUM_FILLED, col=ORANGE)
+    if True or not run_index%kiwi_wf.averaging_n:
+        plot_spectrum(filled=SPECTRUM_FILLED, col=YELLOW)
         surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
         surface.set_palette(palRGB)
         sdrdisplay.blit(surface, (0, WF_Y))

@@ -425,13 +425,13 @@ class kiwi_waterfall():
         try:
             self.socket = socket.socket()
             self.socket.connect((self.host, self.port))
+            print ("Socket open...")
         except:
             print ("Failed to connect")
-            exit()   
-        print ("Socket open...")
-
+            raise Exception()
+        
         self.start_stream()
-
+        
         while True:
             msg = self.wf_stream.receive_message()
             if msg:
