@@ -48,6 +48,7 @@ clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 
 splash_screen(sdrdisplay)
+font = pygame.font.Font(None, 50)
 
 options = vars(parser.parse_args()[0])
 FPS = options['refresh']
