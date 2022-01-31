@@ -204,10 +204,10 @@ def s_meter_draw(rssi_smooth, agc_threshold):
 
     s_meter_center = (s_meter_radius+10,s_meter_radius+8)
     alpha_rssi = rssi_smooth+127
-    alpha_rssi = -math.radians(alpha_rssi* 180/127.)-math.pi
+    alpha_rssi = -math.radians(alpha_rssi * 180/127.)-math.pi*1.02
 
     alpha_agc = agc_threshold+127
-    alpha_agc = -math.radians(alpha_agc* 180/127.)-math.pi
+    alpha_agc = -math.radians(alpha_agc * 180/127.)-math.pi*1.02
 
     def _coords_from_angle(angle, s_meter_radius_):
         x_ = s_meter_radius_ * math.cos(angle)
@@ -223,7 +223,7 @@ def s_meter_draw(rssi_smooth, agc_threshold):
     pygame.draw.rect(smeter_surface, BLACK,
                    (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 3)
     
-    angle_list = np.linspace(0.4, math.pi-0.4, 9)
+    angle_list = np.linspace(0.2, math.pi-0.2, 9)
     text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
     for alpha_seg, msg in zip(angle_list, text_list[::-1]):
         text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
@@ -531,6 +531,8 @@ rssi_maxlen = 10 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
 run_index = 0
+run_index_bigmsg = 0
+
 run_index_automode = 0
 show_bigmsg = None
 msg_text = ""
@@ -549,7 +551,7 @@ while not wf_quit:
     force_sync_flag = None
 
     rssi = kiwi_snd.rssi
-    rssi_hist.append(rssi+10)
+    rssi_hist.append(rssi)
     mouse = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
@@ -707,13 +709,14 @@ while not wf_quit:
 
                 # KIWI RX volume UP/DOWN, Mute
                 if keys[pygame.K_v] and (mods & pygame.KMOD_SHIFT):
-                    if kiwi_snd.volume > 0:
-                        old_volume = kiwi_snd.volume
-                        kiwi_snd.volume = 0
-                    else:
-                        kiwi_snd.volume = old_volume
-                    show_bigmsg = "VOLUME"
-                    run_index_bigmsg = run_index
+                    if run_index_bigmsg < run_index:
+                        if kiwi_snd.volume > 0:
+                            old_volume = kiwi_snd.volume
+                            kiwi_snd.volume = 0
+                        else:
+                            kiwi_snd.volume = old_volume
+                        show_bigmsg = "VOLUME"
+                        run_index_bigmsg = run_index
                 elif keys[pygame.K_v]:
                     if kiwi_snd.volume < 150:
                         kiwi_snd.volume += 10

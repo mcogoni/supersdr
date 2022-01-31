@@ -543,24 +543,20 @@ class kiwi_waterfall():
     def spectrum_db2col(self):
         wf = self.spectrum
         wf = -(255 - wf)  # dBm
-        wf_db = wf - 13 + (3*self.zoom) # typical Kiwi wf cal
+        wf_db = wf - 13 + (3*self.zoom) # typical Kiwi wf cal and zoom correction
         wf_db[0] = wf_db[1] # first bin is broken
         
-        min_db, max_db = np.min(wf_db), np.max(wf_db)
-        #wf_db = np.clip(wf_db, min_db+self.delta_low_db, max_db+self.delta_high_db)
-
         if self.wf_auto_scaling:
             # compute min/max db of the power distribution at selected percentiles
             self.low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
             self.high_clip_db = np.percentile(wf_db, self.CLIP_HIGHP)
-            self.dynamic_range = max(self.high_clip_db-(self.low_clip_db+self.delta_low_db), self.MIN_DYN_RANGE)
+            self.dynamic_range = max(self.high_clip_db - self.low_clip_db, self.MIN_DYN_RANGE)
 
         # shift chosen min to zero
         wf_color_db = (wf_db - (self.low_clip_db+self.delta_low_db))
         # standardize the distribution between 0 and 1 (at least MIN_DYN_RANGE dB will be allocated in the colormap if delta=0)
-        # normal_factor_db = max(self.high_clip_db-(self.low_clip_db+self.delta_low_db), self.MIN_DYN_RANGE)+self.delta_high_db
-        normal_factor_db = self.dynamic_range+self.delta_high_db
-        self.wf_color = wf_color_db / normal_factor_db
+        normal_factor_db = self.dynamic_range + self.delta_high_db
+        self.wf_color = wf_color_db / (normal_factor_db-self.delta_low_db)
 
         self.wf_color = np.clip(self.wf_color, 0.0, 1.0)
 
@@ -780,7 +776,7 @@ class kiwi_sound():
         #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
         if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
             s_meter, = struct.unpack('>H',  buffer(data[8:10]))
-            self.rssi = 0.1 * s_meter - 127
+            self.rssi = (0.1 * s_meter - 127)
             data = data[10:]
             count = len(data) // 2
             samples = np.ndarray(count, dtype='>h', buffer=data).astype(np.int16)
