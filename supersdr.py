@@ -378,8 +378,10 @@ parser.add_option("-m", "--colormap", type=str,
 
 # init Pygame
 pygame.init()
+# sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
+#     pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
 sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
-    pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF)
+    pygame.DOUBLEBUF,vsync=1)
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
@@ -503,7 +505,8 @@ while not kiwi_wf:
                     kiwi_host, kiwi_port = kiwi_address.split(":")
                     kiwi_port = int(kiwi_port)
                 else:
-                    kiwi_host = kiwi_address
+                    if len(kiwi_address)>0:
+                        kiwi_host = kiwi_address
 
                 print(kiwi_host, kiwi_port)
                 break
@@ -938,18 +941,19 @@ while not wf_quit:
                         show_bigmsg = "switchab"
                         run_index_bigmsg = run_index
                     else:
-                        kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000,  kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
-                        if not kiwi_snd2:
-                            print("Server not ready")
-                        play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
-                        if not play2:
-                            kiwi_snd2 = None
-                        else:
+                        try:
+                            kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000,  kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
+                            play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
                             print("Second RX active!")
                             show_bigmsg = "enable2rx"
                             run_index_bigmsg = run_index
                             dualrx_flag = True
-
+                        except:
+                            print("Server not ready")
+                            kiwi_snd2 = None
+                            dualrx_flag = False
+                            show_bigmsg = "disable2rx"
+                            run_index_bigmsg = run_index
 
                 # Quit SuperSDR
                 if keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
