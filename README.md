@@ -24,25 +24,13 @@ Notice how the lower waterfall half is noisier than the upper half thanks to 10X
 Mouse over the HELP label on the bottom right corner will show you the main keyboard commands.
 
 ## Prerequisites:
-Install Python 3 along with PYGAME, PYAUDIO, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;) If you use Linux I hope I don't have to tell you how to install librearies and Python components: I presonally use a Arch based distro and pip to keep everything updated.
+Install Python 3 along with PYGAME, SOUNDDEVICE, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;) If you use Linux I hope I don't have to tell you how to install librearies and Python components: I presonally use a Arch based distro and pip to keep everything updated.
 ### On Windows:
 There is now a preliminary Windows [executable](https://github.com/mcogoni/supersdr/releases/download/1.0/WinSuperSDR.zip) thanks to [Giovanni Busonera](https://github.com/Strato75).
 This version doesn't need any library nor Python environment. The Windows executable will always lag a bit during the development.
 
-I don't personally use Windows, but a beta tester let me know that you can run it there:
-- Install [miniconda](https://docs.conda.io/en/latest/miniconda.html) and the proposed version of Python (3.8)
-- Now open the miniconda powershell to install the packages as below:
-  * conda config --add channels conda-forge 
-  * conda install pyaudio
-- then use pip on a powershell:
-  * pip install numpy
-  * pip install scipy
-  * pip install matplotlib
-  * pip install pygame
-
-
 ## Use:
-[![SuperSDR tutorial](https://studio.youtube.com/video/q27zInnop8g/0.jpg)](https://studio.youtube.com/video/q27zInnop8g "SuperSDR tutorial")
+[![SuperSDR tutorial](https://studio.youtube.com/video/q27zInnop8g/0.jpg)](https://youtu.be/Q4H7ZYqxGA0 "SuperSDR tutorial")
 
 There is now the possibility to launch the program with no command line options and select the kiwi server at the start or change it at runtime (still buggy, but it mostly works). To use the CAT, at least for now, you have to specify it from the command line.
 
