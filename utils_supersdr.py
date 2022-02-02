@@ -91,7 +91,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- PAGE UP/DOWN: move WF freq +/- SPAN/4",
         "- UP/DOWN: zoom in/out by a factor 2X",
         "- U/L/C/A: switches to USB, LSB, CW, AM",
-        "- J/K/O: change low/high cut of RX (SHIFT inverts), O resets",
+        "- J/K/O: tune RX low/high cut (SHIFT inverts, try CTRL!), O resets",
         "- G/H: inc/dec spectrum and WF averaging to improve SNR",
         "- ,/.(+SHIFT) change high(low) clip level for spectrum and WF",
         "- E: start/stop audio recording",
@@ -143,7 +143,6 @@ class flags():
     wf_cat_link_flag = True
     wf_snd_link_flag = False
     cat_snd_link_flag = True
-
 
 
 class audio_recording():
@@ -333,12 +332,12 @@ class memory():
             pass
         self.index = len(self.mem_list)
 
-    def write_mem(self, freq, radio_mode, lc, hc):
-        self.mem_list.append((freq, radio_mode, lc, hc))
+    def write_mem(self, freq, radio_mode, delta_low, delta_high):
+        self.mem_list.append((round(freq, 3), radio_mode, delta_low, delta_high))
     
     def restore_mem(self):
         if len(self.mem_list)>0:
-            self.index -= 1
+            self.index += 1
             self.index %= len(self.mem_list)
             return self.mem_list[self.index]
         else:
@@ -688,16 +687,16 @@ class kiwi_sound():
     AUDIO_RATE = 48000
     KIWI_RATE = 12000
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-    CHUNKS = 2
+    CHUNKS = 1
     KIWI_SAMPLES_PER_FRAME = 512
-    FULL_BUFF_LEN = 20 # 20 or more for remote kiwis (higher latency)
 
-    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, volume_=100, host_=None, port_=None, subrx_=False):
+    def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, buffer_len, volume_=100, host_=None, port_=None, subrx_=False):
         self.subrx = subrx_
         # connect to kiwi server
         self.kiwi_wf = kiwi_wf
         self.host = host_ if host_ else kiwi_wf.host
         self.port = port_ if port_ else kiwi_wf.port
+        self.FULL_BUFF_LEN = buffer_len
         self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
         self.terminate = False
         self.volume = volume_
@@ -915,6 +914,7 @@ class cat:
     def set_freq(self, freq_):
         if freq_ >= self.CAT_MIN_FREQ and freq_ <= self.CAT_MAX_FREQ:
             self.send_msg(("\\set_freq %d" % (freq_*1000)))
+            self.freq = freq_
 
     def set_mode(self, radio_mode_):
         self.send_msg(("\\set_mode %s 2400"%radio_mode_))
@@ -1066,7 +1066,7 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, ki
     ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
             "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
             "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-50,V_POS_TEXT), "small", False),
+            "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-120,V_POS_TEXT), "big", False),
             "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
             "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
             "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, V_POS_TEXT), "small", False),
@@ -1084,7 +1084,7 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, ki
             }
 
     if fl.dualrx_flag and kiwi_snd2:
-        ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-240,V_POS_TEXT), "small", False)
+        ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-390,V_POS_TEXT), "big", False)
         ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,BOTTOMBAR_Y+6), "small", False)
     if not fl.s_meter_show_flag:
         s_value = (kiwi_snd.rssi+120)//6 # signal in S units of 6dB

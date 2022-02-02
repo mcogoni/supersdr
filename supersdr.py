@@ -151,8 +151,7 @@ while not kiwi_wf:
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
-kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
-kiwi_snd.FULL_BUFF_LEN = options["audio_buffer"]
+kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, options["audio_buffer"])
 if not kiwi_snd:
     print("Server not ready")
     sys.exit()
@@ -286,7 +285,7 @@ while not wf_quit:
                         show_bigmsg = "savememorydisk"
                         run_index_bigmsg = run_index
                     else:
-                        kiwi_memory.write_mem(kiwi_snd.freq, radio_mode, lc, hc)
+                        kiwi_memory.write_mem(kiwi_snd.freq, kiwi_snd.radio_mode, delta_low, delta_high)
                         show_bigmsg = "writememory"
                         run_index_bigmsg = run_index
                 if keys[pygame.K_r]:
@@ -298,7 +297,8 @@ while not wf_quit:
                         run_index_bigmsg = run_index
                         mem_tmp = kiwi_memory.restore_mem()
                         if mem_tmp:
-                            click_freq, kiwi_snd.radio_mode, lc, hc = mem_tmp
+                            click_freq, kiwi_snd.radio_mode, delta_low, delta_high = mem_tmp
+                            print(click_freq, kiwi_snd.radio_mode, delta_low, delta_high)
                             show_bigmsg = "restorememory"
                         else:
                             show_bigmsg = "emptymemory"
@@ -841,21 +841,22 @@ while not wf_quit:
     # Change KIWI SND frequency
     if click_freq:
         kiwi_snd.freq = click_freq
-        if fl.auto_mode:
+        if fl.wf_snd_link_flag or show_bigmsg == "restorememory":
+            kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
+            lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+            kiwi_wf.set_white_flag()
+        elif fl.auto_mode:
             kiwi_snd.radio_mode = get_auto_mode(kiwi_snd.freq)
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
         kiwi_snd.set_mode_freq_pb()
-        if fl.wf_snd_link_flag or show_bigmsg == "restorememory":
-            kiwi_wf.set_freq_zoom(click_freq, kiwi_wf.zoom)
-            kiwi_wf.set_white_flag()
 
     if cat_radio and fl.cat_snd_link_flag:
         if manual_mode:
             cat_radio.set_mode(kiwi_snd.radio_mode)
         elif click_freq or manual_snd_freq:
-            if cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and fl.auto_mode:
-                cat_radio.set_mode(kiwi_snd.radio_mode)
             cat_radio.set_freq(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.))
+            if (cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and fl.auto_mode) or show_bigmsg == "restorememory":
+                cat_radio.set_mode(kiwi_snd.radio_mode)
         else:
             kiwi_snd.radio_mode = cat_radio.get_mode()
             lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
