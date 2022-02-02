@@ -24,6 +24,18 @@ Notice how the lower waterfall half is noisier than the upper half thanks to 10X
 
 Mouse over the HELP label on the bottom right corner will show you the main keyboard commands.
 
+## Main keyboard shortcuts:
+
+ - **TUNING**: **LEFT/RIGHT** keys tune by -/+1 khz, when very zoomed in, they tune by 100 Hz, when you also press **SHIFT** the tuning step is 10X. You may also **point and click** on any signal with the mouse. Just **use the VFO of your radio** instead. The spectrum scope will also move by half span when you reach the borders. Pressing **Z** enables the center tuning and shifts the waterfall/scope while you tune keeping the RX bandpass centered;
+ - **SPECTRUM TUNING**: **UP/DOWN** change zoom level (**SPAN**) by **2X** (equivalent: mouse wheel scroll). **PAGE UP/PAGE DOWN** move the spectrum center by half the span, but do not affect the RX frequency, you may return to your (main) RX frequency by pressing the **SPACE** bar. You may **DRAG** the spectrum scope (not the waterfall) with your mouse and also see dynamically by how much you're dragging it;
+ - **FILTER BANDPASS**: **CONTROL+J/K** grows/shrinks by **100Hz** the whole filter, **J/K** changes the **LOW/HIGH CUT** and **SHIFT** inverts the change. Pressing **O (not zero)** resets it to default. Bandpass width is not supported by Hamlib (at least for my radio) so you don't affect the CAT controlled radio;
+ - **RECEIVERS**: you start with one active RX passband whose rx mode changes automatically with frequency, you may decativate **AUTO RX MODE** by pressing **X** or manually changing mode. Second kiwi RX is activated by pressing **Y** that uses the same KIWISDR as the first. You may change the KIWISDR by pressing **Q** and entering the address:port of any KIWISDR. You may decouple the tuning of the Kiwi and that of the CAT radio by pressing **S**: you'll now have a separate orange bandpass representing your real VFO, press **S** again to relink. The currently being tuned RX is the **RED** one, the **GREEN** one has no controls and monitors the frequency you left it into. Pressing **Y** again you just switch the RX bandpasses and you can control the other. Each KIWI RX has a separate volume/mute control but the same **AGC threshold** that you can change via **1/2** keys and that level is visible on the s-meter with the short blue needle;
+ - **S-METER**: activate it with the **M** key: it has an analog simulation that changes between CW and SSB/AM. The values over S9 are not accurate (it is a known problem I'm working on). The numbers in dB are correct though;
+ - **SPECTRUM SCOPE LEVELS**: by default you have a fully automatic, dynamically set minimum and maximum values that are shown on the left. This is the most useful mode especially because it's almost insensitive to thunderstorms and you don't get those pesky horizontal lines on the low bands! But if you need to perform some measurement, you may turn **AUTO mode** off with the **3** key that will also get you horizontal lines every 10dB vertical division. The **TOP/BOTTOM dB levels** may be changed by pressing **./, keys** (**SHIFT** to change bottom level);
+ - **ACCUMULATION AVERAGE**:  if you're familiar with LINRAD by Leif Asbrink, you'll surely be fond of the possibility to perform multiple samplings for each shown spectrum/waterfall line. This leads to large visual enhancements of the SNR both in the scope and the waterfall. This is performed by pressing **G** several times and it will slow down the update. Pressing **H** will lower the number of samples until you get back to normal;
+
+OK, these are the main points you should be familiar with to use the software. There are several other functions but you'll discover them with the HELP menu... :)
+
 ## Prerequisites:
 Install Python 3 along with PYGAME, SOUNDDEVICE, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;) If you use Linux I hope I don't have to tell you how to install librearies and Python components: I presonally use a Arch based distro and pip to keep everything updated.
 ### On Windows:
@@ -35,7 +47,7 @@ This version doesn't need any library nor Python environment. The Windows execut
 
 There is now the possibility to launch the program *with no command line options* and select the kiwi server at the start or change it at runtime (still buggy, but it mostly works). To use the CAT, at least for now, you have to specify it from the command line.
 
-To launch the program:
+To launch the program under Linux:
 ```
 ./supersdr.py --kiwiserver 192.168.1.82 --kiwiport 8073 -z 9 -f 198 -w password
 ```
