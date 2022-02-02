@@ -155,7 +155,7 @@ kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf)
 kiwi_snd.FULL_BUFF_LEN = options["audio_buffer"]
 if not kiwi_snd:
     print("Server not ready")
-    exit()
+    sys.exit()
 
 kiwi_snd2 = None
 if fl.dualrx_flag:
@@ -168,7 +168,7 @@ if fl.dualrx_flag:
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 if not play:
     del kiwi_snd
-    exit("Chosen KIWI receiver is not ready!")
+    sys.exit("Chosen KIWI receiver is not ready!")
 
 if fl.dualrx_flag:
     play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
@@ -944,7 +944,7 @@ while not wf_quit:
         elif "cat_rx_sync" == show_bigmsg:
             msg_text = "CAT<->RX SYNC "+("ON" if fl.cat_snd_link_flag else "OFF")
         elif "forcesync" == show_bigmsg:
-            msg_text = "Center RX passband" if not fl.cat_radio else "Force SYNC WF & RX -> CAT"
+            msg_text = "Center RX passband" if not cat_radio else "Force SYNC WF & RX -> CAT"
         elif "switchab" == show_bigmsg:
             msg_text = "Switch MAIN/SUB RXs"
         elif "enable2rx" == show_bigmsg:
@@ -986,7 +986,7 @@ while not wf_quit:
 
     rssi_last = rssi_hist[-1]
     if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= 0.5 # s-meter decay rate
+        rssi_smooth -= 3 if kiwi_snd.radio_mode=="CW" else 0.5 # s-meter decay rate
     else:
         rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
 
@@ -1013,7 +1013,6 @@ if kiwi_snd2:
 
 kiwi_wf.terminate = True
 time.sleep(0.5)
-exit()
 
 kiwi_wf.close_connection()
 kiwi_snd.close_connection()
