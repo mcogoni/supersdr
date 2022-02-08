@@ -1,6 +1,5 @@
 import pygame
 import sounddevice as sd
-
 import wave
 
 from pygame.locals import *
@@ -39,30 +38,31 @@ from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
 VERSION = "v3.0beta"
 
-# SuperSDR constants
-WF_HEIGHT = 440
-DISPLAY_WIDTH = 1024
-TOPBAR_HEIGHT = 20
-SPECTRUM_HEIGHT = 200
-BOTTOMBAR_HEIGHT = 20
-TUNEBAR_HEIGHT = 20
-DISPLAY_HEIGHT = WF_HEIGHT + SPECTRUM_HEIGHT + TOPBAR_HEIGHT + BOTTOMBAR_HEIGHT + TUNEBAR_HEIGHT
-TOPBAR_Y = 0
-SPECTRUM_Y = TOPBAR_HEIGHT
-TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
-WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
-BOTTOMBAR_Y = WF_Y + WF_HEIGHT
-SPECTRUM_FILLED = True
-V_POS_TEXT = 5
+# # SuperSDR constants
+# disp.DISPLAY_WIDTH = 1440 #1024
+# disp.DISPLAY_HEIGHT = disp.DISPLAY_WIDTH//2
+# WF_HEIGHT = disp.DISPLAY_HEIGHT*60//100
+# SPECTRUM_HEIGHT = disp.DISPLAY_HEIGHT*40//100
+# TOPBAR_HEIGHT = 20
+# BOTTOMBAR_HEIGHT = 20
+# TUNEBAR_HEIGHT = 20
+# disp.DISPLAY_HEIGHT = WF_HEIGHT + SPECTRUM_HEIGHT + TOPBAR_HEIGHT + BOTTOMBAR_HEIGHT + TUNEBAR_HEIGHT
+# TOPBAR_Y = 0
+# SPECTRUM_Y = TOPBAR_HEIGHT
+# TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
+# WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
+# BOTTOMBAR_Y = WF_Y + WF_HEIGHT
+# SPECTRUM_FILLED = True
+# V_POS_TEXT = 5
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
-LOW_CUT_SSB=30 # Bandpass low end SSB
-HIGH_CUT_SSB=3000 # Bandpass high end
-LOW_CUT_CW=int(CW_PITCH*1000-200) # Bandpass for CW
-HIGH_CUT_CW=int(CW_PITCH*1000+200) # High end CW
-HIGHLOW_CUT_AM=6000 # Bandpass AM
+LOW_CUT_SSB = 30 # Bandpass low end SSB
+HIGH_CUT_SSB = 3000 # Bandpass high end
+LOW_CUT_CW = int(CW_PITCH*1000-200) # Bandpass for CW
+HIGH_CUT_CW = int(CW_PITCH*1000+200) # High end CW
+HIGHLOW_CUT_AM = 6000 # Bandpass AM
 delta_low, delta_high = 0., 0. # bandpass tuning
 default_kiwi_port = 8073
 default_kiwi_password = ""
@@ -124,6 +124,26 @@ smallfont = pygame.freetype.SysFont('Mono', 12)
 midfont = pygame.freetype.SysFont('Mono', 14)
 bigfont = pygame.freetype.SysFont('Mono', 16)
 hugefont = pygame.freetype.SysFont('Mono', 35)
+
+
+class display_constants():
+    def __init__(self, DISPLAY_WIDTH):
+        # SuperSDR constants
+        self.DISPLAY_WIDTH = DISPLAY_WIDTH
+        DISPLAY_HEIGHT = DISPLAY_WIDTH//2
+        self.WF_HEIGHT = DISPLAY_HEIGHT*60//100
+        self.SPECTRUM_HEIGHT = DISPLAY_HEIGHT*40//100
+        self.TOPBAR_HEIGHT = 20
+        self.BOTTOMBAR_HEIGHT = 20
+        self.TUNEBAR_HEIGHT = 20
+        self.DISPLAY_HEIGHT = self.WF_HEIGHT + self.SPECTRUM_HEIGHT + self.TOPBAR_HEIGHT + self.BOTTOMBAR_HEIGHT + self.TUNEBAR_HEIGHT
+        self.TOPBAR_Y = 0
+        self.SPECTRUM_Y = self.TOPBAR_HEIGHT
+        self.TUNEBAR_Y = self.SPECTRUM_Y + self.SPECTRUM_HEIGHT
+        self.WF_Y = self.TUNEBAR_Y + self.TUNEBAR_HEIGHT
+        self.BOTTOMBAR_Y = self.WF_Y + self.WF_HEIGHT
+        self.SPECTRUM_FILLED = True
+        self.V_POS_TEXT = 5
 
 
 class flags():
@@ -412,7 +432,7 @@ class kiwi_waterfall():
     low_clip_db, high_clip_db = -120, -60 # tentative initial values for wf db limits
     wf_min_db, wf_max_db = low_clip_db, low_clip_db+MIN_DYN_RANGE
     
-    def __init__(self, host_, port_, pass_, zoom_, freq_, eibi):
+    def __init__(self, host_, port_, pass_, zoom_, freq_, eibi, disp):
         self.eibi = eibi
         # kiwi hostname and port
         self.host = host_
@@ -423,6 +443,8 @@ class kiwi_waterfall():
         self.freq = freq_
         self.averaging_n = 1
         self.wf_auto_scaling = True
+        self.BINS2PIXEL_RATIO = disp.DISPLAY_WIDTH / self.WF_BINS
+
         self.old_averaging_n = self.averaging_n
         self.dynamic_range = self.MIN_DYN_RANGE
         
@@ -478,7 +500,7 @@ class kiwi_waterfall():
                     self.MAX_FPS = int(els[2].split("=")[1])
                 
         self.bins_per_khz = self.WF_BINS / self.span_khz
-        self.wf_data = np.zeros((WF_HEIGHT, self.WF_BINS))
+        self.wf_data = np.zeros((disp.WF_HEIGHT, self.WF_BINS))
         self.avg_spectrum_deque = deque([], self.averaging_n)
 
     def gen_div(self):
@@ -1052,60 +1074,60 @@ def create_cm(which):
     return colormap
 
 
-def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
+def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, disp, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
     mousex_pos = mouse[0]
     if mousex_pos < 25:
         mousex_pos = 25
-    elif mousex_pos >= DISPLAY_WIDTH - 80:
-        mousex_pos = DISPLAY_WIDTH - 80
+    elif mousex_pos >= disp.DISPLAY_WIDTH - 80:
+        mousex_pos = disp.DISPLAY_WIDTH - 80
     mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
     buff_level = kiwi_snd.audio_buffer.qsize()
     main_rx_color = RED if not kiwi_snd.subrx else GREEN
     sub_rx_color = GREEN if not kiwi_snd.subrx else RED
     #           Label   Color   Freq/Mode                       Screen position
-    ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,TUNEBAR_Y+2), "small", False),
-            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,TUNEBAR_Y+2), "small", False),
-            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,TUNEBAR_Y+2), "small", False),
-            "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-120,V_POS_TEXT), "big", False),
-            "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,BOTTOMBAR_Y+6), "small", False),
-            "span": (GREEN, "SPAN:%.0fkHz"%(round(kiwi_wf.span_khz)), (wf_width-95,SPECTRUM_Y+1), "small", False),
-            "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, V_POS_TEXT), "small", False),
-            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, TUNEBAR_Y-50), "small", False, "BLACK"),
-            "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (wf_width/2+165, V_POS_TEXT), "small", False),
-            "center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, SPECTRUM_Y+2), "small", False),
-            "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, BOTTOMBAR_Y+4), "big", False),
-            "cat": (GREEN if cat_radio else GREY, "CAT", (5,BOTTOMBAR_Y+4), "big", False), 
-            "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, BOTTOMBAR_Y+4), "big", False),
-            "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, BOTTOMBAR_Y+4), "big", False),
+    ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,disp.TUNEBAR_Y+2), "small", False),
+            "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,disp.TUNEBAR_Y+2), "small", False),
+            "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,disp.TUNEBAR_Y+2), "small", False),
+            "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-120,disp.V_POS_TEXT), "big", False),
+            "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,disp.BOTTOMBAR_Y+6), "small", False),
+            "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,disp.SPECTRUM_Y+1), "small", False),
+            "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, disp.V_POS_TEXT), "small", False),
+            "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, disp.TUNEBAR_Y-50), "small", False, "BLACK"),
+            "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (wf_width/2+165, disp.V_POS_TEXT), "small", False),
+            "center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, disp.SPECTRUM_Y+2), "small", False),
+            "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, disp.BOTTOMBAR_Y+4), "big", False),
+            "cat": (GREEN if cat_radio else GREY, "CAT", (5,disp.BOTTOMBAR_Y+4), "big", False), 
+            "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, disp.BOTTOMBAR_Y+4), "big", False),
+            "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, disp.BOTTOMBAR_Y+4), "big", False),
             "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
-            "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,TUNEBAR_Y-12), "small", False, "BLACK"),
-            "wf_param": (WHITE, "%ddB AUTO %s"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,SPECTRUM_Y+1), "small", False, "BLACK"),
-            "help": (BLUE, "HELP", (wf_width-50, BOTTOMBAR_Y+4), "big", False)
+            "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,disp.TUNEBAR_Y-12), "small", False, "BLACK"),
+            "wf_param": (WHITE, "%ddB AUTO %s"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,disp.SPECTRUM_Y+1), "small", False, "BLACK"),
+            "help": (BLUE, "HELP", (wf_width-50, disp.BOTTOMBAR_Y+4), "big", False)
             }
 
     if fl.dualrx_flag and kiwi_snd2:
-        ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-390,V_POS_TEXT), "big", False)
-        ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,BOTTOMBAR_Y+6), "small", False)
+        ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-390,disp.V_POS_TEXT), "big", False)
+        ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,disp.BOTTOMBAR_Y+6), "small", False)
     if not fl.s_meter_show_flag:
         s_value = (kiwi_snd.rssi+120)//6 # signal in S units of 6dB
         if s_value<=9:
             s_value = "S"+str(int(s_value))
         else:
             s_value = "S9+"+str(int((s_value-9)*6))+"dB"
-        ts_dict["smeter"] = (GREEN, s_value, (20,V_POS_TEXT), "big", False)
+        ts_dict["smeter"] = (GREEN, s_value, (20,disp.V_POS_TEXT), "big", False)
     if fl.click_drag_flag:
         delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x-mousex_pos)
-        ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,SPECTRUM_Y+20), "big", False)
+        ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,disp.SPECTRUM_Y+20), "big", False)
     if kiwi_wf.averaging_n>1:
-        ts_dict["avg"] = (RED, "AVG %dX"%kiwi_wf.averaging_n, (10,SPECTRUM_Y+13), "small", False)
+        ts_dict["avg"] = (RED, "AVG %dX"%kiwi_wf.averaging_n, (10,disp.SPECTRUM_Y+13), "small", False)
     if len(kiwi_wf.div_list)>1:
-        ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,SPECTRUM_Y+13), "small", False)
+        ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,disp.SPECTRUM_Y+13), "small", False)
     else:
-        ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-95,SPECTRUM_Y+13), "small", False)
+        ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-95,disp.SPECTRUM_Y+13), "small", False)
 
     draw_dict = {}
     for k in ts_dict:
-        if k == "p_freq" and not (pygame.mouse.get_focused() and (WF_Y <= mouse[1] <= BOTTOMBAR_Y or TOPBAR_HEIGHT <= mouse[1] <= TUNEBAR_Y)):
+        if k == "p_freq" and not (pygame.mouse.get_focused() and (disp.WF_Y <= mouse[1] <= disp.BOTTOMBAR_Y or disp.TOPBAR_HEIGHT <= mouse[1] <= disp.TUNEBAR_Y)):
             continue
         if "small" in ts_dict[k][3]:
             render_ = smallfont.render_to
@@ -1117,42 +1139,41 @@ def update_textsurfaces(surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, ki
             bg_col = None
         render_(surface_, ts_dict[k][2], ts_dict[k][1], ts_dict[k][0], bgcolor=bg_col)
 
-def draw_lines(surface_, wf_height, radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio):
+def draw_lines(surface_, wf_height, radio_mode, mouse, kiwi_wf, disp, kiwi_snd, kiwi_snd2, fl, cat_radio):
 
     def _plot_bandpass(color_, kiwi_):
         snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
         if snd_freq_bin>0 and snd_freq_bin< kiwi_wf.WF_BINS:
             # carrier line
-            pygame.draw.line(surface_, RED, (snd_freq_bin, TUNEBAR_Y), (snd_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, RED, (snd_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), (snd_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 1)
         if cat_radio and not fl.cat_snd_link_flag:
             tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
             # tune wf line
-            pygame.draw.line(surface_, D_RED, (tune_freq_bin, TUNEBAR_Y), (tune_freq_bin, TUNEBAR_Y+TUNEBAR_HEIGHT), 3)
+            pygame.draw.line(surface_, D_RED, (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 3)
             
         lc_bin = kiwi_wf.offset_to_bin(kiwi_.lc/1000.)
         lc_bin = snd_freq_bin + lc_bin
         if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
             # low cut line
-            pygame.draw.line(surface_, color_, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(kiwi_.hc/1000)
         hc_bin = snd_freq_bin + hc_bin
         if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
             # high cut line
-            pygame.draw.line(surface_, color_, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, color_, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 1)
         
-        pygame.draw.line(surface_, color_, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
-
+        pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), 2)
 
 
     center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
     # center WF line
-    pygame.draw.line(surface_, RED, (center_freq_bin, WF_Y), (center_freq_bin, WF_Y+6), 4)
+    pygame.draw.line(surface_, RED, (center_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.WF_Y), (center_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.WF_Y+6), 4)
     # mouse click_freq line
-    if pygame.mouse.get_focused() and WF_Y <= mouse[1] <= BOTTOMBAR_Y:
-        pygame.draw.line(surface_, RED, (mouse[0], TUNEBAR_Y), (mouse[0], BOTTOMBAR_Y), 1)
-    elif pygame.mouse.get_focused() and TOPBAR_HEIGHT <= mouse[1] <= TUNEBAR_Y:
-        pygame.draw.line(surface_, GREEN, (mouse[0], TOPBAR_HEIGHT), (mouse[0], TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+    if pygame.mouse.get_focused() and disp.WF_Y <= mouse[1] <= disp.BOTTOMBAR_Y:
+        pygame.draw.line(surface_, RED, (mouse[0], disp.TUNEBAR_Y), (mouse[0], disp.BOTTOMBAR_Y), 1)
+    elif pygame.mouse.get_focused() and disp.TOPBAR_HEIGHT <= mouse[1] <= disp.TUNEBAR_Y:
+        pygame.draw.line(surface_, GREEN, (mouse[0], disp.TOPBAR_HEIGHT), (mouse[0], disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 1)
 
     # SUB RX
     if fl.dualrx_flag and kiwi_snd2:
@@ -1168,24 +1189,24 @@ def draw_lines(surface_, wf_height, radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_s
         lc_bin = tune_freq_bin + lc_bin + 1
         if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
             # low cut line
-            pygame.draw.line(surface_, ORANGE, (lc_bin, TUNEBAR_Y), (lc_bin-5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 1)
         
         hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
         hc_bin = tune_freq_bin + hc_bin
         if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
             # high cut line
-            pygame.draw.line(surface_, ORANGE, (hc_bin, TUNEBAR_Y), (hc_bin+5, TUNEBAR_Y+TUNEBAR_HEIGHT), 1)
-        pygame.draw.line(surface_, ORANGE, (lc_bin, TUNEBAR_Y), (hc_bin, TUNEBAR_Y), 2)
+            pygame.draw.line(surface_, ORANGE, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), 1)
+        pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y), 2)
 
     # plot click and drag red horiz bar
     if fl.click_drag_flag:
-        pygame.draw.line(surface_, RED, (fl.start_drag_x, SPECTRUM_Y+10), (mouse[0], SPECTRUM_Y+10), 4)
+        pygame.draw.line(surface_, RED, (fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO, disp.SPECTRUM_Y+10), (mouse[0], disp.SPECTRUM_Y+10), 4)
 
     # plot tuning minor and major ticks
     for x in kiwi_wf.div_list:
-        pygame.draw.line(surface_, YELLOW, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+5), 3)
+        pygame.draw.line(surface_, YELLOW, (x*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+5), 3)
     for x in kiwi_wf.subdiv_list:
-        pygame.draw.line(surface_, WHITE, (x, TUNEBAR_Y+TUNEBAR_HEIGHT), (x, TUNEBAR_Y+15), 1)
+        pygame.draw.line(surface_, WHITE, (x*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+disp.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, disp.TUNEBAR_Y+15), 1)
 
 
 def display_kiwi_box(screen, current_string_, kiwilist):
@@ -1249,7 +1270,7 @@ def display_msg_box(screen, message, pos=None, color=WHITE):
         hugefont.render_to(screen, pos, message, color)
 
 
-def s_meter_draw(rssi_smooth, agc_threshold):
+def s_meter_draw(rssi_smooth, agc_threshold, disp):
     s_meter_radius = 50.
     SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
     smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
@@ -1299,18 +1320,18 @@ def s_meter_draw(rssi_smooth, agc_threshold):
     return smeter_surface
 
 
-def plot_spectrum(sdrdisplay, kiwi_wf, t_avg=15, col=YELLOW, filled=False):
-    spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, SPECTRUM_HEIGHT))
-    pixarr = pygame.PixelArray (spectrum_surf)
+def plot_spectrum(sdrdisplay, kiwi_wf, disp, t_avg=15, col=YELLOW, filled=False):
+    spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, disp.SPECTRUM_HEIGHT))
+    pixarr = pygame.PixelArray(spectrum_surf)
     wf_dyn_range = kiwi_wf.wf_max_db-kiwi_wf.wf_min_db
     min_wf_10 = int(kiwi_wf.wf_min_db/10)*10
     max_wf_10 = int(kiwi_wf.wf_max_db/10)*10
-    subdiv_list = [SPECTRUM_HEIGHT-1-int((v-kiwi_wf.wf_min_db)/wf_dyn_range * SPECTRUM_HEIGHT) for v in range(min_wf_10, max_wf_10, 10)]
+    subdiv_list = [disp.SPECTRUM_HEIGHT-1-int((v-kiwi_wf.wf_min_db)/wf_dyn_range * disp.SPECTRUM_HEIGHT) for v in range(min_wf_10, max_wf_10, 10)]
 
     for x, v in enumerate(np.nanmean(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
-        y = SPECTRUM_HEIGHT-1-int(v/255 * SPECTRUM_HEIGHT)
+        y = disp.SPECTRUM_HEIGHT-1-int(v/255 * disp.SPECTRUM_HEIGHT)
         if filled:
-            pixarr[x,y:SPECTRUM_HEIGHT] = col
+            pixarr[x,y:disp.SPECTRUM_HEIGHT] = col
         else:
             pixarr[x,y] = col
 
@@ -1318,10 +1339,12 @@ def plot_spectrum(sdrdisplay, kiwi_wf, t_avg=15, col=YELLOW, filled=False):
             for y_div in subdiv_list:
                 pixarr[x,y_div] = D_GREEN
     del pixarr
-    sdrdisplay.blit(spectrum_surf, (0, SPECTRUM_Y))
+    if disp.DISPLAY_WIDTH != kiwi_wf.WF_BINS:
+        spectrum_surf = pygame.transform.smoothscale(spectrum_surf, (disp.DISPLAY_WIDTH, disp.SPECTRUM_HEIGHT))
+    sdrdisplay.blit(spectrum_surf, (0, disp.SPECTRUM_Y))
 
 
-def plot_eibi(surface_, eibi, kiwi_wf):
+def plot_eibi(surface_, eibi, kiwi_wf, disp):
     y_offset = 0
     old_fbin = -100
     fontsize = font_size_dict["medium"]
@@ -1336,13 +1359,13 @@ def plot_eibi(surface_, eibi, kiwi_wf):
         f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
         shown_list.append(station_record)
         try:
-            ts = (WHITE, station_record[3], (f_bin,WF_Y+20), "small")
+            ts = (WHITE, station_record[3], (f_bin,disp.WF_Y+20), "small")
         except:
             continue
         render_ = midfont.render_to
         str_len = len(ts[1])
         x, y = ts[2]
-        if x>fontsize*str_len/2 and x<DISPLAY_WIDTH-10:
+        if x>fontsize*str_len/2 and x<disp.DISPLAY_WIDTH-10:
             if f_bin-old_fbin <= fontsize*str_len/2+5:
                 y_offset += fontsize
             else:
@@ -1350,11 +1373,11 @@ def plot_eibi(surface_, eibi, kiwi_wf):
             old_fbin = f_bin
             try:
                 render_(surface_, (x-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
+                pygame.draw.line(surface_, WHITE, (f_bin, disp.WF_Y), (f_bin, disp.WF_Y+20+y_offset), 1)
             except:
                 pass
 
-def plot_dxcluster(surface_, dxclust, kiwi_wf):
+def plot_dxcluster(surface_, dxclust, kiwi_wf, disp):
     y_offset = 0
     old_fbin = -100
     fontsize = font_size_dict["medium"]
@@ -1364,13 +1387,13 @@ def plot_dxcluster(surface_, dxclust, kiwi_wf):
         f_khz_float = float(string_f_khz)
         f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
         try:
-            ts = (WHITE, dxclust.callsign_freq_dict[string_f_khz], (f_bin,WF_Y+20), "small")
+            ts = (WHITE, dxclust.callsign_freq_dict[string_f_khz], (f_bin,disp.WF_Y+20), "small")
         except:
             continue
         render_ = midfont.render_to
         str_len = len(ts[1])
         x, y = ts[2]
-        if x>fontsize*str_len/2 and x<DISPLAY_WIDTH-10:
+        if x>fontsize*str_len/2 and x<disp.DISPLAY_WIDTH-10:
             if f_bin-old_fbin <= fontsize*str_len/2+5:
                 y_offset += fontsize
             else:
@@ -1378,11 +1401,11 @@ def plot_dxcluster(surface_, dxclust, kiwi_wf):
             old_fbin = f_bin
             try:
                 render_(surface_, (x-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                pygame.draw.line(surface_, WHITE, (f_bin, WF_Y), (f_bin, WF_Y+20+y_offset), 1)
+                pygame.draw.line(surface_, WHITE, (f_bin, disp.WF_Y), (f_bin, disp.WF_Y+20+y_offset), 1)
             except:
                 pass
 
-def plot_beacons(surface_, beacon_project, kiwi_wf):
+def plot_beacons(surface_, beacon_project, kiwi_wf, disp):
     y_offset = 0
     old_fbin = -100
     fontsize = font_size_dict["medium"]
@@ -1391,29 +1414,29 @@ def plot_beacons(surface_, beacon_project, kiwi_wf):
         if math.fabs(kiwi_wf.freq - beacon_project.freq_dict[band])<100:    
             f_khz_float = float(beacon_project.freq_dict[band])
             f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
-            ts = (GREEN, beacon_project.beacons_dict[band], (f_bin,(SPECTRUM_Y+TUNEBAR_Y)/2), "small")
+            ts = (GREEN, beacon_project.beacons_dict[band], (f_bin,(disp.SPECTRUM_Y+disp.TUNEBAR_Y)/2), "small")
             render_ = midfont.render_to
             str_len = len(ts[1])
             x, y = ts[2]
-            if x>fontsize*str_len/2 and x<DISPLAY_WIDTH-10:
+            if x>fontsize*str_len/2 and x<disp.DISPLAY_WIDTH-10:
                 old_fbin = f_bin
                 render_(surface_, (x-str_len*fontsize/2-10, y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
 
 
-def splash_screen(sdrdisplay):
+def splash_screen(sdrdisplay, disp):
     font = pygame.font.Font(None, 50)
     sdrdisplay.fill((0, 0, 0))
     block = font.render(" - SUPERSDR - ", True, ORANGE)
     rect = block.get_rect()
-    rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2-90))
+    rect = block.get_rect(center=(disp.DISPLAY_WIDTH/2, disp.DISPLAY_HEIGHT/2-90))
     sdrdisplay.blit(block, rect)
     block = font.render("...CONNECTING...", True, YELLOW)
     rect = block.get_rect()
-    rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2))
+    rect = block.get_rect(center=(disp.DISPLAY_WIDTH/2, disp.DISPLAY_HEIGHT/2))
     sdrdisplay.blit(block, rect)
     block = font.render("marco cogoni - IS0KYB", True, BLUE)
     rect = block.get_rect()
-    rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2+90))
+    rect = block.get_rect(center=(disp.DISPLAY_WIDTH/2, disp.DISPLAY_HEIGHT/2+90))
     sdrdisplay.blit(block, rect)
     pygame.display.flip()
     time.sleep(1)

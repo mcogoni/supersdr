@@ -24,6 +24,8 @@ parser.add_option("-f", "--freq", type=int,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
+parser.add_option("-l", "--large", type=int,
+                  help="screen horiz size in pixels (default 1024)", dest="winsize", default=1024)
 parser.add_option("-b", "--buffer", type=int,
                   help="buffer size", dest="audio_buffer", default=10)
 parser.add_option("-d", "--dual",
@@ -36,8 +38,14 @@ parser.add_option("-m", "--colormap", type=str,
 
 # sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
 #     pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
-sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
-    pygame.DOUBLEBUF,vsync=1)
+options = vars(parser.parse_args()[0])
+disp = display_constants(options["winsize"])
+if disp.DISPLAY_WIDTH == 1920:
+    sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
+        pygame.DOUBLEBUF | pygame.FULLSCREEN,vsync=1)
+else:
+    sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
+        pygame.DOUBLEBUF,vsync=1)
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
@@ -47,10 +55,9 @@ pygame.display.set_caption("SuperSDR %s"%VERSION)
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 
-splash_screen(sdrdisplay)
+splash_screen(sdrdisplay, disp)
 font = pygame.font.Font(None, 50)
 
-options = vars(parser.parse_args()[0])
 FPS = options['refresh']
 fl.dualrx_flag = options['dualrx']
 
@@ -114,7 +121,7 @@ kiwi_wf = None
 while not kiwi_wf:
     print(kiwi_wf)
     try:
-        kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
+        kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi, disp)
     except:
         kiwi_address = ""
         complete = False
@@ -133,7 +140,7 @@ while not kiwi_wf:
             sdrdisplay.fill((0, 0, 0))
             block = font.render("Enter KIWI address:port ->" + kiwi_address, True, (255, 255, 255))
             rect = block.get_rect()
-            rect = block.get_rect(center=(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2))
+            rect = block.get_rect(center=(disp.DISPLAY_WIDTH/2, disp.DISPLAY_HEIGHT/2))
             sdrdisplay.blit(block, rect)
             pygame.display.flip()
             if complete:
@@ -159,9 +166,11 @@ if not kiwi_snd:
 kiwi_snd2 = None
 if fl.dualrx_flag:
     time.sleep(2)
-    kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
-    kiwi_snd2.FULL_BUFF_LEN = options["audio_buffer"]
-    if not kiwi_snd2:
+    try:
+        kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
+    # kiwi_snd2.FULL_BUFF_LEN = options["audio_buffer"]
+    except:
+        fl.dualrx_flag = False
         print("Server not ready")
 
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
@@ -196,6 +205,7 @@ kiwilist.load_from_disk()
 kiwi_wf.set_freq_zoom(freq, zoom)
 kiwi_snd.freq = freq
 kiwi_snd.radio_mode = radio_mode
+delta_low, delta_high = 0., 0. # bandpass tuning
 lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
 kiwi_snd.set_mode_freq_pb()
 
@@ -487,7 +497,7 @@ while not wf_quit:
 
                 # WF fill spectrum ON/OFF
                 if keys[pygame.K_4]:
-                    SPECTRUM_FILLED = False if SPECTRUM_FILLED else True
+                    disp.SPECTRUM_FILLED = False if disp.SPECTRUM_FILLED else True
 
                 # Start/stop audio recording to file
                 if keys[pygame.K_e]:
@@ -564,12 +574,13 @@ while not wf_quit:
                 elif keys[pygame.K_y]:
                     if kiwi_snd2:
                         kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
-                        #force_sync_flag = True
+                        if not cat_radio:
+                            force_sync_flag = True
                         show_bigmsg = "switchab"
                         run_index_bigmsg = run_index
                     else:
                         try:
-                            kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000,  kiwi_password2, kiwi_wf, 0, kiwi_host2, kiwi_port2, True)
+                            kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
                             play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
                             print("Second RX active!")
                             show_bigmsg = "enable2rx"
@@ -644,25 +655,25 @@ while not wf_quit:
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom - 1)
                     kiwi_wf.set_white_flag()
             elif event.button == 1:
-                if WF_Y <= mouse[1] <= BOTTOMBAR_Y:
+                if disp.WF_Y <= mouse[1] <= disp.BOTTOMBAR_Y:
                     kiwi_wf.zoom_to_span()
                     kiwi_wf.start_freq()
                     kiwi_wf.end_freq()
-                    click_freq = kiwi_wf.bins_to_khz(mouse[0])
+                    click_freq = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
                     if kiwi_snd.radio_mode == "CW":
                         click_freq -= CW_PITCH # tune CW signal taking into account cw offset
-                if SPECTRUM_Y <= mouse[1] <= TUNEBAR_Y:
+                if disp.SPECTRUM_Y <= mouse[1] <= disp.TUNEBAR_Y:
                     pygame.mouse.get_rel()
-                    fl.start_drag_x = mouse[0]
+                    fl.start_drag_x = mouse[0]/kiwi_wf.BINS2PIXEL_RATIO
                     fl.click_drag_flag = True
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1 and fl.click_drag_flag:
-                delta_x = pygame.mouse.get_rel()[0]
+                delta_x = pygame.mouse.get_rel()[0]/kiwi_wf.BINS2PIXEL_RATIO
                 delta_freq = kiwi_wf.deltabins_to_khz(delta_x)
                 manual_wf_freq = kiwi_wf.freq - delta_freq
                 fl.click_drag_flag = False
     
-    if mouse[0] > wf_width-50 and mouse[1] > BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
+    if mouse[0] > wf_width-50 and mouse[1] > disp.BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
         fl.show_help_flag = True
     else:
         fl.show_help_flag = False
@@ -744,16 +755,16 @@ while not wf_quit:
         kiwi_wf.terminate = False
 
         try:
-            kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi)
-            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, old_volume)
+            kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi, disp)
+            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
             print("Changed server to: %s:%d" % (new_host,new_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
             print ("something went wrong...")
             play = None
         if not play:
-            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi)
-            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, old_volume)
+            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi, disp)
+            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
             if not play:
@@ -897,21 +908,24 @@ while not wf_quit:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
     if True or not run_index%kiwi_wf.averaging_n:
-        plot_spectrum(sdrdisplay, kiwi_wf,filled=SPECTRUM_FILLED, col=YELLOW)
-        surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
-        surface.set_palette(palRGB)
-        sdrdisplay.blit(surface, (0, WF_Y))
+        plot_spectrum(sdrdisplay, kiwi_wf, disp,filled=disp.SPECTRUM_FILLED, col=YELLOW)
+        wf_surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
+        wf_surface.set_palette(palRGB)
+        if disp.DISPLAY_WIDTH != kiwi_wf.WF_BINS:
+            wf_surface = pygame.Surface.convert(wf_surface)
+            wf_surface = pygame.transform.smoothscale(wf_surface, (disp.DISPLAY_WIDTH, disp.WF_HEIGHT))
+        sdrdisplay.blit(wf_surface, (0, disp.WF_Y))
 
-    pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,DISPLAY_WIDTH,TOPBAR_HEIGHT), 0)
-    pygame.draw.rect(sdrdisplay, (0,0,80), (0,TUNEBAR_Y,DISPLAY_WIDTH,TUNEBAR_HEIGHT), 0)
-    pygame.draw.rect(sdrdisplay, (0,0,0), (0,BOTTOMBAR_Y,DISPLAY_WIDTH,DISPLAY_HEIGHT), 0)
-    draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio)
-    update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
+    pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,disp.DISPLAY_WIDTH,disp.TOPBAR_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
+    pygame.draw.rect(sdrdisplay, (0,0,0), (0,disp.BOTTOMBAR_Y,disp.DISPLAY_WIDTH,disp.DISPLAY_HEIGHT), 0)
+    draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, disp, kiwi_snd, kiwi_snd2, fl, cat_radio)
+    update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, disp, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
-        plot_eibi(sdrdisplay, eibi, kiwi_wf)
+        plot_eibi(sdrdisplay, eibi, kiwi_wf, disp)
     elif fl.show_dxcluster_flag and kiwi_wf.zoom > 3:
-        plot_dxcluster(sdrdisplay, dxclust, kiwi_wf)
+        plot_dxcluster(sdrdisplay, dxclust, kiwi_wf, disp)
 
     time_now = datetime.utcnow()
     if check_time.second != time_now.second and not time_now.second % 10:
@@ -919,7 +933,7 @@ while not wf_quit:
         beacon_project.which_beacons()
         # print(beacon_project.beacons_dict)
     if kiwi_wf.zoom > 8:
-        plot_beacons(sdrdisplay, beacon_project, kiwi_wf)
+        plot_beacons(sdrdisplay, beacon_project, kiwi_wf, disp)
 
     if fl.input_freq_flag:
         question = "Freq (kHz)"
@@ -961,15 +975,15 @@ while not wf_quit:
         elif "restorememory" == show_bigmsg:
             msg_text = "Recall memory:%d -> %s"% (kiwi_memory.index, 
                 str(kiwi_memory.mem_list[kiwi_memory.index][0])+" kHz "+kiwi_memory.mem_list[kiwi_memory.index][1]) 
-            pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
+            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 2 - 10)
         elif "resetmemory" == show_bigmsg:
             msg_text = "Reset All Memories!"
         elif "loadmemorydisk" == show_bigmsg:
             msg_text = "Load Memories from Disk"
-            pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
+            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 2 - 10)
         elif "savememorydisk" == show_bigmsg:
             msg_text = "Save All Memories to Disk"
-            pos = (DISPLAY_WIDTH / 2 - 300, DISPLAY_HEIGHT / 2 - 10)
+            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 2 - 10)
         elif "emptymemory" == show_bigmsg:
             msg_text = "No Memories!"
         elif "start_rec" == show_bigmsg:
@@ -992,8 +1006,8 @@ while not wf_quit:
         rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
 
     if fl.s_meter_show_flag:
-        smeter_surface = s_meter_draw(rssi_smooth, kiwi_snd.thresh)
-        sdrdisplay.blit(smeter_surface, (0, BOTTOMBAR_Y-80))
+        smeter_surface = s_meter_draw(rssi_smooth, kiwi_snd.thresh, disp)
+        sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-80))
 
     mouse = pygame.mouse.get_pos()
     pygame.display.flip()
