@@ -39,7 +39,7 @@ parser.add_option("-m", "--colormap", type=str,
 # sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
 #     pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
 options = vars(parser.parse_args()[0])
-disp = display_constants(options["winsize"])
+disp = display_stuff(options["winsize"])
 if disp.DISPLAY_WIDTH == 1920:
     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
         pygame.DOUBLEBUF | pygame.FULLSCREEN,vsync=1)
@@ -55,7 +55,7 @@ pygame.display.set_caption("SuperSDR %s"%VERSION)
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 
-splash_screen(sdrdisplay, disp)
+disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
 
 FPS = options['refresh']
@@ -68,7 +68,7 @@ except:
     dxclust = None
 eibi = eibi_db()
 
-palRGB = create_cm(options["colormap"])
+palRGB = disp.create_cm(options["colormap"])
 
 kiwi_host = options['kiwiserver']
 kiwi_port = options['kiwiport']
@@ -908,7 +908,7 @@ while not wf_quit:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
     if True or not run_index%kiwi_wf.averaging_n:
-        plot_spectrum(sdrdisplay, kiwi_wf, disp,filled=disp.SPECTRUM_FILLED, col=YELLOW)
+        disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=YELLOW)
         wf_surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
         wf_surface.set_palette(palRGB)
         if disp.DISPLAY_WIDTH != kiwi_wf.WF_BINS:
@@ -919,13 +919,13 @@ while not wf_quit:
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,disp.DISPLAY_WIDTH,disp.TOPBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,0), (0,disp.BOTTOMBAR_Y,disp.DISPLAY_WIDTH,disp.DISPLAY_HEIGHT), 0)
-    draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, disp, kiwi_snd, kiwi_snd2, fl, cat_radio)
-    update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, disp, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
+    disp.draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio)
+    disp.update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
-        plot_eibi(sdrdisplay, eibi, kiwi_wf, disp)
+        disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
     elif fl.show_dxcluster_flag and kiwi_wf.zoom > 3:
-        plot_dxcluster(sdrdisplay, dxclust, kiwi_wf, disp)
+        disp.plot_dxcluster(sdrdisplay, dxclust, kiwi_wf)
 
     time_now = datetime.utcnow()
     if check_time.second != time_now.second and not time_now.second % 10:
@@ -933,18 +933,18 @@ while not wf_quit:
         beacon_project.which_beacons()
         # print(beacon_project.beacons_dict)
     if kiwi_wf.zoom > 8:
-        plot_beacons(sdrdisplay, beacon_project, kiwi_wf, disp)
+        disp.plot_beacons(sdrdisplay, beacon_project, kiwi_wf)
 
     if fl.input_freq_flag:
         question = "Freq (kHz)"
-        display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
+        disp.display_box(sdrdisplay, question + ": " + "".join(current_string), 200)
     elif fl.input_callsign_flag:
         question = "DXCLuster CALLSIGN"
-        display_box(sdrdisplay, question + ": " + "".join(current_string), 300)
+        disp.display_box(sdrdisplay, question + ": " + "".join(current_string), 300)
     elif fl.input_server_flag:
-        display_kiwi_box(sdrdisplay, current_string, kiwilist)
+        disp.display_kiwi_box(sdrdisplay, current_string, kiwilist)
     elif fl.show_help_flag:
-        display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
+        disp.display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_bigmsg:
         pos = None
         msg_color = WHITE
@@ -995,7 +995,7 @@ while not wf_quit:
         elif "agc" == show_bigmsg:
             msg_text = "AGC threshold: %d dBm" % kiwi_snd.thresh
 
-        display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
+        disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
     # rssi_smooth = np.mean(list(rssi_hist)[:])+10 # +10 is to approximately recalibrate the S-meter after averaging over time
 
@@ -1006,7 +1006,7 @@ while not wf_quit:
         rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
 
     if fl.s_meter_show_flag:
-        smeter_surface = s_meter_draw(rssi_smooth, kiwi_snd.thresh, disp)
+        smeter_surface = disp.s_meter_draw(rssi_smooth, kiwi_snd.thresh)
         sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-80))
 
     mouse = pygame.mouse.get_pos()
