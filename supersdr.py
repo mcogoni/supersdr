@@ -4,6 +4,9 @@ import _thread
 from optparse import OptionParser
 from utils_supersdr import *
 
+# from tkinter import *
+# from tkinter import messagebox
+
 # initialize global flags class, this is not really that elegant, but gets the job done
 fl = flags()
 
@@ -57,6 +60,10 @@ pygame.key.set_repeat(200, 50)
 
 disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
+
+# Tk().wm_withdraw() #to hide the main window
+# messagebox.showinfo('Continue','OK')
+
 
 FPS = options['refresh']
 fl.dualrx_flag = options['dualrx']

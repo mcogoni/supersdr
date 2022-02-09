@@ -156,12 +156,14 @@ class audio_recording():
     def start(self):
         self.filename = "supersdr_%sUTC.wav"%datetime.utcnow().isoformat().split(".")[0].replace(":", "_")
         print("start recording")
+        self.audio_buffer = []
         self.recording_flag = True
 
     def stop(self):
         print("stop recording")
         self.recording_flag = False
         self.save()
+
 
     def save(self):
         self.wave = wave.open(self.filename, 'wb')
@@ -804,7 +806,7 @@ class kiwi_sound():
     def process_audio_stream(self):
         try:
             data = self.stream.receive_message()
-            if not self.run_index % 100:
+            # if not self.run_index % 100:
                 # print(self.run_index, self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE)
             if self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE >= self.KIWI_SAMPLES_PER_FRAME: # self.KIWI_SAMPLES_PER_FRAME:
                 # print("Double reading from server to compensate audio non integer sample rate!", self.run_index)
