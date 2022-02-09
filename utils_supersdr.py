@@ -176,8 +176,9 @@ class audio_recording():
 
 
 class dxcluster():
-    CLEANUP_TIME = 600
-    UPDATE_TIME = 5
+    CLEANUP_TIME = 120
+    UPDATE_TIME = 10
+    color_dict = {0: GREEN, 300: RED, 600: ORANGE, 900: YELLOW, 1200: GREY}
 
     def __init__(self, mycall_):
         if mycall_ == "":
@@ -188,6 +189,7 @@ class dxcluster():
         self.int_freq_dict = defaultdict(set)
         self.spot_dict = {}
         self.callsign_freq_dict = {}
+        self.spot_color_list = []
         self.terminate = False
         self.failed_counter = 0
         self.update_now = False
@@ -238,7 +240,7 @@ class dxcluster():
         try:
             qrg = float(els[1].strip())
             callsign = els[2].strip()
-            print(utc, qrg, callsign)
+            print("New SPOT:", utc.strftime('%H:%M:%SZ'), qrg, "kHz", callsign)
         except:
             qrg, callsign, utc = None, None, None
             print("DX cluster msg decode failed: %s"%els)
@@ -254,7 +256,10 @@ class dxcluster():
             if duration_in_s > self.time_to_live:
                 del_list.append(call)
         for call in del_list:
+            qrg, _ = self.spot_dict[call]
             del self.spot_dict[call]
+            del self.callsign_freq_dict[qrg]
+            self.int_freq_dict[int(qrg)].remove(qrg)
 
     def run(self, kiwi_wf):
         while not self.terminate:
@@ -282,12 +287,12 @@ class dxcluster():
             if delta_t > self.CLEANUP_TIME: # cleanup db and keepalive msg
                 self.clean_old_spots()
                 self.last_cleanup = datetime.utcnow()
-                print("DXCLUST: cleaned old spots")
+                # print("DXCLUST: cleaned old spots")
             delta_t = (datetime.utcnow() - self.last_update).total_seconds()
             if delta_t > self.UPDATE_TIME or self.update_now:
                 self.keepalive()
                 self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
-                print("DXCLUST: updated visible spots")
+                # print("DXCLUST: updated visible spots")
                 self.last_update = datetime.utcnow()
                 self.update_now = False
 
@@ -705,6 +710,9 @@ class kiwi_sound():
         self.max_rssi_before_mute = -20
         self.mute_counter = 0
         self.muting_delay = 15
+
+        self.run_index = 0
+        self.delta_t = 0.0
         
         self.rssi = -127
         self.freq = freq_
@@ -751,16 +759,19 @@ class kiwi_sound():
                 if msg and "SND" == bytearray2str(msg[:3]):
                     break
                 elif msg and "MSG audio_init" in bytearray2str(msg):
+                    print(msg)
                     msg = bytearray2str(msg)
                     els = msg[4:].split()                
                     self.KIWI_RATE = int(int(els[1].split("=")[1]))
+                    KIWI_RATE_TRUE = float(els[2].split("=")[1])
+                    self.delta_t = KIWI_RATE_TRUE - self.KIWI_RATE
                     self.SAMPLE_RATIO = self.AUDIO_RATE/self.KIWI_RATE
         except:
             print ("Failed to connect to Kiwi audio stream")
             raise
         
         self.kiwi_filter = filtering(self.KIWI_RATE/2, self.AUDIO_RATE)
-        gcd = np.gcd(self.KIWI_RATE,self.AUDIO_RATE)
+        gcd = np.gcd((self.KIWI_RATE),self.AUDIO_RATE)
         self.n_low, self.n_high = int(self.KIWI_RATE/gcd), int(self.AUDIO_RATE/gcd)
 
         self.n_tap = self.kiwi_filter.n_tap
@@ -793,6 +804,12 @@ class kiwi_sound():
     def process_audio_stream(self):
         try:
             data = self.stream.receive_message()
+            if not self.run_index % 100:
+                # print(self.run_index, self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE)
+            if self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE >= self.KIWI_SAMPLES_PER_FRAME: # self.KIWI_SAMPLES_PER_FRAME:
+                # print("Double reading from server to compensate audio non integer sample rate!", self.run_index)
+                data = self.stream.receive_message()
+                self.run_index = 0
             if data is None:
                 self.terminate = True
                 self.kiwi_wf.terminate = True
@@ -881,6 +898,7 @@ class kiwi_sound():
             snd_buf = self.get_audio_chunk()
             if snd_buf is not None:
                 self.audio_buffer.put(snd_buf)
+                self.run_index += 1
         return
 
 
@@ -1074,14 +1092,13 @@ class display_stuff():
         return colormap
 
 
-
     def update_textsurfaces(self, surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
         mousex_pos = mouse[0]
         if mousex_pos < 25:
             mousex_pos = 25
         elif mousex_pos >= self.DISPLAY_WIDTH - 80:
             mousex_pos = self.DISPLAY_WIDTH - 80
-        mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
+        mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
         buff_level = kiwi_snd.audio_buffer.qsize()
         main_rx_color = RED if not kiwi_snd.subrx else GREEN
         sub_rx_color = GREEN if not kiwi_snd.subrx else RED
@@ -1117,7 +1134,7 @@ class display_stuff():
                 s_value = "S9+"+str(int((s_value-9)*6))+"dB"
             ts_dict["smeter"] = (GREEN, s_value, (20,self.V_POS_TEXT), "big", False)
         if fl.click_drag_flag:
-            delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x-mousex_pos)
+            delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO - mousex_pos)
             ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,self.SPECTRUM_Y+20), "big", False)
         if kiwi_wf.averaging_n>1:
             ts_dict["avg"] = (RED, "AVG %dX"%kiwi_wf.averaging_n, (10,self.SPECTRUM_Y+13), "small", False)
@@ -1373,12 +1390,13 @@ class display_stuff():
                     y_offset = 0
                 old_fbin = f_bin
                 try:
-                    render_(surface_, (x-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin, self.WF_Y), (f_bin, self.WF_Y+20+y_offset), 1)
+                    render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2), y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
                 except:
                     pass
 
     def plot_dxcluster(self, surface_, dxclust, kiwi_wf):
+        now  = datetime.utcnow()        
         y_offset = 0
         old_fbin = -100
         fontsize = font_size_dict["medium"]
@@ -1387,8 +1405,15 @@ class display_stuff():
         for string_f_khz in sorted_station_list:
             f_khz_float = float(string_f_khz)
             f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
+
             try:
-                ts = (WHITE, dxclust.callsign_freq_dict[string_f_khz], (f_bin,self.WF_Y+20), "small")
+                call = dxclust.callsign_freq_dict[string_f_khz]
+                spot_utc = dxclust.spot_dict[call][1]
+                duration = now - spot_utc
+                duration_in_s = duration.total_seconds()
+                duration_normal = int(duration_in_s//300*300)
+                color = dxclust.color_dict[duration_normal]
+                ts = (color, call, (f_bin,self.WF_Y+20), "small")
             except:
                 continue
             render_ = midfont.render_to
@@ -1401,8 +1426,8 @@ class display_stuff():
                     y_offset = 0
                 old_fbin = f_bin
                 try:
-                    render_(surface_, (x-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin, self.WF_Y), (f_bin, self.WF_Y+20+y_offset), 1)
+                    render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
                 except:
                     pass
 
@@ -1421,7 +1446,7 @@ class display_stuff():
                 x, y = ts[2]
                 if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
                     old_fbin = f_bin
-                    render_(surface_, (x-str_len*fontsize/2-10, y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-10), y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
 
 
     def splash_screen(self, sdrdisplay):

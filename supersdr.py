@@ -246,7 +246,7 @@ while not wf_quit:
     mouse = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
-        mouse_khz = kiwi_wf.bins_to_khz(mouse[0])
+        mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
 
         if event.type == pygame.KEYDOWN:
             before_help_flag = fl.show_help_flag
@@ -644,13 +644,13 @@ while not wf_quit:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 4: # mouse scroll up
                 if kiwi_wf.zoom<kiwi_wf.MAX_ZOOM:
-                    t_khz = kiwi_wf.bins_to_khz(mouse[0])
+                    t_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
                     zoom_f = (t_khz+kiwi_wf.freq)/2
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom + 1)
                     kiwi_wf.set_white_flag()
             elif event.button == 5: # mouse scroll down
                 if kiwi_wf.zoom>0:
-                    t_khz = kiwi_wf.bins_to_khz(mouse[0])
+                    t_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
                     zoom_f = kiwi_wf.freq + (kiwi_wf.freq-t_khz)
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom - 1)
                     kiwi_wf.set_white_flag()
@@ -1001,7 +1001,7 @@ while not wf_quit:
 
     rssi_last = rssi_hist[-1]
     if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= 3 if kiwi_snd.radio_mode=="CW" else 0.5 # s-meter decay rate
+        rssi_smooth -= 3 if kiwi_snd.radio_mode=="CW" else 1.5 # s-meter decay rate
     else:
         rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
 
