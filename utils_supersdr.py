@@ -164,7 +164,8 @@ class audio_recording():
 class dxcluster():
     CLEANUP_TIME = 120
     UPDATE_TIME = 10
-    color_dict = {0: GREEN, 300: YELLOW, 600: ORANGE, 900: RED, 1200: GREY}
+    SPOT_TTL_BASETIME = 300
+    color_dict = {0: GREEN, SPOT_TTL_BASETIME: YELLOW, SPOT_TTL_BASETIME*2: ORANGE, SPOT_TTL_BASETIME*3: RED, SPOT_TTL_BASETIME*4: GREY}
 
     def __init__(self, mycall_):
         if mycall_ == "":
@@ -172,10 +173,7 @@ class dxcluster():
         self.mycall = mycall_
         host, port = 'dxfun.com', 8000
         self.server = (host, port)
-        self.int_freq_dict = defaultdict(set)
         self.spot_dict = {}
-        self.callsign_freq_dict = defaultdict(set)
-        self.spot_color_list = []
         self.terminate = False
         self.failed_counter = 0
         self.update_now = False
@@ -193,6 +191,7 @@ class dxcluster():
             else:       
                 print('Connected!!!')
                 connected = True
+                # self.sock.settimeout(0.1)
         self.send(self.mycall)
         self.visible_stations = []
         self.time_to_live = 1200 # seconds for a spot to live
@@ -210,8 +209,8 @@ class dxcluster():
             pass
 
     def receive(self):
-        msg = self.sock.recv(2048)
         try:
+            msg = self.sock.recv(2048)
             msg = msg.decode("utf-8")
         except:
             msg = None
@@ -230,40 +229,21 @@ class dxcluster():
         except:
             qrg, callsign, utc = None, None, None
             print("DX cluster msg decode failed: %s"%els)
-        return qrg, callsign, utc        
+        return qrg, callsign, utc, els
 
     def clean_old_spots(self):
         now  = datetime.utcnow()
         # print (len(self.spot_dict.keys()), self.spot_dict.keys())
         del_list = []
-        for call in self.spot_dict:
-            spot_utc =self.spot_dict[call][1]
+        for spot_id in self.spot_dict.keys():
+            spot_utc = self.spot_dict[spot_id][2]
             duration = now - spot_utc
             duration_in_s = duration.total_seconds()
             if duration_in_s > self.time_to_live:
-                del_list.append(call)
-        for call in del_list:
-            qrg, _ = self.spot_dict[call]
-            # try:
-            #     del self.spot_dict[call]
-            #     self.callsign_freq_dict[qrg].remove(call)
-            #     if len(self.callsign_freq_dict[qrg]) == 0:
-            #         del self.callsign_freq_dict[qrg]
-            #     self.int_freq_dict[int(qrg)].remove(qrg)
-            #     if len(self.int_freq_dict[int(qrg)]) == 0:
-            #         del self.int_freq_dict[int(qrg)]
-            # except:
-            #     print("DXCLUST: problem deleting old spot!")
-            del self.spot_dict[call]
-            if len(self.callsign_freq_dict[qrg]) == 0:
-                del self.callsign_freq_dict[qrg]
-            elif call in self.callsign_freq_dict[qrg]:
-                self.callsign_freq_dict[qrg].remove(call)
-        
-            if len(self.int_freq_dict[int(qrg)]) == 0:
-                del self.int_freq_dict[int(qrg)]
-            elif qrg in self.int_freq_dict[int(qrg)]:
-                self.int_freq_dict[int(qrg)].remove(qrg)
+                del_list.append(spot_id)
+        for spot_id in del_list:
+            del self.spot_dict[spot_id]
+        print("Number of spots in memory:", len(self.spot_dict.keys()))
 
 
     def run(self, kiwi_wf):
@@ -283,9 +263,9 @@ class dxcluster():
             stored_something_flag = False
             for line in spot_str.replace("\x07", "").split("\n"):
                 if "DX de " in line:
-                    qrg, callsign, utc = self.decode_spot(line)
+                    qrg, callsign, utc, spot_msg = self.decode_spot(line)
                     if qrg and callsign:
-                        self.store_spot(qrg, callsign, utc)
+                        self.store_spot(qrg, callsign, utc, spot_msg)
                         stored_something_flag = True
                     else:
                         continue
@@ -305,20 +285,34 @@ class dxcluster():
                 self.last_update = datetime.utcnow()
                 self.update_now = False
 
-    def store_spot(self, qrg_, callsign_, utc_):
-        if callsign_ in self.spot_dict.keys() and math.fabs(qrg_-self.spot_dict[callsign_][0])<1.0:
-            qrg_ = self.spot_dict[callsign_][0]
-        self.spot_dict[callsign_] = (qrg_, utc_)
-        self.callsign_freq_dict[qrg_].add(callsign_)
-        self.int_freq_dict[int(qrg_)].add(qrg_)
+    def store_spot(self, qrg_, callsign_, utc_, spot_msg_):
+        spot_id = next(self.uniqueid()) # create a unique hash for each spot
+        self.spot_dict[spot_id] = (callsign_, qrg_, utc_, spot_msg_) # save spots as elements of a dictionary with hashes as keys
 
     def get_stations(self, start_f, end_f):
-        inters = set(range(int(start_f), int(end_f))) & set(self.int_freq_dict.keys())
+        count_dupes_dict = defaultdict(list)
         self.visible_stations = []
-        for int_freq in inters:
-            for freq in self.int_freq_dict[int_freq]:
-                self.visible_stations.append(freq)
-        self.visible_stations = sorted(self.visible_stations, key=float)
+        for spot_id in self.spot_dict.keys():
+            (callsign_, qrg_, utc_, spot_msg_) = self.spot_dict[spot_id]
+            if start_f < qrg_ < end_f:
+                count_dupes_dict[callsign_].append(spot_id)
+                self.visible_stations.append(spot_id)
+
+        self.visible_stations = sorted(self.visible_stations, key=lambda spot_id: self.spot_dict[spot_id][1])
+        for call in count_dupes_dict.keys():
+            same_call_list = []
+            if len(count_dupes_dict[call])>1:
+                same_call_list = sorted([spot_id for spot_id in count_dupes_dict[call]], key = lambda spot_id: self.spot_dict[spot_id][2])
+                for spot_id in same_call_list[:-1]:
+                    self.visible_stations.remove(spot_id)
+                    del self.spot_dict[spot_id]
+
+
+    def uniqueid(self):
+        seed = random.getrandbits(32)
+        while True:
+           yield seed
+           seed += 1
 
 
 class filtering():
@@ -1407,43 +1401,38 @@ class display_stuff():
                 except:
                     pass
 
+
     def plot_dxcluster(self, surface_, dxclust, kiwi_wf):
         now  = datetime.utcnow()        
         y_offset = 0
         old_fbin = -100
         fontsize = font_size_dict["medium"]
 
-        try:
-            for string_f_khz in dxclust.visible_stations:
-                f_khz_float = float(string_f_khz)
+        for spot_id in dxclust.visible_stations:
+            try:
+                f_khz_float = float(dxclust.spot_dict[spot_id][1])
                 f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
-                call_set = dxclust.callsign_freq_dict[string_f_khz]
-                for call in call_set:
-                    if call not in dxclust.spot_dict:
-                        continue
-                    spot_utc = dxclust.spot_dict[call][1]
-                    duration = now - spot_utc
-                    duration_in_s = duration.total_seconds()
-                    duration_normal = int(duration_in_s//300*300)
-                    color = dxclust.color_dict[duration_normal]
-                    ts = (color, call, (f_bin,self.WF_Y+20), "small")
+                call = dxclust.spot_dict[spot_id][0]
+                spot_utc = dxclust.spot_dict[spot_id][2]
+                duration = now - spot_utc
+                duration_in_s = duration.total_seconds()
+                duration_normal = int(duration_in_s//dxclust.SPOT_TTL_BASETIME*dxclust.SPOT_TTL_BASETIME)
+                color = dxclust.color_dict[duration_normal]
+                ts = (color, call, (f_bin,self.WF_Y+20), "small")
 
-                    render_ = midfont.render_to
-                    str_len = len(ts[1])
-                    x, y = ts[2]
-                    if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
-                        if f_bin-old_fbin <= fontsize*str_len/2+5:
-                            y_offset += fontsize
-                        else:
-                            y_offset = 0
-                        old_fbin = f_bin
-                        try:
-                            render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                            pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
-                        except:
-                            pass
-        except:
-            pass
+                render_ = midfont.render_to
+                str_len = len(ts[1])
+                x, y = ts[2]
+                if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
+                    if f_bin-old_fbin <= fontsize*str_len/2+5:
+                        y_offset += fontsize
+                    else:
+                        y_offset = 0
+                    old_fbin = f_bin
+                    render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
+            except:
+                pass
 
     def plot_beacons(self, surface_, beacon_project, kiwi_wf):
         y_offset = 0
@@ -1466,11 +1455,11 @@ class display_stuff():
     def splash_screen(self, sdrdisplay):
         font = pygame.font.Font(None, 50)
         sdrdisplay.fill((0, 0, 0))
-        block = font.render(" - SUPERSDR - ", True, ORANGE)
+        block = font.render(" - SUPERSDR - ", True, GREEN)
         rect = block.get_rect()
         rect = block.get_rect(center=(self.DISPLAY_WIDTH/2, self.DISPLAY_HEIGHT/2-90))
         sdrdisplay.blit(block, rect)
-        block = font.render("...CONNECTING...", True, YELLOW)
+        block = font.render("...CONNECTING...", True, GREY)
         rect = block.get_rect()
         rect = block.get_rect(center=(self.DISPLAY_WIDTH/2, self.DISPLAY_HEIGHT/2))
         sdrdisplay.blit(block, rect)
