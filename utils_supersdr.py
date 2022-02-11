@@ -38,22 +38,6 @@ from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
 VERSION = "v3.0beta"
 
-# # SuperSDR constants
-# disp.DISPLAY_WIDTH = 1440 #1024
-# disp.DISPLAY_HEIGHT = disp.DISPLAY_WIDTH//2
-# WF_HEIGHT = disp.DISPLAY_HEIGHT*60//100
-# SPECTRUM_HEIGHT = disp.DISPLAY_HEIGHT*40//100
-# TOPBAR_HEIGHT = 20
-# BOTTOMBAR_HEIGHT = 20
-# TUNEBAR_HEIGHT = 20
-# disp.DISPLAY_HEIGHT = WF_HEIGHT + SPECTRUM_HEIGHT + TOPBAR_HEIGHT + BOTTOMBAR_HEIGHT + TUNEBAR_HEIGHT
-# TOPBAR_Y = 0
-# SPECTRUM_Y = TOPBAR_HEIGHT
-# TUNEBAR_Y = SPECTRUM_Y + SPECTRUM_HEIGHT
-# WF_Y = TUNEBAR_Y + TUNEBAR_HEIGHT
-# BOTTOMBAR_Y = WF_Y + WF_HEIGHT
-# SPECTRUM_FILLED = True
-# V_POS_TEXT = 5
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.6 # CW offset from carrier in kHz
 
@@ -180,7 +164,7 @@ class audio_recording():
 class dxcluster():
     CLEANUP_TIME = 120
     UPDATE_TIME = 10
-    color_dict = {0: GREEN, 300: RED, 600: ORANGE, 900: YELLOW, 1200: GREY}
+    color_dict = {0: GREEN, 300: YELLOW, 600: ORANGE, 900: RED, 1200: GREY}
 
     def __init__(self, mycall_):
         if mycall_ == "":
@@ -190,7 +174,7 @@ class dxcluster():
         self.server = (host, port)
         self.int_freq_dict = defaultdict(set)
         self.spot_dict = {}
-        self.callsign_freq_dict = {}
+        self.callsign_freq_dict = defaultdict(set)
         self.spot_color_list = []
         self.terminate = False
         self.failed_counter = 0
@@ -250,6 +234,7 @@ class dxcluster():
 
     def clean_old_spots(self):
         now  = datetime.utcnow()
+        # print (len(self.spot_dict.keys()), self.spot_dict.keys())
         del_list = []
         for call in self.spot_dict:
             spot_utc =self.spot_dict[call][1]
@@ -259,9 +244,27 @@ class dxcluster():
                 del_list.append(call)
         for call in del_list:
             qrg, _ = self.spot_dict[call]
+            # try:
+            #     del self.spot_dict[call]
+            #     self.callsign_freq_dict[qrg].remove(call)
+            #     if len(self.callsign_freq_dict[qrg]) == 0:
+            #         del self.callsign_freq_dict[qrg]
+            #     self.int_freq_dict[int(qrg)].remove(qrg)
+            #     if len(self.int_freq_dict[int(qrg)]) == 0:
+            #         del self.int_freq_dict[int(qrg)]
+            # except:
+            #     print("DXCLUST: problem deleting old spot!")
             del self.spot_dict[call]
-            del self.callsign_freq_dict[qrg]
-            self.int_freq_dict[int(qrg)].remove(qrg)
+            if len(self.callsign_freq_dict[qrg]) == 0:
+                del self.callsign_freq_dict[qrg]
+            elif call in self.callsign_freq_dict[qrg]:
+                self.callsign_freq_dict[qrg].remove(call)
+        
+            if len(self.int_freq_dict[int(qrg)]) == 0:
+                del self.int_freq_dict[int(qrg)]
+            elif qrg in self.int_freq_dict[int(qrg)]:
+                self.int_freq_dict[int(qrg)].remove(qrg)
+
 
     def run(self, kiwi_wf):
         while not self.terminate:
@@ -277,13 +280,17 @@ class dxcluster():
                     continue
             self.failed_counter = 0
             spot_str = "%s"%dx_cluster_msg
+            stored_something_flag = False
             for line in spot_str.replace("\x07", "").split("\n"):
                 if "DX de " in line:
                     qrg, callsign, utc = self.decode_spot(line)
                     if qrg and callsign:
                         self.store_spot(qrg, callsign, utc)
+                        stored_something_flag = True
                     else:
                         continue
+            if stored_something_flag:           
+                self.update_now = True
 
             delta_t = (datetime.utcnow() - self.last_cleanup).total_seconds()
             if delta_t > self.CLEANUP_TIME: # cleanup db and keepalive msg
@@ -299,16 +306,19 @@ class dxcluster():
                 self.update_now = False
 
     def store_spot(self, qrg_, callsign_, utc_):
+        if callsign_ in self.spot_dict.keys() and math.fabs(qrg_-self.spot_dict[callsign_][0])<1.0:
+            qrg_ = self.spot_dict[callsign_][0]
         self.spot_dict[callsign_] = (qrg_, utc_)
-        self.callsign_freq_dict[qrg_] = callsign_
+        self.callsign_freq_dict[qrg_].add(callsign_)
         self.int_freq_dict[int(qrg_)].add(qrg_)
 
     def get_stations(self, start_f, end_f):
         inters = set(range(int(start_f), int(end_f))) & set(self.int_freq_dict.keys())
         self.visible_stations = []
         for int_freq in inters:
-            self.visible_stations.append(int_freq)
-        return self.visible_stations
+            for freq in self.int_freq_dict[int_freq]:
+                self.visible_stations.append(freq)
+        self.visible_stations = sorted(self.visible_stations, key=float)
 
 
 class filtering():
@@ -1402,36 +1412,38 @@ class display_stuff():
         y_offset = 0
         old_fbin = -100
         fontsize = font_size_dict["medium"]
-        station_list = [string_f_khz for f_khz in set(dxclust.visible_stations) for string_f_khz in dxclust.int_freq_dict[f_khz] ]
-        sorted_station_list = sorted(station_list, key=float)
-        for string_f_khz in sorted_station_list:
-            f_khz_float = float(string_f_khz)
-            f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
 
-            try:
-                call = dxclust.callsign_freq_dict[string_f_khz]
-                spot_utc = dxclust.spot_dict[call][1]
-                duration = now - spot_utc
-                duration_in_s = duration.total_seconds()
-                duration_normal = int(duration_in_s//300*300)
-                color = dxclust.color_dict[duration_normal]
-                ts = (color, call, (f_bin,self.WF_Y+20), "small")
-            except:
-                continue
-            render_ = midfont.render_to
-            str_len = len(ts[1])
-            x, y = ts[2]
-            if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
-                if f_bin-old_fbin <= fontsize*str_len/2+5:
-                    y_offset += fontsize
-                else:
-                    y_offset = 0
-                old_fbin = f_bin
-                try:
-                    render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
-                except:
-                    pass
+        try:
+            for string_f_khz in dxclust.visible_stations:
+                f_khz_float = float(string_f_khz)
+                f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
+                call_set = dxclust.callsign_freq_dict[string_f_khz]
+                for call in call_set:
+                    if call not in dxclust.spot_dict:
+                        continue
+                    spot_utc = dxclust.spot_dict[call][1]
+                    duration = now - spot_utc
+                    duration_in_s = duration.total_seconds()
+                    duration_normal = int(duration_in_s//300*300)
+                    color = dxclust.color_dict[duration_normal]
+                    ts = (color, call, (f_bin,self.WF_Y+20), "small")
+
+                    render_ = midfont.render_to
+                    str_len = len(ts[1])
+                    x, y = ts[2]
+                    if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
+                        if f_bin-old_fbin <= fontsize*str_len/2+5:
+                            y_offset += fontsize
+                        else:
+                            y_offset = 0
+                        old_fbin = f_bin
+                        try:
+                            render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                            pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
+                        except:
+                            pass
+        except:
+            pass
 
     def plot_beacons(self, surface_, beacon_project, kiwi_wf):
         y_offset = 0

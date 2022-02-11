@@ -4,9 +4,6 @@ import _thread
 from optparse import OptionParser
 from utils_supersdr import *
 
-# from tkinter import *
-# from tkinter import messagebox
-
 # initialize global flags class, this is not really that elegant, but gets the job done
 fl = flags()
 
@@ -60,10 +57,6 @@ pygame.key.set_repeat(200, 50)
 
 disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
-
-# Tk().wm_withdraw() #to hide the main window
-# messagebox.showinfo('Continue','OK')
-
 
 FPS = options['refresh']
 fl.dualrx_flag = options['dualrx']
@@ -239,6 +232,7 @@ fl.click_drag_flag = False
 check_time = datetime.utcnow()
 
 while not wf_quit:
+
     run_index += 1
 
     click_freq = None
@@ -1008,7 +1002,7 @@ while not wf_quit:
 
     rssi_last = rssi_hist[-1]
     if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= 3 if kiwi_snd.radio_mode=="CW" else 1.5 # s-meter decay rate
+        rssi_smooth -= 1.5 if kiwi_snd.radio_mode=="CW" else 0.5 # s-meter decay rate
     else:
         rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
 
