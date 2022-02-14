@@ -164,7 +164,7 @@ class audio_recording():
 class dxcluster():
     CLEANUP_TIME = 120
     UPDATE_TIME = 10
-    SPOT_TTL_BASETIME = 300
+    SPOT_TTL_BASETIME = 600
     color_dict = {0: GREEN, SPOT_TTL_BASETIME: YELLOW, SPOT_TTL_BASETIME*2: ORANGE, SPOT_TTL_BASETIME*3: RED, SPOT_TTL_BASETIME*4: GREY}
 
     def __init__(self, mycall_):
@@ -188,7 +188,8 @@ class dxcluster():
             except:
                 print('Impossibile to connect')
                 sleep(5)     
-            else:       
+            else:
+                self.sock.settimeout(1)
                 print('Connected!!!')
                 connected = True
                 # self.sock.settimeout(0.1)
@@ -248,17 +249,20 @@ class dxcluster():
 
     def run(self, kiwi_wf):
         while not self.terminate:
-            dx_cluster_msg = self.receive()
-            if not dx_cluster_msg:
-                self.failed_counter += 1
-                print("DX Cluster void response")
-                if self.failed_counter > 5:
-                    self.sock.close()
-                    time.sleep(5)
-                    self.connect()
-                    time.sleep(5)
-                    continue
-            self.failed_counter = 0
+            try:
+                dx_cluster_msg = self.receive()
+            except:
+                continue
+            # if not dx_cluster_msg:
+            #     self.failed_counter += 1
+            #     print("DX Cluster void response")
+            #     if self.failed_counter > 5:
+            #         self.sock.close()
+            #         time.sleep(5)
+            #         self.connect()
+            #         time.sleep(5)
+            #         continue
+            # self.failed_counter = 0
             spot_str = "%s"%dx_cluster_msg
             stored_something_flag = False
             for line in spot_str.replace("\x07", "").split("\n"):
@@ -1425,7 +1429,7 @@ class display_stuff():
                 x, y = ts[2]
                 if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
                     if f_bin-old_fbin <= fontsize*str_len/2+5:
-                        y_offset += fontsize
+                        y_offset += fontsize-2
                     else:
                         y_offset = 0
                     old_fbin = f_bin

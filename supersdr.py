@@ -20,7 +20,7 @@ parser.add_option("-P", "--radioport", type=int,
                   help="port number", dest="radioport", default=4532)
 parser.add_option("-z", "--zoom", type=int,
                   help="zoom factor", dest="zoom", default=8)
-parser.add_option("-f", "--freq", type=int,
+parser.add_option("-f", "--freq", type=float,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
                   help="screen refresh rate", dest="refresh", default=23)
@@ -686,6 +686,7 @@ while not wf_quit:
                 dxclust.connect()
                 dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
                 dx_t.start()
+
                 dx_cluster_msg = True
                 fl.show_dxcluster_flag = True
             else:
@@ -908,7 +909,7 @@ while not wf_quit:
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-    if True or not run_index%kiwi_wf.averaging_n:
+    if not run_index%min(5, kiwi_wf.averaging_n):
         disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=YELLOW)
         wf_surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
         wf_surface.set_palette(palRGB)
