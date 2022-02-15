@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import _thread
 from optparse import OptionParser
 from utils_supersdr import *
 
@@ -189,6 +188,7 @@ wf_quit = False
 
 current_string = []
 
+old_spot_dict = None
 if dxclust:
     print(dxclust)
     dxclust.connect()
@@ -266,8 +266,16 @@ while not wf_quit:
                 if keys[pygame.K_i]:
                     fl.show_eibi_flag = False if fl.show_eibi_flag else True
 
-                # Show realtime DX-CLUSTER labels
-                if keys[pygame.K_d]:
+                # Disconnect DXCLUSTER, but save previous spot list
+                if keys[pygame.K_p]:
+                    if dxclust:
+                        old_spot_dict = dxclust.spot_dict
+                        fl.show_dxcluster_flag = False
+                        dxclust.disconnect()
+                        dxclust = None
+
+                # Show realtime DX-CLUSTER labels, if DXCLUSTER disabled, enable it first
+                elif keys[pygame.K_d]:
                     if dxclust:
                         fl.show_dxcluster_flag = False if fl.show_dxcluster_flag else True
                         if fl.show_dxcluster_flag:
@@ -686,7 +694,8 @@ while not wf_quit:
                 dxclust.connect()
                 dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
                 dx_t.start()
-
+                if old_spot_dict:
+                    dxclust.spot_dict = old_spot_dict
                 dx_cluster_msg = True
                 fl.show_dxcluster_flag = True
             else:

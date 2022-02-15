@@ -90,7 +90,8 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- Z: Center KIWI RX, shift WF instead",
         "- SPACE: FORCE SYNC of WF to RX if no CAT, else sync to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
-        "- I/D: displays EIBI/DXCLUSTER labels",
+        "- D/P: enable or hide DXCLUSTER, P disconnect DXCLUSTER",
+        "- I: show/hide EIBI database stations",
         "- Q: switch to a different KIWI server",
         "- 1/2 & 3: adjust AGC threshold, 3 switch WF autoscale",
         "- SHIFT+ESC: quits",
@@ -174,15 +175,25 @@ class dxcluster():
         host, port = 'dxfun.com', 8000
         self.server = (host, port)
         self.spot_dict = {}
+        self.visible_stations = []
         self.terminate = False
         self.failed_counter = 0
         self.update_now = False
 
+    def disconnect(self):
+        self.terminate = True
+        try:
+            self.sock.shutdown(1)
+            self.sock.close()
+        except:
+            pass
+        print("DXCLuster disconnected!")
+        
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connected = False
         while not connected:
-            print(f'Connection to: {self.server}')
+            print("Connecting to: %s:%d" % self.server)
             try:
                 self.sock.connect(self.server)
             except:
@@ -194,7 +205,6 @@ class dxcluster():
                 connected = True
                 # self.sock.settimeout(0.1)
         self.send(self.mycall)
-        self.visible_stations = []
         self.time_to_live = 1200 # seconds for a spot to live
         self.last_update = datetime.utcnow()
         self.last_cleanup = datetime.utcnow()
@@ -253,16 +263,7 @@ class dxcluster():
                 dx_cluster_msg = self.receive()
             except:
                 continue
-            # if not dx_cluster_msg:
-            #     self.failed_counter += 1
-            #     print("DX Cluster void response")
-            #     if self.failed_counter > 5:
-            #         self.sock.close()
-            #         time.sleep(5)
-            #         self.connect()
-            #         time.sleep(5)
-            #         continue
-            # self.failed_counter = 0
+
             spot_str = "%s"%dx_cluster_msg
             stored_something_flag = False
             for line in spot_str.replace("\x07", "").split("\n"):
@@ -288,6 +289,7 @@ class dxcluster():
                 # print("DXCLUST: updated visible spots")
                 self.last_update = datetime.utcnow()
                 self.update_now = False
+        # print("Exited from DXCLUSTER loop")
 
     def store_spot(self, qrg_, callsign_, utc_, spot_msg_):
         spot_id = next(self.uniqueid()) # create a unique hash for each spot
@@ -1275,7 +1277,7 @@ class display_stuff():
     def display_help_box(self, screen, message_list):
         font_size = font_size_dict["small"]
 
-        window_size = 495
+        window_size = 505 #495
         pygame.draw.rect(screen, (0,0,0),
                        ((screen.get_width() / 2) - window_size/2,
                         (screen.get_height() / 2) - window_size/3,
