@@ -1014,7 +1014,7 @@ while not wf_quit:
     if math.fabs(rssi_last)>math.fabs(rssi_smooth):
         rssi_smooth -= 1.5 if kiwi_snd.radio_mode=="CW" else 0.5 # s-meter decay rate
     else:
-        rssi_smooth = (rssi_last+rssi_smooth)/2 # attack rate
+        rssi_smooth = (rssi_smooth + rssi_last)/2 # attack rate
 
     if fl.s_meter_show_flag:
         smeter_surface = disp.s_meter_draw(rssi_smooth, kiwi_snd.thresh)

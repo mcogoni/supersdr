@@ -36,7 +36,7 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v3.0beta"
+VERSION = "v3.1"
 
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.6 # CW offset from carrier in kHz
@@ -205,7 +205,7 @@ class dxcluster():
                 connected = True
                 # self.sock.settimeout(0.1)
         self.send(self.mycall)
-        self.time_to_live = 1200 # seconds for a spot to live
+        self.time_to_live = self.SPOT_TTL_BASETIME*5 # seconds for a spot to live
         self.last_update = datetime.utcnow()
         self.last_cleanup = datetime.utcnow()
 
@@ -1141,7 +1141,7 @@ class display_stuff():
         if not fl.s_meter_show_flag:
             s_value = (kiwi_snd.rssi+120)//6 # signal in S units of 6dB
             if s_value<=9:
-                s_value = "S"+str(int(s_value))
+                s_value = "S"+str(max(0,int(s_value)))
             else:
                 s_value = "S9+"+str(int((s_value-9)*6))+"dB"
             ts_dict["smeter"] = (GREEN, s_value, (20,self.V_POS_TEXT), "big", False)
@@ -1353,10 +1353,11 @@ class display_stuff():
     def plot_spectrum(self, sdrdisplay, kiwi_wf, t_avg=15, col=YELLOW, filled=False):
         spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, self.SPECTRUM_HEIGHT))
         pixarr = pygame.PixelArray(spectrum_surf)
-        wf_dyn_range = kiwi_wf.wf_max_db-kiwi_wf.wf_min_db
-        min_wf_10 = int(kiwi_wf.wf_min_db/10)*10
-        max_wf_10 = int(kiwi_wf.wf_max_db/10)*10
-        subdiv_list = [self.SPECTRUM_HEIGHT-1-int((v-kiwi_wf.wf_min_db)/wf_dyn_range * self.SPECTRUM_HEIGHT) for v in range(min_wf_10, max_wf_10, 10)]
+        if not kiwi_wf.wf_auto_scaling:
+            wf_dyn_range = kiwi_wf.wf_max_db-kiwi_wf.wf_min_db
+            min_wf_10 = int(kiwi_wf.wf_min_db/10)*10
+            max_wf_10 = int(kiwi_wf.wf_max_db/10)*10
+            subdiv_list = [self.SPECTRUM_HEIGHT-1-int((v-kiwi_wf.wf_min_db)/wf_dyn_range * self.SPECTRUM_HEIGHT) for v in range(min_wf_10, max_wf_10, 10)]
 
         for x, v in enumerate(np.nanmean(kiwi_wf.wf_data.T[:,:t_avg], axis=1)):
             y = self.SPECTRUM_HEIGHT-1-int(v/255 * self.SPECTRUM_HEIGHT)
@@ -1456,6 +1457,7 @@ class display_stuff():
                 if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
                     old_fbin = f_bin
                     render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-10), y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, y), 1)
 
 
     def splash_screen(self, sdrdisplay):
