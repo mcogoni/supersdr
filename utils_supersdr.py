@@ -1,4 +1,3 @@
-import pygame
 import sounddevice as sd
 import wave
 
@@ -8,6 +7,8 @@ import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 from matplotlib import cm
 import numpy as np
 from scipy.signal import resample_poly, welch
+
+import pygame
 
 import pickle
 import threading, queue

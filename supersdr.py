@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import warnings
+warnings.filterwarnings('ignore')
 
 from optparse import OptionParser
 from utils_supersdr import *
@@ -460,26 +462,32 @@ while not wf_quit:
 
                 # KIWI WF arrow step tune
                 if keys[pygame.K_LEFT]:
-                    fast_tune = True if mods & pygame.KMOD_SHIFT else False
-                    if not (mods & pygame.KMOD_CTRL):
-                        if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10:
+                    if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
+                        fast_tune = True if mods & pygame.KMOD_SHIFT else False
+                        slow_tune = True if mods & pygame.KMOD_CTRL else False
+                        if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10: # AM & SSB
                             if fast_tune:
                                 manual_snd_freq = kiwi_snd.freq//1 - 10
+                            elif slow_tune:
+                                manual_snd_freq = kiwi_snd.freq - 0.1
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 if kiwi_snd.freq % 1 else kiwi_snd.freq//1 - 1
-                        else:
-                            manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 - (0.1 if not fast_tune else 1.0)
+                        else: # CW
+                            manual_snd_freq = kiwi_snd.freq - (1.0 if fast_tune else (0.01 if slow_tune else 0.1))
                 elif keys[pygame.K_RIGHT]:
-                    fast_tune = True if mods & pygame.KMOD_SHIFT else False
-                    if not (mods & pygame.KMOD_CTRL):                    
-                        if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10:
+                    if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
+                        fast_tune = True if mods & pygame.KMOD_SHIFT else False
+                        slow_tune = True if mods & pygame.KMOD_CTRL else False
+                        if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10: # AM & SSB
                             if fast_tune:
                                 manual_snd_freq = kiwi_snd.freq//1 + 10
+                            elif slow_tune:
+                                manual_snd_freq = kiwi_snd.freq + 0.1
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 + 1
-                        else:
-                            manual_snd_freq = ((kiwi_snd.freq)*10//1)/10 + (0.1001 if not fast_tune else 1.0)
-                
+                        else: # CW
+                            manual_snd_freq = kiwi_snd.freq + (1.0 if fast_tune else (0.01 if slow_tune else 0.1))
+                    
                 if keys[pygame.K_PAGEDOWN]:
                     manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/4
                 elif keys[pygame.K_PAGEUP]:
