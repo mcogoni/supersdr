@@ -59,6 +59,8 @@ pygame.key.set_repeat(200, 50)
 disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
 
+
+#################################
 FPS = options['refresh']
 fl.dualrx_flag = options['dualrx']
 
@@ -68,6 +70,9 @@ try:
 except:
     dxclust = None
 eibi = eibi_db()
+
+mylogger = logger(CALLSIGN)
+mylogger.read_file()
 
 palRGB = disp.create_cm(options["colormap"])
 
@@ -263,6 +268,14 @@ while not wf_quit:
                     force_sync_flag = True
                     show_bigmsg = "forcesync"
                     run_index_bigmsg = run_index
+
+                # Show logger popup
+                if keys[pygame.K_0]:
+                    mylogger.log_popup(kiwi_snd)
+
+                # Show logger popup
+                if keys[pygame.K_9]:
+                    mylogger.search_popup(kiwi_snd)
 
                 # Show EIBI labels
                 if keys[pygame.K_i]:
@@ -469,11 +482,11 @@ while not wf_quit:
                             if fast_tune:
                                 manual_snd_freq = kiwi_snd.freq//1 - 10
                             elif slow_tune:
-                                manual_snd_freq = kiwi_snd.freq - 0.1
+                                manual_snd_freq = round(kiwi_snd.freq - 0.1, 2)
                             else:
                                 manual_snd_freq = kiwi_snd.freq//1 if kiwi_snd.freq % 1 else kiwi_snd.freq//1 - 1
                         else: # CW
-                            manual_snd_freq = kiwi_snd.freq - (1.0 if fast_tune else (0.01 if slow_tune else 0.1))
+                            manual_snd_freq = round(kiwi_snd.freq - (1.0 if fast_tune else (0.01 if slow_tune else 0.1)), 2)
                 elif keys[pygame.K_RIGHT]:
                     if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
                         fast_tune = True if mods & pygame.KMOD_SHIFT else False
@@ -960,6 +973,9 @@ while not wf_quit:
     elif fl.input_callsign_flag:
         question = "DXCLuster CALLSIGN"
         disp.display_box(sdrdisplay, question + ": " + "".join(current_string), 300)
+    elif fl.input_qso_flag:
+        question = "CALL"
+        disp.display_box(sdrdisplay, question + ": " + "".join(current_string), 300)
     elif fl.input_server_flag:
         disp.display_kiwi_box(sdrdisplay, current_string, kiwilist)
     elif fl.show_help_flag:
@@ -1034,6 +1050,11 @@ while not wf_quit:
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
+
+    try:
+        mylogger.main_dialog.update()
+    except:
+        pass
 
 # close audio stream
 kiwi_audio_stream.stop()

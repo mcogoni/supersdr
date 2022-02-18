@@ -1,6 +1,9 @@
 import sounddevice as sd
 import wave
 
+import tkinter
+from tkinter import *
+
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
@@ -40,7 +43,7 @@ from mod_pywebsocket._stream_base import ConnectionTerminatedException
 VERSION = "v3.1"
 
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-CW_PITCH = 0.6 # CW offset from carrier in kHz
+CW_PITCH = 0.5 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
 LOW_CUT_SSB = 30 # Bandpass low end SSB
@@ -95,6 +98,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- I: show/hide EIBI database stations",
         "- Q: switch to a different KIWI server",
         "- 1/2 & 3: adjust AGC threshold, 3 switch WF autoscale",
+        "- 0/9: [LOGGER] add QSO to log / open search QSO dialog",
         "- SHIFT+ESC: quits",
         "",
         "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
@@ -122,6 +126,7 @@ class flags():
     show_eibi_flag = False
     show_dxcluster_flag = False
     input_callsign_flag = False
+    input_qso_flag = False
     dualrx_flag = False
     click_drag_flag = False
     start_drag_x = None
@@ -130,6 +135,207 @@ class flags():
     wf_snd_link_flag = False
     cat_snd_link_flag = True
 
+
+class logger():
+    def __init__(self, callsign):
+        # self.log_file = "supersdr_%s.log" % callsign.upper()
+        self.log_file = "log.sdr"
+        self.qso_dict = defaultdict(set)
+
+    def read_file(self):
+        try:
+            with open(self.log_file, "r") as fd:
+                log_data = fd.readlines()
+            for row in log_data:
+                els = row.split(";")
+                if len(els)>1:
+                    qso_utc = els[0].strip() #.strptime("%d/%m/%Y %I:%M")
+                    qso_callsign = els[1].strip()
+                    qso_frequency = float(els[2].strip())
+                    qso_mode = els[3].strip()
+                    qso_power = float(els[4].strip())
+                    qso_rst_his = els[5].strip()
+                    qso_rst_mine = els[6].strip()
+                    qso_comments = els[7].strip()
+                    
+                    self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
+        except:
+            print("no logfile found!")
+
+
+    def store_qso_to_file(self):
+        qso_callsign = self.entry_callsign.get().upper()
+        qso_utc = self.entry_utc.get()
+        qso_frequency = self.entry_frequency.get()
+        qso_mode = self.entry_mode.get()
+        qso_power = self.entry_power.get()
+        qso_rst_his = self.entry_rst_his.get()
+        qso_rst_mine = self.entry_rst_mine.get()
+        qso_comments = self.entry_comments.get()
+        self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
+        with open(self.log_file, "a") as fd:
+            qso_row_list = [qso_utc, qso_callsign, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments]
+            qso_row_string = ";".join(qso_row_list)+"\n"
+            print(qso_row_string)
+            fd.write(qso_row_string)
+
+        self.root.destroy()
+
+    def log_popup(self, kiwi_snd):
+        try:
+            if 'normal' == self.root.state():
+                self.root.focus_force()
+                return
+        except:
+            try:
+                if 'normal' == self.root_search.state():
+                    return
+            except:
+                pass
+        self.root = tkinter.Tk()
+        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.geometry("200x430+1500+400")
+        self.root.resizable(False,False)
+        self.root.title("Logger")
+        self.root.bind('<Escape>', lambda event: self.root.destroy())
+
+        self.main_dialog =  tkinter.Frame(self.root)
+        self.main_dialog.pack()
+         
+        # Create label
+        l = tkinter.Label(self.root, text = "New QSO")
+        l.config(font =("Mono", 14))
+
+        label_callsign = tkinter.Label(text="Callsign")
+        self.entry_callsign = tkinter.Entry()
+        self.entry_callsign.focus()
+        label_utc = tkinter.Label(text="Date and Time (UTC)")
+        self.entry_utc = tkinter.Entry()
+        label_frequency = tkinter.Label(text="Frequency (kHz)")
+        self.entry_frequency = tkinter.Entry()
+        label_mode = tkinter.Label(text="Mode")
+        self.entry_mode = tkinter.Entry()
+        label_rst_his = tkinter.Label(text="RST (his)")
+        self.entry_power = tkinter.Entry()
+        label_power = tkinter.Label(text="Power (W)")
+        self.entry_rst_his = tkinter.Entry()
+        label_rst_mine = tkinter.Label(text="RST (Mine)")
+        self.entry_rst_mine = tkinter.Entry()
+        label_comments = tkinter.Label(text="Comments (Name, QTH, etc")
+        self.entry_comments = tkinter.Entry()
+
+        l.pack()
+        label_callsign.pack()
+        self.entry_callsign.pack()
+        label_utc.pack()
+        self.entry_utc.pack()
+        self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %I:%M"))
+        label_frequency.pack()
+        self.entry_frequency.pack()
+        self.entry_frequency.insert(END, kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0))
+        label_mode.pack()
+        self.entry_mode.pack()
+        self.entry_mode.insert(END, kiwi_snd.radio_mode)
+        label_power.pack()
+        self.entry_power.pack()
+        self.entry_power.insert(END, 100)
+        label_rst_his.pack()
+        self.entry_rst_his.pack()
+        self.entry_rst_his.insert(END, 59 if kiwi_snd.radio_mode!="CW" else 599)
+        label_rst_mine.pack()
+        self.entry_rst_mine.pack()
+        self.entry_rst_mine.insert(END, 59 if kiwi_snd.radio_mode!="CW" else 599)
+        label_comments.pack()
+        self.entry_comments.pack()
+
+        frame_bottom = tkinter.Frame(self.root, borderwidth=5)
+        frame_bottom.pack(fill=BOTH, expand=True)
+        # Create button for next text.
+        self.b1 = tkinter.Button(master=frame_bottom, text = "Save QSO", command = self.store_qso_to_file)
+         # Create an Exit button.
+        self.b2 = tkinter.Button(master=frame_bottom, text = "Cancel",
+                    command = self.root.destroy)
+
+        self.b1.pack(side=LEFT)
+        self.b2.pack(side=RIGHT)
+        frame_bottom.pack()
+
+
+    def find_qso(self):
+        qso_callsign = self.entry_callsign_search.get().upper()
+        if len(qso_callsign)<3:
+            self.t.delete(1.0, END)
+            self.t.insert(END, "Callsign too short!\n")
+            return
+        call_list = list(self.qso_dict.keys())
+        self.t.delete(1.0, END)
+        callsign_find_list = [True if key.find(qso_callsign)>-1 else False for i, key in enumerate(call_list)]
+        index = 1
+        if any(callsign_find_list):
+            for i, qso_call_flag in enumerate(callsign_find_list):
+                if qso_call_flag:
+                    qso_list = self.qso_dict[call_list[i]]
+                    for qso_record in qso_list:
+                        qso_string = "%d. "%(index)+call_list[i]+"\n"+" - ".join([str(el)+("\n" if ii==0 else "") for ii, el in enumerate(qso_record)])+"\n"
+                        self.t.insert(END, qso_string)
+                        index += 1
+        else:    
+            self.t.insert(END, "No QSOs found!")
+
+    def search_popup(self, kiwi_snd):
+        try:
+            if 'normal' == self.root_search.state():
+                self.root_search.focus_force()
+                return
+        except:
+            try:
+                if 'normal' == self.root.state():
+                    return
+            except:
+                pass
+
+        self.root_search = tkinter.Tk()
+        self.root_search.protocol("WM_DELETE_WINDOW", self.root_search.destroy)
+        self.root_search.geometry("400x400+1500+900")
+        self.root_search.resizable(False,False)
+        self.root_search.title("Search QSO")
+        self.root_search.bind('<Escape>', lambda event: self.root_search.destroy())
+        self.root_search.bind('<Return>', lambda event: self.find_qso())
+        self.main_dialog = tkinter.Frame(self.root_search)
+        self.main_dialog.pack()
+
+        # Create label
+        l = tkinter.Label(self.root_search, text = "Search QSO")
+        l.config(font =("Mono", 14))
+
+        label_callsign_search = tkinter.Label(text="Callsign")
+        self.entry_callsign_search = tkinter.Entry()
+        self.entry_callsign_search.focus()
+
+        l.pack()
+        label_callsign_search.pack()
+        self.entry_callsign_search.pack()
+
+        frame_text = tkinter.Frame(self.root_search, borderwidth=1)
+        frame_text.pack(fill=BOTH, expand=True)
+        scrollbar = Scrollbar(frame_text)
+        self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.t.yview)         
+        scrollbar.pack(side=RIGHT, fill=Y)
+        self.t.pack(side="left")
+
+        frame_bottom = tkinter.Frame(self.root_search, borderwidth=5)
+        frame_bottom.pack(fill=BOTH, expand=True)
+        # Create button for next text.
+        self.b1 = tkinter.Button(master=frame_bottom, text = "Find!", command = self.find_qso)
+         # Create an Exit button.
+        self.b2 = tkinter.Button(master=frame_bottom, text = "Cancel",
+                    command = self.root_search.destroy)
+
+        self.b1.pack(side=LEFT)
+        self.b2.pack(side=RIGHT)
+        frame_bottom.pack()
+            
 
 class audio_recording():
     def __init__(self, kiwi_snd):
@@ -1068,9 +1274,9 @@ class display_stuff():
         DISPLAY_HEIGHT = DISPLAY_WIDTH//2
         self.WF_HEIGHT = DISPLAY_HEIGHT*60//100
         self.SPECTRUM_HEIGHT = DISPLAY_HEIGHT*40//100
-        self.TOPBAR_HEIGHT = 20
+        self.TOPBAR_HEIGHT = 23
         self.BOTTOMBAR_HEIGHT = 20
-        self.TUNEBAR_HEIGHT = 20
+        self.TUNEBAR_HEIGHT = 23
         self.DISPLAY_HEIGHT = self.WF_HEIGHT + self.SPECTRUM_HEIGHT + self.TOPBAR_HEIGHT + self.BOTTOMBAR_HEIGHT + self.TUNEBAR_HEIGHT
         self.TOPBAR_Y = 0
         self.SPECTRUM_Y = self.TOPBAR_HEIGHT
@@ -1078,7 +1284,7 @@ class display_stuff():
         self.WF_Y = self.TUNEBAR_Y + self.TUNEBAR_HEIGHT
         self.BOTTOMBAR_Y = self.WF_Y + self.WF_HEIGHT
         self.SPECTRUM_FILLED = True
-        self.V_POS_TEXT = 5
+        self.V_POS_TEXT = 6
 
 
     def create_cm(self, which):
@@ -1113,14 +1319,15 @@ class display_stuff():
             mousex_pos = self.DISPLAY_WIDTH - 80
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
         buff_level = kiwi_snd.audio_buffer.qsize()
-        main_rx_color = RED if not kiwi_snd.subrx else GREEN
-        sub_rx_color = GREEN if not kiwi_snd.subrx else RED
+        main_rx_color = RED #if not kiwi_snd.subrx else GREEN
+        sub_rx_color = GREEN #if not kiwi_snd.subrx else RED
         #           Label   Color   Freq/Mode                       Screen position
-        ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-68,self.TUNEBAR_Y+2), "small", False),
-                "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,self.TUNEBAR_Y+2), "small", False),
-                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,self.TUNEBAR_Y+2), "small", False),
-                "rx_freq": (main_rx_color, "%sMAIN:%.3fkHz %s"%("[MUTE]" if kiwi_snd.volume==0 else "[ENBL]", kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode), (wf_width/2-120,self.V_POS_TEXT), "big", False),
-                "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,self.BOTTOMBAR_Y+6), "small", False),
+        ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
+                "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,self.TUNEBAR_Y+1), "small", False),
+                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,self.TUNEBAR_Y+1), "small", False),
+                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
+                # "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,self.BOTTOMBAR_Y+6), "small", False),
+                "kiwi": (RED if not kiwi_snd.subrx else GREEN, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,self.BOTTOMBAR_Y+6), "small", False),
                 "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,self.SPECTRUM_Y+1), "small", False),
                 "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, self.V_POS_TEXT), "small", False),
                 "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
@@ -1130,22 +1337,22 @@ class display_stuff():
                 "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+4), "big", False), 
                 "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, self.BOTTOMBAR_Y+4), "big", False),
                 "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, self.BOTTOMBAR_Y+4), "big", False),
-                "utc": (WHITE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-155, 4), "small", False),
+                "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-160, self.V_POS_TEXT), "small", False),
                 "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
                 "wf_param": (WHITE, "%ddB AUTO %s"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
                 "help": (BLUE, "HELP", (wf_width-50, self.BOTTOMBAR_Y+4), "big", False)
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
-            ts_dict["rx_freq2"] = (sub_rx_color, "%sSUB:%.3fkHz %s"%("[MUTE]" if kiwi_snd2.volume==0 else "[ENBL]", kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode), (wf_width/2-390,self.V_POS_TEXT), "big", False)
-            ts_dict["kiwi2"] = (D_GREEN if buff_level<kiwi_snd2.FULL_BUFF_LEN/3 else GREEN, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,self.BOTTOMBAR_Y+6), "small", False)
+            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
+            ts_dict["kiwi2"] = (GREEN if not kiwi_snd.subrx else RED, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,self.BOTTOMBAR_Y+6), "small", False)
         if not fl.s_meter_show_flag:
             s_value = (kiwi_snd.rssi+120)//6 # signal in S units of 6dB
             if s_value<=9:
                 s_value = "S"+str(max(0,int(s_value)))
             else:
                 s_value = "S9+"+str(int((s_value-9)*6))+"dB"
-            ts_dict["smeter"] = (GREEN, s_value, (20,self.V_POS_TEXT), "big", False)
+            ts_dict["smeter"] = (ORANGE, s_value, (20,self.V_POS_TEXT-1), "big", False)
         if fl.click_drag_flag:
             delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO - mousex_pos)
             ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,self.SPECTRUM_Y+20), "big", False)
@@ -1176,25 +1383,25 @@ class display_stuff():
             snd_freq_bin = kiwi_wf.offset_to_bin(kiwi_.freq+kiwi_wf.span_khz/2-kiwi_wf.freq)
             if snd_freq_bin>0 and snd_freq_bin< kiwi_wf.WF_BINS:
                 # carrier line
-                pygame.draw.line(surface_, RED, (snd_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (snd_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
+                pygame.draw.line(surface_, RED, (snd_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), (snd_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
             if cat_radio and not fl.cat_snd_link_flag:
                 tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
                 # tune wf line
-                pygame.draw.line(surface_, D_RED, (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 3)
+                pygame.draw.line(surface_, D_RED, (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 3)
                 
             lc_bin = kiwi_wf.offset_to_bin(kiwi_.lc/1000.)
             lc_bin = snd_freq_bin + lc_bin
             if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
                 # low cut line
-                pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
+                pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
             
             hc_bin = kiwi_wf.offset_to_bin(kiwi_.hc/1000)
             hc_bin = snd_freq_bin + hc_bin
             if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
                 # high cut line
-                pygame.draw.line(surface_, color_, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
+                pygame.draw.line(surface_, color_, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
             
-            pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), 2)
+            pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), 2)
 
 
         center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
@@ -1204,7 +1411,7 @@ class display_stuff():
         if pygame.mouse.get_focused() and self.WF_Y <= mouse[1] <= self.BOTTOMBAR_Y:
             pygame.draw.line(surface_, RED, (mouse[0], self.TUNEBAR_Y), (mouse[0], self.BOTTOMBAR_Y), 1)
         elif pygame.mouse.get_focused() and self.TOPBAR_HEIGHT <= mouse[1] <= self.TUNEBAR_Y:
-            pygame.draw.line(surface_, GREEN, (mouse[0], self.TOPBAR_HEIGHT), (mouse[0], self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, GREEN, (mouse[0], self.TOPBAR_HEIGHT+self.TUNEBAR_HEIGHT/2), (mouse[0], self.TUNEBAR_Y+self.TUNEBAR_HEIGHT+self.TUNEBAR_HEIGHT/2), 1)
 
         # SUB RX
         if fl.dualrx_flag and kiwi_snd2:
@@ -1220,14 +1427,14 @@ class display_stuff():
             lc_bin = tune_freq_bin + lc_bin + 1
             if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
                 # low cut line
-                pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
+                pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
             
             hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
             hc_bin = tune_freq_bin + hc_bin
             if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
                 # high cut line
-                pygame.draw.line(surface_, ORANGE, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
-            pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), 2)
+                pygame.draw.line(surface_, ORANGE, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
+            pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), 2)
 
         # plot click and drag red horiz bar
         if fl.click_drag_flag:
@@ -1235,9 +1442,9 @@ class display_stuff():
 
         # plot tuning minor and major ticks
         for x in kiwi_wf.div_list:
-            pygame.draw.line(surface_, YELLOW, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+5), 3)
+            pygame.draw.line(surface_, YELLOW, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+12), 3)
         for x in kiwi_wf.subdiv_list:
-            pygame.draw.line(surface_, WHITE, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+15), 1)
+            pygame.draw.line(surface_, WHITE, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+17), 1)
 
 
     def display_kiwi_box(self, screen, current_string_, kiwilist):
@@ -1278,7 +1485,7 @@ class display_stuff():
     def display_help_box(self, screen, message_list):
         font_size = font_size_dict["small"]
 
-        window_size = 505 #495
+        window_size = 525
         pygame.draw.rect(screen, (0,0,0),
                        ((screen.get_width() / 2) - window_size/2,
                         (screen.get_height() / 2) - window_size/3,
@@ -1457,8 +1664,8 @@ class display_stuff():
                 x, y = ts[2]
                 if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
                     old_fbin = f_bin
-                    render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-10), y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, y), 1)
+                    render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-5), y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, (0, 100, 0, 20), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y-60), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, y), 1)
 
 
     def splash_screen(self, sdrdisplay):
