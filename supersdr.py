@@ -64,11 +64,8 @@ font = pygame.font.Font(None, 50)
 FPS = options['refresh']
 fl.dualrx_flag = options['dualrx']
 
-CALLSIGN = options['callsign']
-try:
-    dxclust = dxcluster(CALLSIGN)
-except:
-    dxclust = None
+CALLSIGN = options['callsign'].upper()
+dxclust = None
 eibi = eibi_db()
 
 mylogger = logger(CALLSIGN)
@@ -196,14 +193,6 @@ wf_quit = False
 current_string = []
 
 old_spot_dict = None
-if dxclust:
-    print(dxclust)
-    dxclust.connect()
-    dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
-    dx_t.start()
-    dx_cluster_msg = True
-else:
-    dx_cluster_msg = False
 
 kiwi_memory = memory()
 kiwilist = kiwi_list()
@@ -281,24 +270,22 @@ while not wf_quit:
                 if keys[pygame.K_i]:
                     fl.show_eibi_flag = False if fl.show_eibi_flag else True
 
-                # Disconnect DXCLUSTER, but save previous spot list
-                if keys[pygame.K_p]:
-                    if dxclust:
-                        old_spot_dict = dxclust.spot_dict
-                        fl.show_dxcluster_flag = False
-                        dxclust.disconnect()
-                        dxclust = None
-
                 # Show realtime DX-CLUSTER labels, if DXCLUSTER disabled, enable it first
                 elif keys[pygame.K_d]:
                     if dxclust:
                         fl.show_dxcluster_flag = False if fl.show_dxcluster_flag else True
                         if fl.show_dxcluster_flag:
                             dxclust.terminate = False
+                            fl.connect_dxcluster_flag = True
                         else:
+                            old_spot_dict = dxclust.spot_dict
                             dxclust.terminate = True
+                            dxclust.disconnect()
+                            dxclust = None
                     else:
-                        fl.input_callsign_flag = True
+                        fl.connect_dxcluster_flag = True
+                        if CALLSIGN=="":
+                            fl.input_callsign_flag = True
                         current_string = []
 
                 # Center RX freq on WF
@@ -474,7 +461,7 @@ while not wf_quit:
                         kiwi_wf.set_white_flag()
 
                 # KIWI WF arrow step tune
-                if keys[pygame.K_LEFT]:
+                if keys[pygame.K_LEFT] and not (mods & pygame.KMOD_ALT):
                     if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
                         fast_tune = True if mods & pygame.KMOD_SHIFT else False
                         slow_tune = True if mods & pygame.KMOD_CTRL else False
@@ -487,7 +474,7 @@ while not wf_quit:
                                 manual_snd_freq = kiwi_snd.freq//1 if kiwi_snd.freq % 1 else kiwi_snd.freq//1 - 1
                         else: # CW
                             manual_snd_freq = round(kiwi_snd.freq - (1.0 if fast_tune else (0.01 if slow_tune else 0.1)), 2)
-                elif keys[pygame.K_RIGHT]:
+                elif keys[pygame.K_RIGHT] and not (mods & pygame.KMOD_ALT):
                     if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
                         fast_tune = True if mods & pygame.KMOD_SHIFT else False
                         slow_tune = True if mods & pygame.KMOD_CTRL else False
@@ -649,6 +636,7 @@ while not wf_quit:
                                 input_new_server = current_string
                             elif fl.input_callsign_flag:
                                 CALLSIGN = current_string
+                                fl.input_callsign_flag = False
                         except:
                             pass
                             #click_freq = kiwi_wf.freq
@@ -708,11 +696,10 @@ while not wf_quit:
     else:
         fl.show_help_flag = False
 
-    if fl.input_callsign_flag and CALLSIGN != "":
+    if CALLSIGN != "" and fl.connect_dxcluster_flag:
         try:
             dxclust = dxcluster(CALLSIGN)
             if dxclust:
-                dxclust.connect()
                 dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
                 dx_t.start()
                 if old_spot_dict:
@@ -724,7 +711,7 @@ while not wf_quit:
 
         except:
             dxclust = None
-        fl.input_callsign_flag = False
+        fl.connect_dxcluster_flag = False
 
     if fl.input_server_flag and input_new_server:
         pygame.event.clear()

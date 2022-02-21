@@ -4,6 +4,8 @@ import wave
 import tkinter
 from tkinter import *
 
+from qrz_utils import *
+
 from pygame.locals import *
 import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
 
@@ -94,7 +96,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- Z: Center KIWI RX, shift WF instead",
         "- SPACE: FORCE SYNC of WF to RX if no CAT, else sync to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
-        "- D/P: enable or hide DXCLUSTER, P disconnect DXCLUSTER",
+        "- D: connect/disconnect from DXCLUSTER server",
         "- I: show/hide EIBI database stations",
         "- Q: switch to a different KIWI server",
         "- 1/2 & 3: adjust AGC threshold, 3 switch WF autoscale",
@@ -125,6 +127,7 @@ class flags():
     s_meter_show_flag = False
     show_eibi_flag = False
     show_dxcluster_flag = False
+    connect_dxcluster_flag = False
     input_callsign_flag = False
     input_qso_flag = False
     dualrx_flag = False
@@ -135,206 +138,6 @@ class flags():
     wf_snd_link_flag = False
     cat_snd_link_flag = True
 
-
-class logger():
-    def __init__(self, callsign):
-        # self.log_file = "supersdr_%s.log" % callsign.upper()
-        self.log_file = "log.sdr"
-        self.qso_dict = defaultdict(set)
-
-    def read_file(self):
-        try:
-            with open(self.log_file, "r") as fd:
-                log_data = fd.readlines()
-            for row in log_data:
-                els = row.split(";")
-                if len(els)>1:
-                    qso_utc = els[0].strip() #.strptime("%d/%m/%Y %I:%M")
-                    qso_callsign = els[1].strip()
-                    qso_frequency = float(els[2].strip())
-                    qso_mode = els[3].strip()
-                    qso_power = float(els[4].strip())
-                    qso_rst_his = els[5].strip()
-                    qso_rst_mine = els[6].strip()
-                    qso_comments = els[7].strip()
-                    
-                    self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
-        except:
-            print("no logfile found!")
-
-
-    def store_qso_to_file(self):
-        qso_callsign = self.entry_callsign.get().upper()
-        qso_utc = self.entry_utc.get()
-        qso_frequency = self.entry_frequency.get()
-        qso_mode = self.entry_mode.get()
-        qso_power = self.entry_power.get()
-        qso_rst_his = self.entry_rst_his.get()
-        qso_rst_mine = self.entry_rst_mine.get()
-        qso_comments = self.entry_comments.get()
-        self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
-        with open(self.log_file, "a") as fd:
-            qso_row_list = [qso_utc, qso_callsign, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments]
-            qso_row_string = ";".join(qso_row_list)+"\n"
-            print(qso_row_string)
-            fd.write(qso_row_string)
-
-        self.root.destroy()
-
-    def log_popup(self, kiwi_snd):
-        try:
-            if 'normal' == self.root.state():
-                self.root.focus_force()
-                return
-        except:
-            try:
-                if 'normal' == self.root_search.state():
-                    return
-            except:
-                pass
-        self.root = tkinter.Tk()
-        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
-        self.root.geometry("200x430+1500+400")
-        self.root.resizable(False,False)
-        self.root.title("Logger")
-        self.root.bind('<Escape>', lambda event: self.root.destroy())
-
-        self.main_dialog =  tkinter.Frame(self.root)
-        self.main_dialog.pack()
-         
-        # Create label
-        l = tkinter.Label(self.root, text = "New QSO")
-        l.config(font =("Mono", 14))
-
-        label_callsign = tkinter.Label(text="Callsign")
-        self.entry_callsign = tkinter.Entry()
-        self.entry_callsign.focus()
-        label_utc = tkinter.Label(text="Date and Time (UTC)")
-        self.entry_utc = tkinter.Entry()
-        label_frequency = tkinter.Label(text="Frequency (kHz)")
-        self.entry_frequency = tkinter.Entry()
-        label_mode = tkinter.Label(text="Mode")
-        self.entry_mode = tkinter.Entry()
-        label_rst_his = tkinter.Label(text="RST (his)")
-        self.entry_power = tkinter.Entry()
-        label_power = tkinter.Label(text="Power (W)")
-        self.entry_rst_his = tkinter.Entry()
-        label_rst_mine = tkinter.Label(text="RST (Mine)")
-        self.entry_rst_mine = tkinter.Entry()
-        label_comments = tkinter.Label(text="Comments (Name, QTH, etc")
-        self.entry_comments = tkinter.Entry()
-
-        l.pack()
-        label_callsign.pack()
-        self.entry_callsign.pack()
-        label_utc.pack()
-        self.entry_utc.pack()
-        self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %I:%M"))
-        label_frequency.pack()
-        self.entry_frequency.pack()
-        self.entry_frequency.insert(END, kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0))
-        label_mode.pack()
-        self.entry_mode.pack()
-        self.entry_mode.insert(END, kiwi_snd.radio_mode)
-        label_power.pack()
-        self.entry_power.pack()
-        self.entry_power.insert(END, 100)
-        label_rst_his.pack()
-        self.entry_rst_his.pack()
-        self.entry_rst_his.insert(END, 59 if kiwi_snd.radio_mode!="CW" else 599)
-        label_rst_mine.pack()
-        self.entry_rst_mine.pack()
-        self.entry_rst_mine.insert(END, 59 if kiwi_snd.radio_mode!="CW" else 599)
-        label_comments.pack()
-        self.entry_comments.pack()
-
-        frame_bottom = tkinter.Frame(self.root, borderwidth=5)
-        frame_bottom.pack(fill=BOTH, expand=True)
-        # Create button for next text.
-        self.b1 = tkinter.Button(master=frame_bottom, text = "Save QSO", command = self.store_qso_to_file)
-         # Create an Exit button.
-        self.b2 = tkinter.Button(master=frame_bottom, text = "Cancel",
-                    command = self.root.destroy)
-
-        self.b1.pack(side=LEFT)
-        self.b2.pack(side=RIGHT)
-        frame_bottom.pack()
-
-
-    def find_qso(self):
-        qso_callsign = self.entry_callsign_search.get().upper()
-        if len(qso_callsign)<3:
-            self.t.delete(1.0, END)
-            self.t.insert(END, "Callsign too short!\n")
-            return
-        call_list = list(self.qso_dict.keys())
-        self.t.delete(1.0, END)
-        callsign_find_list = [True if key.find(qso_callsign)>-1 else False for i, key in enumerate(call_list)]
-        index = 1
-        if any(callsign_find_list):
-            for i, qso_call_flag in enumerate(callsign_find_list):
-                if qso_call_flag:
-                    qso_list = self.qso_dict[call_list[i]]
-                    for qso_record in qso_list:
-                        qso_string = "%d. "%(index)+call_list[i]+"\n"+" - ".join([str(el)+("\n" if ii==0 else "") for ii, el in enumerate(qso_record)])+"\n"
-                        self.t.insert(END, qso_string)
-                        index += 1
-        else:    
-            self.t.insert(END, "No QSOs found!")
-
-    def search_popup(self, kiwi_snd):
-        try:
-            if 'normal' == self.root_search.state():
-                self.root_search.focus_force()
-                return
-        except:
-            try:
-                if 'normal' == self.root.state():
-                    return
-            except:
-                pass
-
-        self.root_search = tkinter.Tk()
-        self.root_search.protocol("WM_DELETE_WINDOW", self.root_search.destroy)
-        self.root_search.geometry("400x400+1500+900")
-        self.root_search.resizable(False,False)
-        self.root_search.title("Search QSO")
-        self.root_search.bind('<Escape>', lambda event: self.root_search.destroy())
-        self.root_search.bind('<Return>', lambda event: self.find_qso())
-        self.main_dialog = tkinter.Frame(self.root_search)
-        self.main_dialog.pack()
-
-        # Create label
-        l = tkinter.Label(self.root_search, text = "Search QSO")
-        l.config(font =("Mono", 14))
-
-        label_callsign_search = tkinter.Label(text="Callsign")
-        self.entry_callsign_search = tkinter.Entry()
-        self.entry_callsign_search.focus()
-
-        l.pack()
-        label_callsign_search.pack()
-        self.entry_callsign_search.pack()
-
-        frame_text = tkinter.Frame(self.root_search, borderwidth=1)
-        frame_text.pack(fill=BOTH, expand=True)
-        scrollbar = Scrollbar(frame_text)
-        self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.t.yview)         
-        scrollbar.pack(side=RIGHT, fill=Y)
-        self.t.pack(side="left")
-
-        frame_bottom = tkinter.Frame(self.root_search, borderwidth=5)
-        frame_bottom.pack(fill=BOTH, expand=True)
-        # Create button for next text.
-        self.b1 = tkinter.Button(master=frame_bottom, text = "Find!", command = self.find_qso)
-         # Create an Exit button.
-        self.b2 = tkinter.Button(master=frame_bottom, text = "Cancel",
-                    command = self.root_search.destroy)
-
-        self.b1.pack(side=LEFT)
-        self.b2.pack(side=RIGHT)
-        frame_bottom.pack()
             
 
 class audio_recording():
@@ -407,10 +210,9 @@ class dxcluster():
                 print('Impossibile to connect')
                 sleep(5)     
             else:
-                self.sock.settimeout(1)
+                # self.sock.settimeout(1)
                 print('Connected!!!')
                 connected = True
-                # self.sock.settimeout(0.1)
         self.send(self.mycall)
         self.time_to_live = self.SPOT_TTL_BASETIME*5 # seconds for a spot to live
         self.last_update = datetime.utcnow()
@@ -422,9 +224,10 @@ class dxcluster():
 
     def keepalive(self):
         try:
-            self.send("\n")
+            self.send(chr(8))
+            self.receive()
         except:
-            pass
+            print("DX cluster failed to reply to keepalive msg")
 
     def receive(self):
         try:
@@ -451,7 +254,6 @@ class dxcluster():
 
     def clean_old_spots(self):
         now  = datetime.utcnow()
-        # print (len(self.spot_dict.keys()), self.spot_dict.keys())
         del_list = []
         for spot_id in self.spot_dict.keys():
             spot_utc = self.spot_dict[spot_id][2]
@@ -465,6 +267,7 @@ class dxcluster():
 
 
     def run(self, kiwi_wf):
+        self.connect()
         while not self.terminate:
             try:
                 dx_cluster_msg = self.receive()
@@ -486,20 +289,20 @@ class dxcluster():
 
             delta_t = (datetime.utcnow() - self.last_cleanup).total_seconds()
             if delta_t > self.CLEANUP_TIME: # cleanup db and keepalive msg
+                self.keepalive()
                 self.clean_old_spots()
                 self.last_cleanup = datetime.utcnow()
                 # print("DXCLUST: cleaned old spots")
             delta_t = (datetime.utcnow() - self.last_update).total_seconds()
             if delta_t > self.UPDATE_TIME or self.update_now:
-                self.keepalive()
                 self.get_stations(kiwi_wf.start_f_khz, kiwi_wf.end_f_khz)
                 # print("DXCLUST: updated visible spots")
                 self.last_update = datetime.utcnow()
                 self.update_now = False
-        # print("Exited from DXCLUSTER loop")
+        print("Exited from DXCLUSTER loop")
 
     def store_spot(self, qrg_, callsign_, utc_, spot_msg_):
-        spot_id = next(self.uniqueid()) # create a unique hash for each spot
+        spot_id = next(self.unique_id()) # create a unique hash for each spot
         self.spot_dict[spot_id] = (callsign_, qrg_, utc_, spot_msg_) # save spots as elements of a dictionary with hashes as keys
 
     def get_stations(self, start_f, end_f):
@@ -520,8 +323,7 @@ class dxcluster():
                     self.visible_stations.remove(spot_id)
                     del self.spot_dict[spot_id]
 
-
-    def uniqueid(self):
+    def unique_id(self):
         seed = random.getrandbits(32)
         while True:
            yield seed
@@ -1644,8 +1446,8 @@ class display_stuff():
                     else:
                         y_offset = 0
                     old_fbin = f_bin
-                    render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
+                    render_(surface_, (x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2, y+y_offset%(self.WF_HEIGHT/2)), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset%(self.WF_HEIGHT/2)), 1)
             except:
                 pass
 
@@ -1685,6 +1487,290 @@ class display_stuff():
         sdrdisplay.blit(block, rect)
         pygame.display.flip()
         time.sleep(1)
+
+
+
+class logger():
+    def __init__(self, callsign):
+        self.log_file = "log.sdr"
+        self.qso_dict = defaultdict(set)
+        try:
+            self.qrz = QRZ("qrz_settings.cfg")
+        except:
+            pass
+        self.check_qrzcom_flag = False
+        self.check_previous_flag = True
+
+    def qrzcom_lookup(self):
+        try:
+            result = self.qrz.callsign(self.entry_callsign.get().upper())
+            comments_string = (result["fname"]+", "+result["addr2"]+", "+result["country"]).strip()
+            self.entry_comments.insert(0, comments_string)
+        except:
+            pass
+          
+    def read_file(self):
+        try:
+            with open(self.log_file, "r") as fd:
+                log_data = fd.readlines()
+            for row in log_data:
+                els = row.split(";")
+                if len(els)>1:
+                    qso_utc = datetime.strptime(els[0].strip(), "%d/%m/%Y %I:%M")
+                    qso_callsign = els[1].strip()
+                    qso_frequency = float(els[2].strip())
+                    qso_mode = els[3].strip()
+                    qso_power = float(els[4].strip())
+                    qso_rst_his = els[5].strip()
+                    qso_rst_mine = els[6].strip()
+                    qso_comments = els[7].strip()
+                    
+                    self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
+        except:
+            print("no logfile found!")
+
+    def store_qso_to_file(self):
+        qso_callsign = self.entry_callsign.get().upper()
+        qso_utc = self.entry_utc.get()
+        qso_frequency = self.entry_frequency.get()
+        qso_mode = self.entry_mode.get()
+        qso_power = self.entry_power.get()
+        qso_rst_his = self.entry_rst_his.get()
+        qso_rst_mine = self.entry_rst_mine.get()
+        qso_comments = self.entry_comments.get()
+        self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
+        with open(self.log_file, "a") as fd:
+            qso_row_list = [qso_utc, qso_callsign, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments]
+            qso_row_string = ";".join(qso_row_list)+"\n"
+            print(qso_row_string)
+            fd.write(qso_row_string)
+
+        # self.root.destroy()
+        self.entry_callsign.focus()
+
+    def log_popup(self, kiwi_snd):
+        def assign_qrzcom_bool():
+            self.check_qrzcom_flag = self.check_qrzcom_flag_tk.get()
+        def assign_previous_bool():
+            self.check_previous_flag = self.check_previous_flag_tk.get()
+        def newcall_callback():
+            self.entry_comments.delete(0, END)
+            self.check_qrzcom_flag = self.check_qrzcom_flag_tk.get()
+            self.check_previous_flag = self.check_previous_flag_tk.get()
+            if self.check_qrzcom_flag:
+                self.qrzcom_lookup()
+            if self.check_previous_flag:
+                self.previous_qso()
+
+            self.entry_utc.delete(0, END)
+            self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %I:%M"))
+            self.entry_frequency.delete(0, END)
+            self.entry_frequency.insert(END, kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0))
+            self.entry_mode.delete(0, END)
+            self.entry_mode.insert(END, kiwi_snd.radio_mode)
+
+        try:
+            if 'normal' == self.root.state():
+                self.root.focus_force()
+                return
+        except:
+            try:
+                if 'normal' == self.root_search.state():
+                    return
+            except:
+                pass
+        self.root = tkinter.Tk()
+        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.geometry("400x280+1500+400")
+        self.root.resizable(False,False)
+        self.root.title("Logger")
+        self.root.bind('<Escape>', lambda event: self.root.destroy())
+
+        self.main_dialog = tkinter.Frame(self.root)
+        self.main_dialog.pack(side=TOP)
+        l = tkinter.Label(self.main_dialog, text = "New QSO")
+        l.config(font =("Mono", 14))
+        l.pack(side=TOP)
+
+        frame_top = tkinter.Frame(self.root, borderwidth=1)
+        frame_top.pack(side=TOP)
+
+        frame_left = tkinter.Frame(self.root, borderwidth=1)
+        frame_left.pack(side=LEFT)
+        frame_right = tkinter.Frame(self.root, borderwidth=1)
+        frame_right.pack(side=RIGHT)
+
+        # frame_bottom = tkinter.Frame(frame_right, borderwidth=1)
+        # frame_bottom.pack(side=BOTTOM, fill=BOTH, expand=True)
+
+        self.check_qrzcom_flag_tk = tkinter.BooleanVar()
+        self.check_qrzcom_flag_tk.set(self.check_qrzcom_flag)
+        self.check_previous_flag_tk = tkinter.BooleanVar()
+        self.check_previous_flag_tk.set(self.check_previous_flag)
+
+        check_qrzcom = tkinter.Checkbutton(frame_top, text='QRZ.COM lookup', var=self.check_qrzcom_flag_tk, command = assign_qrzcom_bool) 
+        check_previous = tkinter.Checkbutton(frame_top, text='LOG lookup', var=self.check_previous_flag_tk, command = assign_previous_bool) 
+
+        self.main_dialog = tkinter.Frame(self.root)
+        self.main_dialog.pack()
+        check_qrzcom.pack(side=LEFT)
+        check_previous.pack(side=RIGHT)
+
+        label_callsign = tkinter.Label(frame_left, text="Callsign")
+        self.entry_callsign = tkinter.Entry(frame_left)
+        self.entry_callsign.focus()
+        self.entry_callsign.bind('<FocusOut>', lambda event: newcall_callback())
+        label_utc = tkinter.Label(frame_left, text="Date and Time (UTC)")
+        self.entry_utc = tkinter.Entry(frame_left)
+        label_frequency = tkinter.Label(frame_left, text="Frequency (kHz)")
+        self.entry_frequency = tkinter.Entry(frame_left)
+        label_mode = tkinter.Label(frame_left, text="Mode")
+        self.entry_mode = tkinter.Entry(frame_left)
+        label_rst_his = tkinter.Label(frame_right, text="RST (his)")
+        self.entry_power = tkinter.Entry(frame_right)
+        label_power = tkinter.Label(frame_right, text="Power (W)")
+        self.entry_rst_his = tkinter.Entry(frame_right)
+        label_rst_mine = tkinter.Label(frame_right, text="RST (Mine)")
+        self.entry_rst_mine = tkinter.Entry(frame_right)
+        label_comments = tkinter.Label(frame_right, text="Comments (Name, QTH, etc)")
+        self.entry_comments = tkinter.Entry(frame_right, width=50)
+        # self.text_comments = tkinter.Text(self.root, height=3, width=23)
+
+        label_callsign.pack()
+        self.entry_callsign.pack()
+        label_utc.pack()
+        self.entry_utc.pack()
+        self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %I:%M"))
+        label_frequency.pack()
+        self.entry_frequency.pack()
+        self.entry_frequency.insert(END, kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0))
+        label_mode.pack()
+        self.entry_mode.pack()
+        self.entry_mode.insert(END, kiwi_snd.radio_mode)
+        label_power.pack()
+        self.entry_power.pack()
+        self.entry_power.insert(END, 100)
+        label_rst_his.pack()
+        self.entry_rst_his.pack()
+        self.entry_rst_his.insert(END, 59 if kiwi_snd.radio_mode!="CW" else 599)
+        label_rst_mine.pack()
+        self.entry_rst_mine.pack()
+        self.entry_rst_mine.insert(END, 59 if kiwi_snd.radio_mode!="CW" else 599)
+        label_comments.pack()
+        self.entry_comments.pack()
+
+        self.b1 = tkinter.Button(frame_right, text = "Save QSO", command = self.store_qso_to_file)
+        self.b2 = tkinter.Button(frame_left, text = "Cancel", command = self.root.destroy)
+
+        self.b1.pack()
+        self.b2.pack()
+
+    def find_qso(self, qso_callsign):
+        if len(qso_callsign)<3:
+            return "call_too_short"
+        call_list = list(self.qso_dict.keys())
+        callsign_find_list = [True if key.find(qso_callsign)>-1 else False for i, key in enumerate(call_list)]
+        index = 1
+        qso_string_list = []
+        if any(callsign_find_list):
+            for i, qso_call_flag in enumerate(callsign_find_list):
+                if qso_call_flag:
+                    qso_list = self.qso_dict[call_list[i]]
+                    for qso_record in sorted(qso_list, key = lambda x: x[0], reverse=True):
+                        qso_string = "%d. "%(index)+call_list[i]+"\n"+" - ".join([str(el.strftime("%d/%m/%Y %I:%M") if ii==0 else el)+("\n" if ii==0 else "") for ii, el in enumerate(qso_record)])+"\n"
+                        qso_string_list.append(qso_string)
+                        index += 1
+        else:
+            return "no_qso_found"
+        return qso_string_list
+
+    def prev_qso_callback(self):
+        qso_string_list = self.find_qso(self.entry_callsign_search.get().upper())
+        self.t.delete(1.0, END)
+        self.t.insert(END, "Last QSO with %s:\n" % self.entry_callsign_search.get().upper())
+        if qso_string_list == "no_qso_found":
+            self.t.insert(END, "No QSOs found!")            
+        elif qso_string_list == "call_too_short":
+            self.t.insert(END, "Callsign too short!\n")
+        else:
+            for qso_string in qso_string_list:
+                self.t.insert(END, qso_string)
+
+    def previous_qso(self):
+        qso_string_list = self.find_qso(self.entry_callsign.get().upper())
+        if qso_string_list == "no_qso_found" or qso_string_list == "call_too_short":
+            return
+
+        w = tkinter.Toplevel()
+        w.wm_title("Previous QSOs")
+        w.bind('<Escape>', lambda event: w.destroy())
+        w.bind('<Return>', lambda event: w.destroy())
+        w.lift()
+        w.focus_force()
+        w.grab_set()
+        w.grab_release()
+        frame_text = tkinter.Frame(w, borderwidth=1)
+        frame_text.pack(fill=BOTH, expand=True)
+        scrollbar = Scrollbar(frame_text)
+        self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.t.yview)         
+        scrollbar.pack(side=RIGHT, fill=Y)
+        self.t.pack(side="left")
+        self.t.delete(1.0, END)
+        self.t.insert(END, "Last QSO with %s:\n" % self.entry_callsign.get().upper())
+        for qso_string in qso_string_list:
+            self.t.insert(END, qso_string)
+
+    def search_popup(self, kiwi_snd):
+        try:
+            if 'normal' == self.root_search.state():
+                self.root_search.focus_force()
+                return
+        except:
+            try:
+                if 'normal' == self.root.state():
+                    return
+            except:
+                pass
+
+        self.root_search = tkinter.Tk()
+        self.root_search.protocol("WM_DELETE_WINDOW", self.root_search.destroy)
+        self.root_search.geometry("400x400+1500+900")
+        self.root_search.resizable(False,False)
+        self.root_search.title("Search QSO")
+        self.root_search.bind('<Escape>', lambda event: self.root_search.destroy())
+        self.root_search.bind('<Return>', lambda event: self.prev_qso_callback())
+        self.main_dialog = tkinter.Frame(self.root_search)
+        self.main_dialog.pack()
+
+        l = tkinter.Label(self.root_search, text = "Search QSO")
+        l.config(font =("Mono", 14))
+
+        label_callsign_search = tkinter.Label(text="Callsign")
+        self.entry_callsign_search = tkinter.Entry()
+        self.entry_callsign_search.focus()
+
+        l.pack()
+        label_callsign_search.pack()
+        self.entry_callsign_search.pack()
+
+        frame_text = tkinter.Frame(self.root_search, borderwidth=1)
+        frame_text.pack(fill=BOTH, expand=True)
+        scrollbar = Scrollbar(frame_text)
+        self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.t.yview)         
+        scrollbar.pack(side=RIGHT, fill=Y)
+        self.t.pack(side="left")
+
+        frame_bottom = tkinter.Frame(self.root_search, borderwidth=5)
+        frame_bottom.pack(fill=BOTH, expand=True)
+        self.b1 = tkinter.Button(master=frame_bottom, text = "Find!", command = self.prev_qso_callback)
+        self.b2 = tkinter.Button(master=frame_bottom, text = "Cancel",
+                    command = self.root_search.destroy)
+
+        self.b1.pack(side=LEFT)
+        self.b2.pack(side=RIGHT)
+        frame_bottom.pack()
 
 
 class beacons():
