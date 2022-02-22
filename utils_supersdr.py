@@ -751,7 +751,6 @@ class kiwi_sound():
 
         print ("Trying to contact server...")
         try:
-            #self.socket = kiwi_wf.socket
             self.socket = socket.socket()
             self.socket.connect((self.host, self.port)) # future: allow different kiwiserver for audio stream
 
@@ -1511,24 +1510,29 @@ class logger():
             pass
           
     def read_file(self):
+        log_data = None
         try:
             with open(self.log_file, "r") as fd:
                 log_data = fd.readlines()
-            for row in log_data:
-                els = row.split(";")
-                if len(els)>1:
-                    qso_utc = datetime.strptime(els[0].strip(), "%d/%m/%Y %H:%M")
-                    qso_callsign = els[1].strip()
-                    qso_frequency = float(els[2].strip())
-                    qso_mode = els[3].strip()
-                    qso_power = float(els[4].strip())
-                    qso_rst_his = els[5].strip()
-                    qso_rst_mine = els[6].strip()
-                    qso_comments = els[7].strip()
-                    
-                    self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
         except:
             print("no logfile found!")
+        if log_data:
+            for idx, row in enumerate(log_data):
+                els = row.split(";")
+                if len(els)>1:
+                    try:
+                        qso_utc = datetime.strptime(els[0].strip(), "%d/%m/%Y %H:%M")
+                        qso_callsign = els[1].strip()
+                        qso_frequency = float(els[2].strip())
+                        qso_mode = els[3].strip()
+                        qso_power = float(els[4].strip())
+                        qso_rst_his = els[5].strip()
+                        qso_rst_mine = els[6].strip()
+                        qso_comments = els[7].strip()
+                        
+                        self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
+                    except:
+                        print("QSO entry not readable at line: %d"%idx)
 
     def store_qso_to_file(self):
         qso_callsign = self.entry_callsign.get().upper()
@@ -1677,7 +1681,7 @@ class logger():
             for i, qso_call_flag in enumerate(callsign_find_list):
                 if qso_call_flag:
                     qso_list = self.qso_dict[call_list[i]]
-                    for qso_record in sorted(qso_list, key = lambda x: x[0], reverse=True):
+                    for qso_record in sorted(qso_list, key = lambda x: x[0], reverse=True): # sort QSOs with the same call by datetime
                         qso_string = "%d. "%(index)+call_list[i]+"\n"+" - ".join([str(el.strftime("%d/%m/%Y %H:%M") if ii==0 else el)+("\n" if ii==0 else "") for ii, el in enumerate(qso_record)])+"\n"
                         qso_string_list.append(qso_string)
                         index += 1
@@ -1687,6 +1691,7 @@ class logger():
 
     def prev_qso_callback(self):
         qso_string_list = self.find_qso(self.entry_callsign_search.get().upper())
+        self.t.configure(state='normal')
         self.t.delete(1.0, END)
         self.t.insert(END, "Last QSO with %s:\n" % self.entry_callsign_search.get().upper())
         if qso_string_list == "no_qso_found":
@@ -1696,6 +1701,7 @@ class logger():
         else:
             for qso_string in qso_string_list:
                 self.t.insert(END, qso_string)
+        self.t.configure(state='disabled')
 
     def previous_qso(self):
         qso_string_list = self.find_qso(self.entry_callsign.get().upper())
@@ -1706,6 +1712,7 @@ class logger():
         w.wm_title("Previous QSOs")
         w.bind('<Escape>', lambda event: w.destroy())
         w.bind('<Return>', lambda event: w.destroy())
+        w.bind('<Tab>', lambda event: w.destroy())
         w.lift()
         w.focus_force()
         w.grab_set()
@@ -1721,6 +1728,8 @@ class logger():
         self.t.insert(END, "Last QSO with %s:\n" % self.entry_callsign.get().upper())
         for qso_string in qso_string_list:
             self.t.insert(END, qso_string)
+        self.t.configure(state='disabled')
+
 
     def search_popup(self, kiwi_snd):
         try:
@@ -1741,6 +1750,7 @@ class logger():
         self.root_search.title("Search QSO")
         self.root_search.bind('<Escape>', lambda event: self.root_search.destroy())
         self.root_search.bind('<Return>', lambda event: self.prev_qso_callback())
+        self.root_search.bind('<Tab>', lambda event: self.prev_qso_callback())
         self.main_dialog = tkinter.Frame(self.root_search)
         self.main_dialog.pack()
 
