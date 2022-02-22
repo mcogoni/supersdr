@@ -16,7 +16,7 @@ parser.add_option("-s", "--kiwiserver", type=str,
 parser.add_option("-p", "--kiwiport", type=int,
                   help="port number", dest="kiwiport", default=default_kiwi_port)
 parser.add_option("-S", "--radioserver", type=str,
-                  help="RTX server name", dest="radioserver", default=None)
+                  help="RTX server name", dest="radioserver", default="localhost")
 parser.add_option("-P", "--radioport", type=int,
                   help="port number", dest="radioport", default=4532)
 parser.add_option("-z", "--zoom", type=int,
@@ -37,14 +37,14 @@ parser.add_option("-m", "--colormap", type=str,
                   help="colormap for waterfall", dest="colormap", default="cutesdr")
                   
 
-# sdrdisplay = pygame.display.set_mode((DISPLAY_WIDTH, DISPLAY_HEIGHT), 
-#     pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
 options = vars(parser.parse_args()[0])
 disp = display_stuff(options["winsize"])
 if disp.DISPLAY_WIDTH == 1920:
     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
         pygame.DOUBLEBUF | pygame.FULLSCREEN,vsync=1)
 else:
+    # sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
+    # pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
         pygame.DOUBLEBUF,vsync=1)
 wf_width = sdrdisplay.get_width()
@@ -58,7 +58,6 @@ pygame.key.set_repeat(200, 50)
 
 disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
-
 
 #################################
 FPS = options['refresh']
@@ -531,11 +530,19 @@ while not wf_quit:
                 if keys[pygame.K_m]:
                     fl.s_meter_show_flag = False if fl.s_meter_show_flag else True
                 
-                if keys[pygame.K_s] and cat_radio:
-                    show_bigmsg = "cat_rx_sync"
-                    run_index_bigmsg = run_index
-                    fl.cat_snd_link_flag = False if fl.cat_snd_link_flag else True
-                    force_sync_flag = True
+                if keys[pygame.K_s]:
+                    if not cat_radio:
+                        try:
+                            cat_radio = cat(radiohost, radioport)
+                            cat_radio.get_freq()
+                        except:
+                            cat_radio = None
+                    if cat_radio:
+                        show_bigmsg = "cat_rx_sync"
+                        run_index_bigmsg = run_index
+                        fl.cat_snd_link_flag = False if fl.cat_snd_link_flag else True
+                        force_sync_flag = True
+
 
                 # Automatic mode change ON/OFF
                 if keys[pygame.K_x]:
@@ -925,6 +932,9 @@ while not wf_quit:
                     kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
+
+    if not cat_radio:
+        fl.cat_snd_link_flag = False
 
     if not run_index%min(5, kiwi_wf.averaging_n):
         disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=YELLOW)

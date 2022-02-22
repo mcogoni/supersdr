@@ -1,23 +1,10 @@
-import sounddevice as sd
-import wave
-
-import tkinter
-from tkinter import *
-
-from qrz_utils import *
-
-from pygame.locals import *
-import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
-
-from matplotlib import cm
-import numpy as np
-from scipy.signal import resample_poly, welch
-
-import pygame
-
+import random
+import struct
+import array
+import math
+from collections import deque, defaultdict
 import pickle
 import threading, queue
-
 import socket
 import time
 from datetime import datetime, timedelta
@@ -30,11 +17,18 @@ else:
     def bytearray2str(b):
         return str(b)
 
-import random
-import struct
-import array
-import math
-from collections import deque, defaultdict
+import numpy as np
+from scipy.signal import resample_poly, welch
+
+import sounddevice as sd
+import wave
+
+import tkinter
+from tkinter import *
+from pygame.locals import *
+import pygame, pygame.font, pygame.event, pygame.draw, string, pygame.freetype
+
+from qrz_utils import *
 
 from kiwi import wsclient
 import mod_pywebsocket.common
@@ -932,6 +926,7 @@ class cat:
         print ("RTX rigctld server: %s:%d" % (self.radiohost, self.radioport))
         # create a socket to communicate with rigctld
         self.socket = socket.socket()
+        self.socket.settimeout(1.0)
         try: # if rigctld is running but the radio is off this will seem OK... TBF!
             self.socket.connect((self.radiohost, self.radioport))
         except:
@@ -945,7 +940,10 @@ class cat:
 
     def send_msg(self, msg):
         self.socket.send((msg+"\n").encode())
-        out = self.socket.recv(512).decode() # tbi implement verification of reply
+        try:
+            out = self.socket.recv(512).decode() # tbi implement verification of reply
+        except:
+            out = ""
         if len(out)==0 or "RPRT -5" in out:
              self.cat_ok = False
              self.reply = None
@@ -969,6 +967,7 @@ class cat:
                 self.freq = int(self.reply)/1000.
             except:
                 self.cat_ok = False
+
         return self.freq
 
     def get_mode(self):
@@ -1090,10 +1089,7 @@ class display_stuff():
 
 
     def create_cm(self, which):
-        if which == "jet":
-            # setup colormap from matplotlib
-            colormap = cm.jet(range(256))[:,:3]*255
-        elif which == "cutesdr":
+        if which == "cutesdr":
             # this colormap is taken from CuteSDR source code
             colormap = []
             for i in range(255):
@@ -1110,6 +1106,9 @@ class display_stuff():
                 if( (i>=217) ):
                     col = ( 255, 0, 128*(i-217)/38)
                 colormap.append(col)
+        # elif which == "jet":
+        #     # setup colormap from matplotlib
+        #     colormap = cm.jet(range(256))[:,:3]*255
         return colormap
 
 
