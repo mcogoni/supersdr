@@ -246,7 +246,8 @@ class dxcluster():
         try:
             qrg = float(els[1].strip())
             callsign = els[2].strip()
-            print("New SPOT:", utc.strftime('%H:%M:%SZ'), qrg, "kHz", callsign)
+            dxde_callsign = els[0][6:].split(":")[0]
+            print("New SPOT:", utc.strftime('%H:%M:%SZ'), qrg, "kHz", callsign, "DX de", dxde_callsign)
         except:
             qrg, callsign, utc = None, None, None
             print("DX cluster msg decode failed: %s"%els)
@@ -1516,7 +1517,7 @@ class logger():
             for row in log_data:
                 els = row.split(";")
                 if len(els)>1:
-                    qso_utc = datetime.strptime(els[0].strip(), "%d/%m/%Y %I:%M")
+                    qso_utc = datetime.strptime(els[0].strip(), "%d/%m/%Y %H:%M")
                     qso_callsign = els[1].strip()
                     qso_frequency = float(els[2].strip())
                     qso_mode = els[3].strip()
@@ -1563,7 +1564,7 @@ class logger():
                 self.previous_qso()
 
             self.entry_utc.delete(0, END)
-            self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %I:%M"))
+            self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %H:%M"))
             self.entry_frequency.delete(0, END)
             self.entry_frequency.insert(END, kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0))
             self.entry_mode.delete(0, END)
@@ -1640,7 +1641,7 @@ class logger():
         self.entry_callsign.pack()
         label_utc.pack()
         self.entry_utc.pack()
-        self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %I:%M"))
+        self.entry_utc.insert(END, datetime.utcnow().strftime("%d/%m/%Y %H:%M"))
         label_frequency.pack()
         self.entry_frequency.pack()
         self.entry_frequency.insert(END, kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0))
@@ -1677,7 +1678,7 @@ class logger():
                 if qso_call_flag:
                     qso_list = self.qso_dict[call_list[i]]
                     for qso_record in sorted(qso_list, key = lambda x: x[0], reverse=True):
-                        qso_string = "%d. "%(index)+call_list[i]+"\n"+" - ".join([str(el.strftime("%d/%m/%Y %I:%M") if ii==0 else el)+("\n" if ii==0 else "") for ii, el in enumerate(qso_record)])+"\n"
+                        qso_string = "%d. "%(index)+call_list[i]+"\n"+" - ".join([str(el.strftime("%d/%m/%Y %H:%M") if ii==0 else el)+("\n" if ii==0 else "") for ii, el in enumerate(qso_record)])+"\n"
                         qso_string_list.append(qso_string)
                         index += 1
         else:
