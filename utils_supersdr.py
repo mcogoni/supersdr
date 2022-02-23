@@ -101,7 +101,6 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
 
 font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
-# init Pygame
 pygame.init()
 
 nanofont = pygame.freetype.SysFont('Mono', 8)
@@ -133,7 +132,6 @@ class flags():
     cat_snd_link_flag = True
 
             
-
 class audio_recording():
     def __init__(self, kiwi_snd):
         self.filename = ""
@@ -153,13 +151,11 @@ class audio_recording():
         self.recording_flag = False
         self.save()
 
-
     def save(self):
         self.wave = wave.open(self.filename, 'wb')
         self.wave.setnchannels(self.kiwi_snd.CHANNELS)
         self.wave.setsampwidth(2) # two bytes per sample (int16)
         self.wave.setframerate(self.kiwi_snd.AUDIO_RATE)
-
         # process audio data here
         self.wave.writeframes(b''.join(self.audio_buffer))
         self.wave.close()
@@ -259,7 +255,6 @@ class dxcluster():
         for spot_id in del_list:
             del self.spot_dict[spot_id]
         print("Number of spots in memory:", len(self.spot_dict.keys()))
-
 
     def run(self, kiwi_wf):
         self.connect()
@@ -527,7 +522,6 @@ class kiwi_waterfall():
             self.space_khz *= 10                
 
     def start_stream(self):
-
         uri = '/%d/%s' % (int(time.time()), 'W/F')
         try:
             handshake_wf = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
@@ -739,7 +733,7 @@ class kiwi_sound():
         self.on = True # AGC auto mode
         self.hang = False # AGC hang
         self.thresh = -80 # AGC threshold in dBm
-        self.slope = 6 # AGC slope decay
+        self.slope = 0 # AGC slope decay
         self.decay = 4000 # AGC decay time constant
         self.gain = 50 # AGC manual gain
 
@@ -1087,7 +1081,6 @@ class display_stuff():
         self.SPECTRUM_FILLED = True
         self.V_POS_TEXT = 6
 
-
     def create_cm(self, which):
         if which == "cutesdr":
             # this colormap is taken from CuteSDR source code
@@ -1110,7 +1103,6 @@ class display_stuff():
         #     # setup colormap from matplotlib
         #     colormap = cm.jet(range(256))[:,:3]*255
         return colormap
-
 
     def update_textsurfaces(self, surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
         mousex_pos = mouse[0]
@@ -1358,7 +1350,6 @@ class display_stuff():
         microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
         return smeter_surface
 
-
     def plot_spectrum(self, sdrdisplay, kiwi_wf, t_avg=15, col=YELLOW, filled=False):
         spectrum_surf = pygame.Surface((kiwi_wf.WF_BINS, self.SPECTRUM_HEIGHT))
         pixarr = pygame.PixelArray(spectrum_surf)
@@ -1382,7 +1373,6 @@ class display_stuff():
         if self.DISPLAY_WIDTH != kiwi_wf.WF_BINS:
             spectrum_surf = pygame.transform.smoothscale(spectrum_surf, (self.DISPLAY_WIDTH, self.SPECTRUM_HEIGHT))
         sdrdisplay.blit(spectrum_surf, (0, self.SPECTRUM_Y))
-
 
     def plot_eibi(self, surface_, eibi, kiwi_wf):
         y_offset = 0
@@ -1416,7 +1406,6 @@ class display_stuff():
                     pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
                 except:
                     pass
-
 
     def plot_dxcluster(self, surface_, dxclust, kiwi_wf):
         now  = datetime.utcnow()        
@@ -1468,7 +1457,6 @@ class display_stuff():
                     render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-5), y), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
                     pygame.draw.line(surface_, (0, 100, 0, 20), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y-60), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, y), 1)
 
-
     def splash_screen(self, sdrdisplay):
         font = pygame.font.Font(None, 50)
         sdrdisplay.fill((0, 0, 0))
@@ -1486,7 +1474,6 @@ class display_stuff():
         sdrdisplay.blit(block, rect)
         pygame.display.flip()
         time.sleep(1)
-
 
 
 class logger():
@@ -1604,9 +1591,6 @@ class logger():
         frame_right = tkinter.Frame(self.root, borderwidth=1)
         frame_right.pack(side=RIGHT)
 
-        # frame_bottom = tkinter.Frame(frame_right, borderwidth=1)
-        # frame_bottom.pack(side=BOTTOM, fill=BOTH, expand=True)
-
         self.check_qrzcom_flag_tk = tkinter.BooleanVar()
         self.check_qrzcom_flag_tk.set(self.check_qrzcom_flag)
         self.check_previous_flag_tk = tkinter.BooleanVar()
@@ -1638,7 +1622,6 @@ class logger():
         self.entry_rst_mine = tkinter.Entry(frame_right)
         label_comments = tkinter.Label(frame_right, text="Comments (Name, QTH, etc)")
         self.entry_comments = tkinter.Entry(frame_right, width=50)
-        # self.text_comments = tkinter.Text(self.root, height=3, width=23)
 
         label_callsign.pack()
         self.entry_callsign.pack()
@@ -1728,7 +1711,6 @@ class logger():
         for qso_string in qso_string_list:
             self.t.insert(END, qso_string)
         self.t.configure(state='disabled')
-
 
     def search_popup(self, kiwi_snd):
         try:

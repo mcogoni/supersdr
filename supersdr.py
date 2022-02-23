@@ -35,7 +35,6 @@ parser.add_option("-c", "--callsign", type=str,
                   help="DX CLUSTER Callsign", dest="callsign", default="")
 parser.add_option("-m", "--colormap", type=str,
                   help="colormap for waterfall", dest="colormap", default="cutesdr")
-                  
 
 options = vars(parser.parse_args()[0])
 disp = display_stuff(options["winsize"])
@@ -59,7 +58,6 @@ pygame.key.set_repeat(200, 50)
 disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
 
-#################################
 FPS = options['refresh']
 fl.dualrx_flag = options['dualrx']
 
@@ -170,7 +168,6 @@ if fl.dualrx_flag:
     time.sleep(2)
     try:
         kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
-    # kiwi_snd2.FULL_BUFF_LEN = options["audio_buffer"]
     except:
         fl.dualrx_flag = False
         print("Server not ready")
@@ -558,18 +555,30 @@ while not wf_quit:
 
                 # Change AGC threshold for the current KIWI receiver
                 if keys[pygame.K_1]:
-                    if kiwi_snd.thresh>-135:
-                        kiwi_snd.thresh -= 1
-                        show_bigmsg = "agc"
-                        run_index_bigmsg = run_index
+                    if not (mods & pygame.KMOD_SHIFT):
+                        if kiwi_snd.thresh>-135:
+                            kiwi_snd.thresh -= 1
+                            show_bigmsg = "agc threshold"
+                            run_index_bigmsg = run_index
+                    else:
+                        if kiwi_snd.decay>200:
+                            kiwi_snd.decay -= 100
+                            show_bigmsg = "agc decay"
+                            run_index_bigmsg = run_index
                     if kiwi_snd:
                         kiwi_snd.set_agc_params()
                 if keys[pygame.K_2]:
-                    if kiwi_snd.thresh<-20:
-                        kiwi_snd.thresh += 1
-                        show_bigmsg = "agc"
-                        run_index_bigmsg = run_index
-                if kiwi_snd:
+                    if not (mods & pygame.KMOD_SHIFT):
+                        if kiwi_snd.thresh<-20:
+                            kiwi_snd.thresh += 1
+                            show_bigmsg = "agc threshold"
+                            run_index_bigmsg = run_index
+                    else:
+                        if kiwi_snd.decay<8000:
+                            kiwi_snd.decay += 100
+                            show_bigmsg = "agc decay"
+                            run_index_bigmsg = run_index
+                    if kiwi_snd:
                         kiwi_snd.set_agc_params()
 
                 # Tune SUB RX on same freq on WF center
@@ -800,7 +809,6 @@ while not wf_quit:
             kiwilist.write_mem(kiwi_host, kiwi_port, kiwi_password)
             kiwilist.save_to_disk()
 
-
         kiwi_snd2 = None
 
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
@@ -1024,16 +1032,16 @@ while not wf_quit:
             msg_text = "Save recording"
         elif "centertune" == show_bigmsg:
             msg_text = "WF center tune mode " + ("ON" if fl.wf_snd_link_flag else "OFF")
-        elif "agc" == show_bigmsg:
+        elif "agc threshold" == show_bigmsg:
             msg_text = "AGC threshold: %d dBm" % kiwi_snd.thresh
+        elif "agc decay" == show_bigmsg:
+            msg_text = "AGC decay: %d s" % kiwi_snd.decay
 
         disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
-    # rssi_smooth = np.mean(list(rssi_hist)[:])+10 # +10 is to approximately recalibrate the S-meter after averaging over time
-
     rssi_last = rssi_hist[-1]
     if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= 1.5 if kiwi_snd.radio_mode=="CW" else 0.5 # s-meter decay rate
+        rssi_smooth -= (1000/kiwi_snd.decay) # s-meter decay rate
     else:
         rssi_smooth = (rssi_smooth + rssi_last)/2 # attack rate
 
