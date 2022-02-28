@@ -284,7 +284,7 @@ while not wf_quit:
                             fl.input_callsign_flag = True
                         current_string = []
 
-                # Center RX freq on WF
+                # Keep RX freq on WF center
                 if keys[pygame.K_z]:
                     fl.wf_snd_link_flag = False if fl.wf_snd_link_flag else True
                     force_sync_flag = True
@@ -591,8 +591,8 @@ while not wf_quit:
                 # Disable SUB RX
                 if keys[pygame.K_y] and (mods & pygame.KMOD_SHIFT):
                     if kiwi_snd2:
-                        if kiwi_snd.subrx:
-                            kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
+                        # if kiwi_snd.subrx: # transfer all main and sub receiver parameters
+                        #     kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
                         kiwi_snd2.terminate = True
                         kiwi_audio_stream2.stop()
                         time.sleep(1)
@@ -824,15 +824,14 @@ while not wf_quit:
         kiwi_snd.set_mode_freq_pb()
 
     if force_sync_flag:
-        if cat_radio:
+        if cat_radio and fl.cat_snd_link_flag:
             kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
-            kiwi_snd.radio_mode = get_auto_mode(kiwi_wf.freq)
-            lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
-            kiwi_snd.freq = kiwi_wf.freq
-            kiwi_snd.set_mode_freq_pb()
+            # kiwi_snd.radio_mode = get_auto_mode(kiwi_wf.freq)
+            # lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+            # kiwi_snd.freq = kiwi_wf.freq
+            # kiwi_snd.set_mode_freq_pb()
         else:
             kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom)
-        force_sync_flag = False
         kiwi_wf.set_white_flag()
 
     if fl.input_freq_flag and manual_snd_freq:
@@ -904,9 +903,12 @@ while not wf_quit:
             if (cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and fl.auto_mode) or show_bigmsg == "restorememory":
                 cat_radio.set_mode(kiwi_snd.radio_mode)
         else:
-            kiwi_snd.radio_mode = cat_radio.get_mode()
-            lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
-            kiwi_snd.set_mode_freq_pb()
+            old_cat_mode = cat_radio.radio_mode
+            new_cat_mode = cat_radio.get_mode()
+            if old_cat_mode != new_cat_mode:
+                kiwi_snd.radio_mode = new_cat_mode
+                lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+                kiwi_snd.set_mode_freq_pb()
 
             old_cat_freq = cat_radio.freq
             cat_radio.get_freq()
