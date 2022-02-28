@@ -920,7 +920,7 @@ class cat:
         print ("RTX rigctld server: %s:%d" % (self.radiohost, self.radioport))
         # create a socket to communicate with rigctld
         self.socket = socket.socket()
-        self.socket.settimeout(1.0)
+        self.socket.settimeout(3.0)
         try: # if rigctld is running but the radio is off this will seem OK... TBF!
             self.socket.connect((self.radiohost, self.radioport))
         except:
@@ -931,6 +931,7 @@ class cat:
         self.radio_mode = self.get_mode()
         self.reply = None
         self.cat_ok = True
+        self.cat_tx = False
 
     def send_msg(self, msg):
         self.socket.send((msg+"\n").encode())
@@ -943,6 +944,11 @@ class cat:
              self.reply = None
         else:
             self.reply = out        
+
+    def get_ptt(self):
+        self.send_msg("\\get_ptt")
+        if self.reply:
+            self.cat_tx = True if self.reply=="1\n" else False
 
     def set_freq(self, freq_):
         if freq_ >= self.CAT_MIN_FREQ and freq_ <= self.CAT_MAX_FREQ:
@@ -1104,7 +1110,7 @@ class display_stuff():
         #     colormap = cm.jet(range(256))[:,:3]*255
         return colormap
 
-    def update_textsurfaces(self, surface_, radio_mode, rssi, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
+    def update_textsurfaces(self, surface_, radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
         mousex_pos = mouse[0]
         if mousex_pos < 25:
             mousex_pos = 25
@@ -1114,6 +1120,9 @@ class display_stuff():
         buff_level = kiwi_snd.audio_buffer.qsize()
         main_rx_color = RED #if not kiwi_snd.subrx else GREEN
         sub_rx_color = GREEN #if not kiwi_snd.subrx else RED
+        tx_on_flag = False
+        if cat_radio:
+            tx_on_flag = cat_radio.cat_tx
         #           Label   Color   Freq/Mode                       Screen position
         ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
                 "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,self.TUNEBAR_Y+1), "small", False),
@@ -1140,12 +1149,12 @@ class display_stuff():
             ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
             ts_dict["kiwi2"] = (GREEN if not kiwi_snd.subrx else RED, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,self.BOTTOMBAR_Y+6), "small", False)
         if not fl.s_meter_show_flag:
-            s_value = (kiwi_snd.rssi+120)//6 # signal in S units of 6dB
+            s_value = (round(rssi_smooth)+127)//6 # signal in S units of 6dB
             if s_value<=9:
                 s_value = "S"+str(max(0,int(s_value)))
             else:
                 s_value = "S9+"+str(int((s_value-9)*6))+"dB"
-            ts_dict["smeter"] = (ORANGE, s_value, (20,self.V_POS_TEXT-1), "big", False)
+            ts_dict["smeter"] = (ORANGE if not tx_on_flag else "RED", s_value if not tx_on_flag else "TX", (20,self.V_POS_TEXT-1), "big", False)
         if fl.click_drag_flag:
             delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO - mousex_pos)
             ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,self.SPECTRUM_Y+20), "big", False)
@@ -1529,11 +1538,10 @@ class logger():
         qso_rst_his = self.entry_rst_his.get()
         qso_rst_mine = self.entry_rst_mine.get()
         qso_comments = self.entry_comments.get()
-        self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
+        self.qso_dict[qso_callsign].add((datetime.strptime(qso_utc, "%d/%m/%Y %H:%M"), qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
         with open(self.log_file, "a") as fd:
             qso_row_list = [qso_utc, qso_callsign, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments]
             qso_row_string = ";".join(qso_row_list)+"\n"
-            print(qso_row_string)
             fd.write(qso_row_string)
 
         # self.root.destroy()

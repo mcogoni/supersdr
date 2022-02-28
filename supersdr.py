@@ -532,6 +532,7 @@ while not wf_quit:
                         try:
                             cat_radio = cat(radiohost, radioport)
                             cat_radio.get_freq()
+                            print("CAT radio detected and enabled!")
                         except:
                             cat_radio = None
                     if cat_radio:
@@ -953,6 +954,12 @@ while not wf_quit:
             wf_surface = pygame.transform.smoothscale(wf_surface, (disp.DISPLAY_WIDTH, disp.WF_HEIGHT))
         sdrdisplay.blit(wf_surface, (0, disp.WF_Y))
 
+    rssi_last = rssi_hist[-1]
+    if math.fabs(rssi_last)>math.fabs(rssi_smooth):
+        rssi_smooth -= (1000/kiwi_snd.decay) # s-meter decay rate
+    else:
+        rssi_smooth = (rssi_smooth + rssi_last)/2 # attack rate
+
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,disp.DISPLAY_WIDTH,disp.TOPBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,0), (0,disp.BOTTOMBAR_Y,disp.DISPLAY_WIDTH,disp.DISPLAY_HEIGHT), 0)
@@ -1039,12 +1046,6 @@ while not wf_quit:
 
         disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
-    rssi_last = rssi_hist[-1]
-    if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= (1000/kiwi_snd.decay) # s-meter decay rate
-    else:
-        rssi_smooth = (rssi_smooth + rssi_last)/2 # attack rate
-
     if fl.s_meter_show_flag:
         smeter_surface = disp.s_meter_draw(rssi_smooth, kiwi_snd.thresh)
         sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-80))
@@ -1055,6 +1056,12 @@ while not wf_quit:
 
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
+        print("CAT radio unreachable!")
+
+    if cat_radio:
+        cat_radio.get_ptt()
+        if cat_radio.cat_tx:
+            kiwi_snd.rssi = 0
 
     try:
         mylogger.main_dialog.update()
