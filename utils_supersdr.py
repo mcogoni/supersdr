@@ -700,7 +700,7 @@ class kiwi_waterfall():
 class kiwi_sound():
     # Soundedevice options
     FORMAT = np.int16
-    CHANNELS = 1
+    CHANNELS = 2
     AUDIO_RATE = 48000
     KIWI_RATE = 12000
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
@@ -737,6 +737,8 @@ class kiwi_sound():
         self.decay = 4000 # AGC decay time constant
         self.gain = 50 # AGC manual gain
 
+        self.audio_balance = 0.0
+
         print ("Trying to contact server...")
         try:
             self.socket = socket.socket()
@@ -753,9 +755,8 @@ class kiwi_sound():
             self.stream = Stream(request_snd, stream_option_snd)
             
             print ("Audio data stream active...")
-
-            msg_list = ["SET auth t=kiwi p=%s ipl=%s"%(password_, password_), "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" %
-            (self.radio_mode.lower(), self.lc, self.hc, self.freq),
+            msg_list = ["SET auth t=kiwi p=%s ipl=%s"%(password_, password_),
+            "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" % (self.radio_mode.lower(), self.lc, self.hc, self.freq), 
             "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
             "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain),
             "SET AR OK in=%d out=%d" % (self.KIWI_RATE, self.AUDIO_RATE)]
@@ -900,7 +901,9 @@ class kiwi_sound():
             self.mute_counter -= 1
         if self.mute_counter > 0:
             pyaudio_buffer *= 0
-        outdata[:,0] = pyaudio_buffer.astype(np.int16)
+        left_volume, right_volume = min(1-self.audio_balance, 1.0), min(1+self.audio_balance, 1.0)
+        outdata[:,0] = (pyaudio_buffer*left_volume**2).astype(np.int16)   # LEFT  CHANNEL
+        outdata[:,1] = (pyaudio_buffer*right_volume**2).astype(np.int16)     # RIGHT CHANNEL
         
     def run(self):
         while not self.terminate:
@@ -1129,7 +1132,7 @@ class display_stuff():
                 "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,self.TUNEBAR_Y+1), "small", False),
                 "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
                 # "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,self.BOTTOMBAR_Y+6), "small", False),
-                "kiwi": (RED if not kiwi_snd.subrx else GREEN, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,self.BOTTOMBAR_Y+6), "small", False),
+                "kiwi": (RED if not kiwi_snd.subrx else GREEN, kiwi_wf.host[:30]+" - BAL: %.1f"%kiwi_snd.audio_balance ,(95,self.BOTTOMBAR_Y+6), "small", False),
                 "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,self.SPECTRUM_Y+1), "small", False),
                 "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, self.V_POS_TEXT), "small", False),
                 "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
@@ -1147,7 +1150,7 @@ class display_stuff():
 
         if fl.dualrx_flag and kiwi_snd2:
             ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
-            ts_dict["kiwi2"] = (GREEN if not kiwi_snd.subrx else RED, ("[kiwi2:%s]"%kiwi_host2)[:30] ,(280,self.BOTTOMBAR_Y+6), "small", False)
+            ts_dict["kiwi2"] = (GREEN if not kiwi_snd.subrx else RED, kiwi_host2[:30]+" - BAL: %.1f"%kiwi_snd2.audio_balance ,(350,self.BOTTOMBAR_Y+6), "small", False)
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth)+127)//6 # signal in S units of 6dB
             if s_value<=9:
@@ -1202,9 +1205,7 @@ class display_stuff():
             if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
                 # high cut line
                 pygame.draw.line(surface_, color_, (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((hc_bin+5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
-            
             pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), (hc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), 2)
-
 
         center_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.span_khz/2)
         # center WF line

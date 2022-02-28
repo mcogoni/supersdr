@@ -78,6 +78,10 @@ zoom = options['zoom']
 radiohost = options['radioserver']
 radioport = options['radioport']
 
+if not freq:
+    freq = 14200
+radio_mode = get_auto_mode(freq)
+
 input_new_server = ""
 if not kiwi_host:
     input_new_server = input("***\nNo KIWI specified!\nPlease enter: hostname [port] [password]\n")
@@ -98,20 +102,13 @@ if radiohost:
             cat_radio.get_mode()
             radio_mode = cat_radio.radio_mode
         else:
-            radio_mode = "USB"
             cat_radio = None
             print("CAT radio not detected!")
     except:
         cat_radio = None
-        radio_mode = "USB"
-        if not freq:
-            freq = 14200
         print("CAT radio not detected!")
 else:
     cat_radio = None
-    if not freq:
-        freq = 14200
-    radio_mode = "USB"
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
@@ -582,6 +579,12 @@ while not wf_quit:
                     if kiwi_snd:
                         kiwi_snd.set_agc_params()
 
+                # Tune audio balance for current receiver
+                if keys[pygame.K_6]:
+                    kiwi_snd.audio_balance += 0.5 if kiwi_snd.audio_balance < 1 else 0.0
+                if keys[pygame.K_5]:
+                    kiwi_snd.audio_balance -= 0.5 if kiwi_snd.audio_balance > -1 else 0.0
+
                 # Tune SUB RX on same freq on WF center
                 if keys[pygame.K_n]:
                     if kiwi_snd2:
@@ -591,8 +594,13 @@ while not wf_quit:
                 # Disable SUB RX
                 if keys[pygame.K_y] and (mods & pygame.KMOD_SHIFT):
                     if kiwi_snd2:
-                        # if kiwi_snd.subrx: # transfer all main and sub receiver parameters
-                        #     kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
+                        # if kiwi_snd2 contains the main receiver
+                        # transfer all rx parameters to kiwi_snd
+                        if kiwi_snd.subrx:
+                            kiwi_snd2.freq = kiwi_snd.freq
+                            kiwi_snd2.radio_mode = kiwi_snd.radio_mode
+                            kiwi_snd2.set_mode_freq_pb()
+                            kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
                         kiwi_snd2.terminate = True
                         kiwi_audio_stream2.stop()
                         time.sleep(1)
@@ -610,12 +618,19 @@ while not wf_quit:
                         kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
                         if not cat_radio:
                             force_sync_flag = True
+                        elif fl.cat_snd_link_flag:
+                            cat_radio.set_freq(kiwi_snd.freq)
+                            cat_radio.set_mode(kiwi_snd.radio_mode)
                         show_bigmsg = "switchab"
                         run_index_bigmsg = run_index
                     else:
                         try:
                             kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
                             play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
+                            kiwi_snd2.radio_mode = get_auto_mode(kiwi_wf.freq)
+                            lc, hc = kiwi_snd2.change_passband(delta_low, delta_high)
+                            kiwi_snd2.freq = kiwi_wf.freq
+                            kiwi_snd2.set_mode_freq_pb()
                             print("Second RX active!")
                             show_bigmsg = "enable2rx"
                             run_index_bigmsg = run_index
@@ -908,8 +923,7 @@ while not wf_quit:
             if old_cat_mode != new_cat_mode:
                 kiwi_snd.radio_mode = new_cat_mode
                 lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
-                kiwi_snd.set_mode_freq_pb()
-
+            kiwi_snd.set_mode_freq_pb()
             old_cat_freq = cat_radio.freq
             cat_radio.get_freq()
             if cat_radio.freq != old_cat_freq:
