@@ -158,7 +158,7 @@ wf_t.start()
 kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, options["audio_buffer"])
 if not kiwi_snd:
     print("Server not ready")
-    sys.exit()
+    # sys.exit()
 
 kiwi_snd2 = None
 if fl.dualrx_flag:
@@ -167,12 +167,12 @@ if fl.dualrx_flag:
         kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
     except:
         fl.dualrx_flag = False
-        print("Server not ready")
+        print("Kiwi audio server not ready")
 
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
-if not play:
-    del kiwi_snd
-    sys.exit("Chosen KIWI receiver is not ready!")
+# if not play:
+#     del kiwi_snd
+#     sys.exit("Chosen KIWI receiver is not ready!")
 
 if fl.dualrx_flag:
     play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
@@ -530,6 +530,7 @@ while not wf_quit:
                             cat_radio = cat(radiohost, radioport)
                             cat_radio.get_freq()
                             print("CAT radio detected and enabled!")
+                            fl.wf_cat_link_flag = True
                         except:
                             cat_radio = None
                     if cat_radio:
@@ -1074,10 +1075,10 @@ while not wf_quit:
         cat_radio = None
         print("CAT radio unreachable!")
 
-    if cat_radio:
-        cat_radio.get_ptt()
-        if cat_radio.cat_tx:
-            kiwi_snd.rssi = 0
+    # if cat_radio and not run_index%10:
+    #     cat_radio.get_ptt()
+    #     if cat_radio.cat_tx:
+    #         kiwi_snd.rssi = 0
 
     try:
         mylogger.main_dialog.update()
@@ -1085,10 +1086,16 @@ while not wf_quit:
         pass
 
 # close audio stream
-kiwi_audio_stream.stop()
+try:
+    kiwi_audio_stream.stop()
+except:
+    pass
 
 if kiwi_snd2:
-    kiwi_audio_stream2.stop()
+    try:
+        kiwi_audio_stream2.stop()
+    except:
+        pass
 
 kiwi_snd.terminate = True
 if kiwi_snd2:

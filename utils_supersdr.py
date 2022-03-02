@@ -36,7 +36,7 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v3.1"
+VERSION = "v3.11"
 
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.5 # CW offset from carrier in kHz
@@ -1124,6 +1124,9 @@ class display_stuff():
         main_rx_color = RED #if not kiwi_snd.subrx else GREEN
         sub_rx_color = GREEN #if not kiwi_snd.subrx else RED
         tx_on_flag = False
+        audio_balance_string_list = ["LEFT", "C-LEFT", "CENTER", "C-RIGHT", "RIGHT"]
+        audio_balance_string_main = audio_balance_string_list[int((kiwi_snd.audio_balance+1)*2)]
+
         if cat_radio:
             tx_on_flag = cat_radio.cat_tx
         #           Label   Color   Freq/Mode                       Screen position
@@ -1131,8 +1134,7 @@ class display_stuff():
                 "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,self.TUNEBAR_Y+1), "small", False),
                 "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,self.TUNEBAR_Y+1), "small", False),
                 "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
-                # "kiwi": (D_RED if buff_level<kiwi_snd.FULL_BUFF_LEN/3 else RED, ("kiwi1:"+kiwi_wf.host)[:30] ,(95,self.BOTTOMBAR_Y+6), "small", False),
-                "kiwi": (RED if not kiwi_snd.subrx else GREEN, kiwi_wf.host[:30]+" - BAL: %.1f"%kiwi_snd.audio_balance ,(95,self.BOTTOMBAR_Y+6), "small", False),
+                "kiwi": (RED if not kiwi_snd.subrx else GREEN, kiwi_wf.host[:30]+" - BAL: %s"%audio_balance_string_main ,(95,self.BOTTOMBAR_Y+6), "small", False),
                 "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,self.SPECTRUM_Y+1), "small", False),
                 "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, self.V_POS_TEXT), "small", False),
                 "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
@@ -1149,8 +1151,9 @@ class display_stuff():
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
+            audio_balance_string_sub = audio_balance_string_list[int((kiwi_snd2.audio_balance+1)*2)]
             ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
-            ts_dict["kiwi2"] = (GREEN if not kiwi_snd.subrx else RED, kiwi_host2[:30]+" - BAL: %.1f"%kiwi_snd2.audio_balance ,(350,self.BOTTOMBAR_Y+6), "small", False)
+            ts_dict["kiwi2"] = (GREEN if not kiwi_snd.subrx else RED, kiwi_host2[:30]+" - BAL: %s"%audio_balance_string_sub ,(350,self.BOTTOMBAR_Y+6), "small", False)
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth)+127)//6 # signal in S units of 6dB
             if s_value<=9:
