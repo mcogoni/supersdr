@@ -560,10 +560,9 @@ while not wf_quit:
                             show_bigmsg = "agc threshold"
                             run_index_bigmsg = run_index
                     else:
-                        if kiwi_snd.decay>200:
-                            kiwi_snd.decay -= 100
-                            show_bigmsg = "agc decay"
-                            run_index_bigmsg = run_index
+                        kiwi_snd.change_agc_delay(-100)
+                        show_bigmsg = "agc decay"
+                        run_index_bigmsg = run_index
                     if kiwi_snd:
                         kiwi_snd.set_agc_params()
                 if keys[pygame.K_2]:
@@ -573,10 +572,9 @@ while not wf_quit:
                             show_bigmsg = "agc threshold"
                             run_index_bigmsg = run_index
                     else:
-                        if kiwi_snd.decay<8000:
-                            kiwi_snd.decay += 100
-                            show_bigmsg = "agc decay"
-                            run_index_bigmsg = run_index
+                        kiwi_snd.change_agc_delay(100)
+                        show_bigmsg = "agc decay"
+                        run_index_bigmsg = run_index
                     if kiwi_snd:
                         kiwi_snd.set_agc_params()
 
@@ -1059,7 +1057,7 @@ while not wf_quit:
         elif "agc threshold" == show_bigmsg:
             msg_text = "AGC threshold: %d dBm" % kiwi_snd.thresh
         elif "agc decay" == show_bigmsg:
-            msg_text = "AGC decay: %d s" % kiwi_snd.decay
+            msg_text = "AGC decay: %.1f s" % (kiwi_snd.decay/1000)
 
         disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 

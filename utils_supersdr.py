@@ -427,6 +427,7 @@ class kiwi_waterfall():
     delta_low_db, delta_high_db = 0, 0
     low_clip_db, high_clip_db = -120, -60 # tentative initial values for wf db limits
     wf_min_db, wf_max_db = low_clip_db, low_clip_db+MIN_DYN_RANGE
+    kiwi_wf_timestamp = None
     
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi, disp):
         self.eibi = eibi
@@ -522,7 +523,10 @@ class kiwi_waterfall():
             self.space_khz *= 10                
 
     def start_stream(self):
-        uri = '/%d/%s' % (int(time.time()), 'W/F')
+        self.kiwi_wf_timestamp = int(time.time())
+        print("WF timestamp", self.kiwi_wf_timestamp)
+        uri = '/%d/%s' % (self.kiwi_wf_timestamp, 'W/F')
+
         try:
             handshake_wf = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
             handshake_wf.handshake(uri)
@@ -734,17 +738,21 @@ class kiwi_sound():
         self.hang = False # AGC hang
         self.thresh = -80 # AGC threshold in dBm
         self.slope = 0 # AGC slope decay
-        self.decay = 4000 # AGC decay time constant
+        self.decay_other = 4000 # AGC decay time constant
+        self.decay_cw = 1000 # AGC decay time constant
         self.gain = 50 # AGC manual gain
-
+        self.min_agc_delay, self.max_agc_delay = 400, 8000
+        self.decay = self.decay_other
         self.audio_balance = 0.0
 
         print ("Trying to contact server...")
         try:
             self.socket = socket.socket()
             self.socket.connect((self.host, self.port)) # future: allow different kiwiserver for audio stream
-
-            uri = '/%d/%s' % (int(time.time()), 'SND')
+            new_timestamp = int(time.time())
+            if new_timestamp - kiwi_wf.kiwi_wf_timestamp > 10:
+                kiwi_wf.kiwi_wf_timestamp = new_timestamp
+            uri = '/%d/%s' % (kiwi_wf.kiwi_wf_timestamp, 'SND')
             handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
             handshake_snd.handshake(uri)
             request_snd = wsclient.ClientRequest(self.socket)
@@ -763,7 +771,6 @@ class kiwi_sound():
             
             for msg in msg_list:
                 self.stream.send_message(msg)
-
             while True:
                 msg = self.stream.receive_message()
                 if msg and "SND" == bytearray2str(msg[:3]):
@@ -790,11 +797,25 @@ class kiwi_sound():
 
         self.audio_rec = audio_recording(self)
 
+    def change_agc_delay(self, delta):
+        if delta < 0:
+            if self.decay > self.min_agc_delay:
+                self.decay += delta
+        else:
+            if self.decay < self.max_agc_delay:
+                self.decay += delta
+        if self.radio_mode == "CW":
+            self.decay_cw = self.decay
+        else:
+            self.decay_other = self.decay
+
+        
     def set_agc_params(self):
         msg = "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain)
         self.stream.send_message(msg)
 
     def set_mode_freq_pb(self):
+        self.decay = self.decay_other if self.radio_mode != "CW" else self.decay_cw
         msg = 'SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (self.radio_mode.lower(), self.lc, self.hc, self.freq)
         self.stream.send_message(msg)
 
