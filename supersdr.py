@@ -1062,7 +1062,7 @@ while not wf_quit:
         disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
     if fl.s_meter_show_flag:
-        smeter_surface = disp.s_meter_draw(rssi_smooth, kiwi_snd.thresh)
+        smeter_surface = disp.s_meter_draw(rssi_smooth, kiwi_snd.thresh, kiwi_snd.decay)
         sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-80))
 
     mouse = pygame.mouse.get_pos()

@@ -1335,16 +1335,16 @@ class display_stuff():
             hugefont.render_to(screen, pos, message, color)
 
 
-    def s_meter_draw(self, rssi_smooth, agc_threshold):
+    def s_meter_draw(self, rssi_smooth, agc_threshold, agc_decay):
         s_meter_radius = 50.
         SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
         smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
 
         s_meter_center = (s_meter_radius+10,s_meter_radius+8)
-        alpha_rssi = rssi_smooth+127
+        alpha_rssi = rssi_smooth + 127
         alpha_rssi = -math.radians(alpha_rssi * 180/127.)-math.pi*1.02
 
-        alpha_agc = agc_threshold+127
+        alpha_agc = agc_threshold + 127
         alpha_agc = -math.radians(alpha_agc * 180/127.)-math.pi*1.02
 
         def _coords_from_angle(angle, s_meter_radius_):
@@ -1354,8 +1354,8 @@ class display_stuff():
             s_meter_y = s_meter_center[1] - y_
             return s_meter_x, s_meter_y
         
-        s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius* 0.95)
-        agc_meter_x, agc_meter_y = _coords_from_angle(alpha_agc, s_meter_radius* 0.7)
+        s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius * 0.95)
+        agc_meter_x, agc_meter_y = _coords_from_angle(alpha_agc, s_meter_radius * 0.7)
         pygame.draw.rect(smeter_surface, YELLOW,
                        (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 0)
         pygame.draw.rect(smeter_surface, BLACK,
@@ -1382,6 +1382,12 @@ class display_stuff():
         str_len = len(str_rssi)
         pos = (s_meter_center[0]+13, s_meter_center[1])
         microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
+        
+        str_decay = "%.1fs" % (agc_decay/1000)
+        str_len = len(str_decay)
+        pos = (s_meter_center[0]-40, s_meter_center[1])
+        microfont.render_to(smeter_surface, pos, str_decay, BLACK)
+        
         return smeter_surface
 
     def plot_spectrum(self, sdrdisplay, kiwi_wf, t_avg=15, col=YELLOW, filled=False):
