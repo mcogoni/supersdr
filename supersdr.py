@@ -600,6 +600,8 @@ while not wf_quit:
                             kiwi_snd2.radio_mode = kiwi_snd.radio_mode
                             kiwi_snd2.set_mode_freq_pb()
                             kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
+                            fl.main_sub_switch_flag = True if not fl.main_sub_switch_flag else False
+
                         kiwi_snd2.terminate = True
                         kiwi_audio_stream2.stop()
                         time.sleep(1)
@@ -615,6 +617,7 @@ while not wf_quit:
                 elif keys[pygame.K_y]:
                     if kiwi_snd2:
                         kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
+                        fl.main_sub_switch_flag = True if not fl.main_sub_switch_flag else False
                         if not cat_radio:
                             force_sync_flag = True
                         elif fl.cat_snd_link_flag:
