@@ -136,6 +136,7 @@ class flags():
 
         
 class audio_recording():
+    CHANNELS = 1
     def __init__(self, kiwi_snd):
         self.filename = ""
         self.audio_buffer = []
@@ -156,7 +157,7 @@ class audio_recording():
 
     def save(self):
         self.wave = wave.open(self.filename, 'wb')
-        self.wave.setnchannels(self.kiwi_snd.CHANNELS)
+        self.wave.setnchannels(self.CHANNELS)
         self.wave.setsampwidth(2) # two bytes per sample (int16)
         self.wave.setframerate(self.kiwi_snd.AUDIO_RATE)
         # process audio data here
@@ -430,30 +431,35 @@ class kiwi_sdr():
     freq_offset = 0
     antenna = ""
     kiwi_name = ""
+    min_freq, max_freq = None, None
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, verbose_flag=False):
         url = "http://%s:%d/status" % (host, port)
         file = urllib.request.urlopen(url)
         for line in file:
             decoded_line = line.decode("utf-8").rstrip()
             # print(decoded_line)
-            key, value = decoded_line.split("=")[0], decoded_line.split("=")[1:]
+            key, value = decoded_line.split("=")[0], decoded_line.split("=")[1]
             self.kiwi_status_dict[key] = value
+        
+        users = int(self.kiwi_status_dict["users"])
+        users_max = int(self.kiwi_status_dict["users_max"])
+        antenna = self.kiwi_status_dict["antenna"]
+        kiwi_name = self.kiwi_status_dict["name"]
+        qth = self.kiwi_status_dict["loc"]
+        active = True if self.kiwi_status_dict["status"]=="active" else False
+        offline = False if self.kiwi_status_dict["offline"]=="no" else True
+        gps = (float(self.kiwi_status_dict["gps"].split(", ")[0][1:]),
+            float(self.kiwi_status_dict["gps"].split(", ")[1][:-1] ))
+        self.min_freq, self.max_freq = float(self.kiwi_status_dict["bands"].split("-")[0]), float(self.kiwi_status_dict["bands"].split("-")[1])
         try:
-            users = int(self.kiwi_status_dict["users"])
-            users_max = int(self.kiwi_status_dict["users_max"])
-            antenna = self.kiwi_status_dict["antenna"]
-            kiwi_name = self.kiwi_status_dict["name"]
-            qth = self.kiwi_status_dict["loc"]
-            active = True if self.kiwi_status_dict["status"]=="active" else False
-            offline = False if self.kiwi_status_dict["offline"]=="no" else True
-            gps = (float(self.kiwi_status_dict["gps"].split(", ")[0]),
-                float(self.kiwi_status_dict["gps"].split(", ")[1] ))
-
-            freq_offset = int(self.kiwi_status_dict["freq_offset"])
+            self.freq_offset = float(self.kiwi_status_dict["freq_offset"])
         except:
-            print("Some status parameters not found! Old firmware?")
-        print (self.kiwi_status_dict)
+            if verbose_flag:
+                print("Some status parameters not found! Old firmware?")
+            self.freq_offset = self.min_freq
+        if verbose_flag:
+            print (self.kiwi_status_dict)
 
 class kiwi_waterfall():
     MAX_FREQ = 30000
@@ -509,7 +515,7 @@ class kiwi_waterfall():
         self.wf_color = None
         self.freq_offset = 0
 
-        kiwi_sdr_status = kiwi_sdr(host_, port_)
+        kiwi_sdr_status = kiwi_sdr(host_, port_, True)
         if kiwi_sdr_status.users >= kiwi_sdr_status.users_max:
             print ("Too many users! Failed to connect!")
             raise Exception()
@@ -971,19 +977,18 @@ class kiwi_sound():
             self.old_buffer = pyaudio_buffer[-(self.n_tap-1):]
             pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
 
+        left_volume, right_volume = min(1-self.audio_balance, 1.0), min(1+self.audio_balance, 1.0)
+        outdata[:,0] = (pyaudio_buffer*left_volume**2).astype(np.int16)   # LEFT  CHANNEL
+        outdata[:,1] = (pyaudio_buffer*right_volume**2).astype(np.int16)     # RIGHT CHANNEL
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
-
         # mute on TX (over some rssi threshold)
         if self.rssi > self.max_rssi_before_mute:
             self.mute_counter = self.muting_delay
         elif self.mute_counter > 0:
             self.mute_counter -= 1
         if self.mute_counter > 0:
-            pyaudio_buffer *= 0
-        left_volume, right_volume = min(1-self.audio_balance, 1.0), min(1+self.audio_balance, 1.0)
-        outdata[:,0] = (pyaudio_buffer*left_volume**2).astype(np.int16)   # LEFT  CHANNEL
-        outdata[:,1] = (pyaudio_buffer*right_volume**2).astype(np.int16)     # RIGHT CHANNEL
+            outdata *= 0
         
     def run(self):
         while not self.terminate:
@@ -1215,14 +1220,14 @@ class display_stuff():
             tx_on_flag = cat_radio.cat_tx
         #           Label   Color   Freq/Mode                       Screen position
         ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq+kiwi_wf.freq_offset if fl.cat_snd_link_flag else kiwi_wf.freq+kiwi_wf.freq_offset), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
-                "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,self.TUNEBAR_Y+1), "small", False),
-                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,self.TUNEBAR_Y+1), "small", False),
+                "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz+kiwi_wf.freq_offset) ,(0,self.TUNEBAR_Y+1), "small", False),
+                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz+kiwi_wf.freq_offset), (wf_width-55,self.TUNEBAR_Y+1), "small", False),
                 "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+kiwi_snd.freq_offset+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
                 "kiwi": (RED if not fl.main_sub_switch_flag else GREEN, kiwi_wf.host[:30]+" - BAL: %s"%audio_balance_string_main ,(95,self.BOTTOMBAR_Y+6), "small", False),
                 "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,self.SPECTRUM_Y+1), "small", False),
                 "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, self.V_POS_TEXT), "small", False),
                 "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
-                "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (wf_width/2+165, self.V_POS_TEXT), "small", False),
+                "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (wf_width/2+170, self.V_POS_TEXT), "small", False),
                 "center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, self.SPECTRUM_Y+2), "small", False),
                 "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, self.BOTTOMBAR_Y+4), "big", False),
                 "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+4), "big", False), 
