@@ -9,6 +9,7 @@ import socket
 import time
 from datetime import datetime, timedelta
 import sys
+import urllib
 if sys.version_info > (3,):
     buffer = memoryview
     def bytearray2str(b):
@@ -418,6 +419,42 @@ class kiwi_list():
             print("No kiwi list file found!")
 
 
+class kiwi_sdr():
+    kiwi_status_dict = {}
+    active = True
+    offline = False
+    users = 0
+    users_max = 4
+    gps = (None, None)
+    qth = ""
+    freq_offset = 0
+    antenna = ""
+    kiwi_name = ""
+
+    def __init__(self, host, port):
+        url = "http://%s:%d/status" % (host, port)
+        file = urllib.request.urlopen(url)
+        for line in file:
+            decoded_line = line.decode("utf-8").rstrip()
+            # print(decoded_line)
+            key, value = decoded_line.split("=")[0], decoded_line.split("=")[1:]
+            self.kiwi_status_dict[key] = value
+        try:
+            users = int(self.kiwi_status_dict["users"])
+            users_max = int(self.kiwi_status_dict["users_max"])
+            antenna = self.kiwi_status_dict["antenna"]
+            kiwi_name = self.kiwi_status_dict["name"]
+            qth = self.kiwi_status_dict["loc"]
+            active = True if self.kiwi_status_dict["status"]=="active" else False
+            offline = False if self.kiwi_status_dict["offline"]=="no" else True
+            gps = (float(self.kiwi_status_dict["gps"].split(", ")[0]),
+                float(self.kiwi_status_dict["gps"].split(", ")[1] ))
+
+            freq_offset = int(self.kiwi_status_dict["freq_offset"])
+        except:
+            print("Some status parameters not found! Old firmware?")
+        print (self.kiwi_status_dict)
+
 class kiwi_waterfall():
     MAX_FREQ = 30000
     CENTER_FREQ = int(MAX_FREQ/2)
@@ -466,10 +503,21 @@ class kiwi_waterfall():
         self.space_khz = 10 # initial proposed spacing between major ticks in kHz
 
         self.counter, self.actual_freq = self.start_frequency_to_counter(self.start_f_khz)
-        print ("Actual frequency:", self.actual_freq, "kHz")
+        # print ("Actual frequency:", self.actual_freq, "kHz")
         self.socket = None
         self.wf_stream = None
         self.wf_color = None
+        self.freq_offset = 0
+
+        kiwi_sdr_status = kiwi_sdr(host_, port_)
+        if kiwi_sdr_status.users >= kiwi_sdr_status.users_max:
+            print ("Too many users! Failed to connect!")
+            raise Exception()
+        elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
+            print ("KiwiSDR offline or under maintenance! Failed to connect!")
+            raise Exception()
+        else:
+            self.freq_offset = kiwi_sdr_status.freq_offset/1000.0
 
         # connect to kiwi WF server
         print ("Trying to contact %s..."%self.host)
@@ -526,7 +574,6 @@ class kiwi_waterfall():
 
     def start_stream(self):
         self.kiwi_wf_timestamp = int(time.time())
-        print("WF timestamp", self.kiwi_wf_timestamp)
         uri = '/%d/%s' % (self.kiwi_wf_timestamp, 'W/F')
 
         try:
@@ -746,6 +793,17 @@ class kiwi_sound():
         self.min_agc_delay, self.max_agc_delay = 400, 8000
         self.decay = self.decay_other
         self.audio_balance = 0.0
+        self.freq_offset = 0
+
+        kiwi_sdr_status = kiwi_sdr(self.host, self.port)
+        if kiwi_sdr_status.users >= kiwi_sdr_status.users_max:
+            print ("Too many users! Failed to connect!")
+            raise Exception()
+        elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
+            print ("KiwiSDR offline or under maintenance! Failed to connect!")
+            raise Exception()
+        else:
+            self.freq_offset = kiwi_sdr_status.freq_offset/1000.0
 
         print ("Trying to contact server...")
         try:
@@ -778,7 +836,6 @@ class kiwi_sound():
                 if msg and "SND" == bytearray2str(msg[:3]):
                     break
                 elif msg and "MSG audio_init" in bytearray2str(msg):
-                    print(msg)
                     msg = bytearray2str(msg)
                     els = msg[4:].split()                
                     self.KIWI_RATE = int(int(els[1].split("=")[1]))
@@ -839,7 +896,7 @@ class kiwi_sound():
             data = self.stream.receive_message()
             # if not self.run_index % 100:
                 # print(self.run_index, self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE)
-            if self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE >= self.KIWI_SAMPLES_PER_FRAME: # self.KIWI_SAMPLES_PER_FRAME:
+            if 2.0 * self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE >= self.KIWI_SAMPLES_PER_FRAME: # self.KIWI_SAMPLES_PER_FRAME:
                 # print("Double reading from server to compensate audio non integer sample rate!", self.run_index)
                 data = self.stream.receive_message()
                 self.run_index = 0
@@ -850,10 +907,10 @@ class kiwi_sound():
                 print ('server closed the connection cleanly')
                 raise
         except ConnectionTerminatedException:
-                self.terminate = True
-                self.kiwi_wf.terminate = True
-                print('server closed the connection unexpectedly')
-                raise
+            self.terminate = True
+            self.kiwi_wf.terminate = True
+            print('server closed the connection unexpectedly')
+            raise
 
         #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
         if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
@@ -904,7 +961,7 @@ class kiwi_sound():
 
         n = len(popped)
         if self.SAMPLE_RATIO % 1: # high bandwidth kiwis (3ch 20kHz)
-            pyaudio_buffer = resample_poly(popped, self.n_high, self.n_low, padtype="line")
+            pyaudio_buffer = resample_poly(popped, self.n_high, self.n_low, padtype="line")[:-1]
         else: # normal 12kHz kiwis
             pyaudio_buffer = np.zeros(int(self.SAMPLE_RATIO*n))
             pyaudio_buffer[::int(self.SAMPLE_RATIO)] = popped
@@ -1157,10 +1214,10 @@ class display_stuff():
         if cat_radio:
             tx_on_flag = cat_radio.cat_tx
         #           Label   Color   Freq/Mode                       Screen position
-        ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq if fl.cat_snd_link_flag else kiwi_wf.freq), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
+        ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq+kiwi_wf.freq_offset if fl.cat_snd_link_flag else kiwi_wf.freq+kiwi_wf.freq_offset), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
                 "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz) ,(0,self.TUNEBAR_Y+1), "small", False),
                 "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz), (wf_width-50,self.TUNEBAR_Y+1), "small", False),
-                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
+                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+kiwi_snd.freq_offset+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
                 "kiwi": (RED if not fl.main_sub_switch_flag else GREEN, kiwi_wf.host[:30]+" - BAL: %s"%audio_balance_string_main ,(95,self.BOTTOMBAR_Y+6), "small", False),
                 "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,self.SPECTRUM_Y+1), "small", False),
                 "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, self.V_POS_TEXT), "small", False),
@@ -1178,7 +1235,7 @@ class display_stuff():
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
-            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
+            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
             ts_dict["kiwi2"] = (GREEN if not fl.main_sub_switch_flag else RED, kiwi_host2[:30]+" - BAL: %s"%audio_balance_string_sub ,(350,self.BOTTOMBAR_Y+6), "small", False)
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth)+127)//6 # signal in S units of 6dB
