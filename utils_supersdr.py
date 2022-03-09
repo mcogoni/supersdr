@@ -37,7 +37,7 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v3.11"
+VERSION = "v3.12"
 
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.5 # CW offset from carrier in kHz
