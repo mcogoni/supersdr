@@ -40,7 +40,7 @@ from mod_pywebsocket._stream_base import ConnectionTerminatedException
 VERSION = "v3.12"
 
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-CW_PITCH = 0.5 # CW offset from carrier in kHz
+CW_PITCH = 0.6 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
 LOW_CUT_SSB = 30 # Bandpass low end SSB
@@ -94,22 +94,24 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- D: connect/disconnect from DXCLUSTER server",
         "- I: show/hide EIBI database stations",
         "- Q: switch to a different KIWI server",
-        "- 1/2 & 3: adjust AGC threshold, 3 switch WF autoscale",
+        "- 1/2 & 3: adjust AGC threshold (+SHIFT decay), 3 WF autoscale",
         "- 0/9: [LOGGER] add QSO to log / open search QSO dialog",
+        "- 4: enable/disable spectrum filling",
+        "- 5/6: pan audio left/right for active RX",
         "- SHIFT+ESC: quits",
         "",
-        "  --- 73 de marco/IS0KYB cogoni@gmail.com ---  "]
+        "  --- 73 de marco/IS0KYB cogoni AT gmail DOT com ---  "]
 
 font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
 pygame.init()
 
-nanofont = pygame.freetype.SysFont('Mono', 8)
-microfont = pygame.freetype.SysFont('Mono', 10)
-smallfont = pygame.freetype.SysFont('Mono', 12)
-midfont = pygame.freetype.SysFont('Mono', 14)
-bigfont = pygame.freetype.SysFont('Mono', 16)
-hugefont = pygame.freetype.SysFont('Mono', 35)
+nanofont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 10)
+microfont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 12)
+smallfont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 14)
+midfont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 16)
+bigfont = pygame.freetype.Font("TerminusTTF-Bold-4.49.1.ttf", 20)
+hugefont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 35)
 
 
 class flags():
@@ -773,7 +775,7 @@ class kiwi_sound():
         self.host = host_ if host_ else kiwi_wf.host
         self.port = port_ if port_ else kiwi_wf.port
         self.FULL_BUFF_LEN = buffer_len
-        self.audio_buffer = queue.Queue(maxsize=self.FULL_BUFF_LEN)
+        self.audio_buffer = queue.Queue(maxsize = max(1, self.FULL_BUFF_LEN))
         self.terminate = False
         self.volume = volume_
         self.max_rssi_before_mute = -20
@@ -816,7 +818,7 @@ class kiwi_sound():
             self.socket = socket.socket()
             self.socket.connect((self.host, self.port)) # future: allow different kiwiserver for audio stream
             new_timestamp = int(time.time())
-            if new_timestamp - kiwi_wf.kiwi_wf_timestamp > 10:
+            if new_timestamp - kiwi_wf.kiwi_wf_timestamp > 2:
                 kiwi_wf.kiwi_wf_timestamp = new_timestamp
             uri = '/%d/%s' % (kiwi_wf.kiwi_wf_timestamp, 'SND')
             handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
@@ -845,8 +847,8 @@ class kiwi_sound():
                     msg = bytearray2str(msg)
                     els = msg[4:].split()                
                     self.KIWI_RATE = int(int(els[1].split("=")[1]))
-                    KIWI_RATE_TRUE = float(els[2].split("=")[1])
-                    self.delta_t = KIWI_RATE_TRUE - self.KIWI_RATE
+                    self.KIWI_RATE_TRUE = float(els[2].split("=")[1])
+                    self.delta_t = self.KIWI_RATE_TRUE - self.KIWI_RATE
                     self.SAMPLE_RATIO = self.AUDIO_RATE/self.KIWI_RATE
         except:
             print ("Failed to connect to Kiwi audio stream")
@@ -902,7 +904,7 @@ class kiwi_sound():
             data = self.stream.receive_message()
             # if not self.run_index % 100:
                 # print(self.run_index, self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE)
-            if 2.0 * self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE >= self.KIWI_SAMPLES_PER_FRAME: # self.KIWI_SAMPLES_PER_FRAME:
+            if self.run_index * self.delta_t * self.KIWI_SAMPLES_PER_FRAME/self.KIWI_RATE >= self.KIWI_SAMPLES_PER_FRAME: # self.KIWI_SAMPLES_PER_FRAME:
                 # print("Double reading from server to compensate audio non integer sample rate!", self.run_index)
                 data = self.stream.receive_message()
                 self.run_index = 0
@@ -991,12 +993,63 @@ class kiwi_sound():
             outdata *= 0
         
     def run(self):
+        self.total_delay_ms = 0.0
+        delta_time_ms = 0.0
+        ms_per_frame = (self.KIWI_SAMPLES_PER_FRAME / self.KIWI_RATE_TRUE) * 1000
+        late_flag = False
         while not self.terminate:
+            time_prev = time.time_ns() / 1000000 # time in ms
             snd_buf = self.get_audio_chunk()
-            if snd_buf is not None:
+            #if not self.run_index % 10:
+            #    print(delta_time_ms, self.total_delay_ms, ms_per_frame)
+            if snd_buf is not None and not late_flag: # drop the audio frame if we're late!
                 self.audio_buffer.put(snd_buf)
                 self.run_index += 1
+                self.total_delay_ms -= delta_time_ms # subtract the frame time from the total delay whether we play it or drop it...
+            else:
+                self.total_delay_ms -= ms_per_frame # subtract the frame time from the total delay whether we play it or drop it...
+
+            time_now = time.time_ns() / 1000000 # time in ms
+            delta_time_ms = time_now - time_prev
+            self.total_delay_ms += delta_time_ms
+            if not late_flag and self.total_delay_ms > max(self.FULL_BUFF_LEN, 5) * ms_per_frame:
+                late_flag = True
+                print("AUDIO STREAM NOT IN SYNC: DROPPING!")
+            if late_flag and self.total_delay_ms < ms_per_frame:
+                late_flag = False
+                print("AUDIO STREAM SYNCED")
+            
         return
+
+
+def start_audio_stream(kiwi_snd):
+    def _get_std_input_dev():
+        devices = sd.query_devices()
+        for dev_id, device in enumerate(devices):
+            if device["max_input_channels"] > 0 and "pulse" in device["name"]:
+                std_dev_id = dev_id
+            else:
+                std_dev_id = None
+        return std_dev_id
+
+    rx_t = threading.Thread(target=kiwi_snd.run, daemon=True)
+    rx_t.start()
+
+    print("Filling audio buffer...")
+    while kiwi_snd.audio_buffer.qsize() < kiwi_snd.FULL_BUFF_LEN and not kiwi_snd.terminate:
+        pass
+
+    if kiwi_snd.terminate:
+        print("kiwi sound not started!")
+        del kiwi_snd
+        return (None, None)
+
+    std_dev_id = _get_std_input_dev()
+    kiwi_audio_stream = sd.OutputStream(blocksize = int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
+                        device=std_dev_id, dtype=kiwi_snd.FORMAT, latency="low", samplerate=kiwi_snd.AUDIO_RATE, channels=kiwi_snd.CHANNELS, callback = kiwi_snd.play_buffer)
+    kiwi_audio_stream.start()
+
+    return True, kiwi_audio_stream
 
 
 class cat:
@@ -1089,36 +1142,6 @@ def get_auto_mode(f):
     return "USB" if f>TENMHZ else "LSB"
 
 
-def start_audio_stream(kiwi_snd):
-    def _get_std_input_dev():
-        devices = sd.query_devices()
-        for dev_id, device in enumerate(devices):
-            if device["max_input_channels"] > 0 and "pulse" in device["name"]:
-                std_dev_id = dev_id
-            else:
-                std_dev_id = None
-        return std_dev_id
-
-    rx_t = threading.Thread(target=kiwi_snd.run, daemon=True)
-    rx_t.start()
-
-    print("Filling audio buffer...")
-    while kiwi_snd.audio_buffer.qsize() < kiwi_snd.FULL_BUFF_LEN and not kiwi_snd.terminate:
-        pass
-
-    if kiwi_snd.terminate:
-        print("kiwi sound not started!")
-        del kiwi_snd
-        return (None, None)
-
-    std_dev_id = _get_std_input_dev()
-    kiwi_audio_stream = sd.OutputStream(blocksize = int(kiwi_snd.KIWI_SAMPLES_PER_FRAME*kiwi_snd.CHUNKS*kiwi_snd.SAMPLE_RATIO),
-                        device=std_dev_id, dtype=kiwi_snd.FORMAT, latency="low", samplerate=kiwi_snd.AUDIO_RATE, channels=kiwi_snd.CHANNELS, callback = kiwi_snd.play_buffer)
-    kiwi_audio_stream.start()
-
-    return True, kiwi_audio_stream
-
-
 class eibi_db():
     def __init__(self):
         try:
@@ -1157,6 +1180,8 @@ class eibi_db():
 
 
 class display_stuff():
+    wf_bottom, wf_top = 0, 0
+
     def __init__(self, DISPLAY_WIDTH):
         # SuperSDR constants
         self.DISPLAY_WIDTH = DISPLAY_WIDTH
@@ -1198,7 +1223,7 @@ class display_stuff():
         #     colormap = cm.jet(range(256))[:,:3]*255
         return colormap
 
-    def update_textsurfaces(self, surface_, radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
+    def update_textsurfaces(self, surface_, radio_mode, rssi_smooth, rssi_smooth_slow, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
         mousex_pos = mouse[0]
         if mousex_pos < 25:
             mousex_pos = 25
@@ -1206,58 +1231,63 @@ class display_stuff():
             mousex_pos = self.DISPLAY_WIDTH - 80
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
         buff_level = kiwi_snd.audio_buffer.qsize()
-        main_rx_color = RED #if not kiwi_snd.subrx else GREEN
-        sub_rx_color = GREEN #if not kiwi_snd.subrx else RED
+        main_rx_color = RED
+        sub_rx_color = GREEN
         tx_on_flag = False
-        audio_balance_string_list = ["LEFT", "C-LEFT", "CENTER", "C-RIGHT", "RIGHT"]
+
+        if not run_index%20:
+            self.wf_bottom = kiwi_wf.wf_min_db
+            self.wf_top = kiwi_wf.wf_max_db
+
+        audio_balance_string_list = ["<<", "<", "^", ">", ">>"]
         audio_balance_string_main = audio_balance_string_list[int((kiwi_snd.audio_balance+1)*2)]
         if fl.dualrx_flag and kiwi_snd2:
             audio_balance_string_sub = audio_balance_string_list[int((kiwi_snd2.audio_balance+1)*2)]
-        if fl.main_sub_switch_flag:
-            audio_balance_string_main, audio_balance_string_sub = audio_balance_string_sub, audio_balance_string_main
+            if fl.main_sub_switch_flag:
+                audio_balance_string_main, audio_balance_string_sub = audio_balance_string_sub, audio_balance_string_main
 
         if cat_radio:
             tx_on_flag = cat_radio.cat_tx
         #           Label   Color   Freq/Mode                       Screen position
         ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq+kiwi_wf.freq_offset if fl.cat_snd_link_flag else kiwi_wf.freq+kiwi_wf.freq_offset), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
                 "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz+kiwi_wf.freq_offset) ,(0,self.TUNEBAR_Y+1), "small", False),
-                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz+kiwi_wf.freq_offset), (wf_width-55,self.TUNEBAR_Y+1), "small", False),
-                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s [%s]"%(kiwi_snd.freq+kiwi_snd.freq_offset+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%%"%kiwi_snd.volume), (wf_width/2-120,self.V_POS_TEXT-1), "big", False),
-                "kiwi": (RED if not fl.main_sub_switch_flag else GREEN, kiwi_wf.host[:30]+" - BAL: %s"%audio_balance_string_main ,(95,self.BOTTOMBAR_Y+6), "small", False),
-                "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-95,self.SPECTRUM_Y+1), "small", False),
-                "filter": (GREY, "FILT:%.1fkHz"%((kiwi_snd.hc-kiwi_snd.lc)/1000.), (wf_width/2+230, self.V_POS_TEXT), "small", False),
+                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz+kiwi_wf.freq_offset), (wf_width-65,self.TUNEBAR_Y+1), "small", False),
+                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s %s"%(kiwi_snd.freq+kiwi_snd.freq_offset+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%% %s"%(kiwi_snd.volume, audio_balance_string_main)), (wf_width/2-130,self.V_POS_TEXT-1), "big", False),
+                "kiwi": (ORANGE, kiwi_wf.host[:40]+":%d"%kiwi_wf.port ,(95,self.BOTTOMBAR_Y+6), "small", False),
+                "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-105,self.SPECTRUM_Y+1), "small", False),
+                "filter": (GREY, "FILT:%.0f Hz"%((kiwi_snd.hc-kiwi_snd.lc)), (wf_width/2+230, self.V_POS_TEXT), "small", False),
                 "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
                 "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (wf_width/2+170, self.V_POS_TEXT), "small", False),
-                "center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, self.SPECTRUM_Y+2), "small", False),
-                "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, self.BOTTOMBAR_Y+4), "big", False),
-                "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+4), "big", False), 
-                "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, self.BOTTOMBAR_Y+4), "big", False),
-                "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, self.BOTTOMBAR_Y+4), "big", False),
-                "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-160, self.V_POS_TEXT), "small", False),
-                "wf_bottom": (WHITE, "%ddB"%(kiwi_wf.wf_min_db), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
-                "wf_param": (WHITE, "%ddB AUTO %s"%(kiwi_wf.wf_max_db, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
-                "help": (BLUE, "HELP", (wf_width-50, self.BOTTOMBAR_Y+4), "big", False)
+                #"center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, self.SPECTRUM_Y+2), "small", False),
+                "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, self.BOTTOMBAR_Y+3), "big", False),
+                "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+3), "big", False), 
+                "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, self.BOTTOMBAR_Y+3), "big", False),
+                "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, self.BOTTOMBAR_Y+3), "big", False),
+                "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-180, self.V_POS_TEXT), "small", False),
+                "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
+                "wf_param": (WHITE, "%ddB AUTO %s"%(self.wf_top, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
+                "help": (BLUE, "HELP", (wf_width-50, self.BOTTOMBAR_Y+3), "big", False)
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
-            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s [%s]"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%%"%kiwi_snd2.volume), (wf_width/2-410,self.V_POS_TEXT-1), "big", False)
-            ts_dict["kiwi2"] = (GREEN if not fl.main_sub_switch_flag else RED, kiwi_host2[:30]+" - BAL: %s"%audio_balance_string_sub ,(350,self.BOTTOMBAR_Y+6), "small", False)
+            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s %s"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%% %s"%(kiwi_snd2.volume, audio_balance_string_sub)), (wf_width/2-430,self.V_POS_TEXT-1), "big", False)
+                
         if not fl.s_meter_show_flag:
-            s_value = (round(rssi_smooth)+127)//6 # signal in S units of 6dB
+            s_value = (round(rssi_smooth_slow)+127)//6 # signal in S units of 6dB
             if s_value<=9:
                 s_value = "S"+str(max(0,int(s_value)))
             else:
                 s_value = "S9+"+str(int((s_value-9)*6))+"dB"
-            ts_dict["smeter"] = (ORANGE if not tx_on_flag else "RED", s_value if not tx_on_flag else "TX", (20,self.V_POS_TEXT-1), "big", False)
+            ts_dict["smeter"] = (ORANGE if not tx_on_flag else "RED", s_value if not tx_on_flag else "TX", (5,self.V_POS_TEXT-1), "big", False)
         if fl.click_drag_flag:
             delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO - mousex_pos)
             ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,self.SPECTRUM_Y+20), "big", False)
         if kiwi_wf.averaging_n>1:
             ts_dict["avg"] = (RED, "AVG %dX"%kiwi_wf.averaging_n, (10,self.SPECTRUM_Y+13), "small", False)
         if len(kiwi_wf.div_list)>1:
-            ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-95,self.SPECTRUM_Y+13), "small", False)
+            ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-105,self.SPECTRUM_Y+13), "small", False)
         else:
-            ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-95,self.SPECTRUM_Y+13), "small", False)
+            ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-105,self.SPECTRUM_Y+13), "small", False)
 
         draw_dict = {}
         for k in ts_dict:
@@ -1335,10 +1365,10 @@ class display_stuff():
             pygame.draw.line(surface_, RED, (fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO, self.SPECTRUM_Y+10), (mouse[0], self.SPECTRUM_Y+10), 4)
 
         # plot tuning minor and major ticks
-        for x in kiwi_wf.div_list:
-            pygame.draw.line(surface_, YELLOW, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+12), 3)
         for x in kiwi_wf.subdiv_list:
             pygame.draw.line(surface_, WHITE, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+17), 1)
+        for x in kiwi_wf.div_list:
+            pygame.draw.line(surface_, YELLOW, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+12), 3)
 
 
     def display_kiwi_box(self, screen, current_string_, kiwilist):
@@ -1379,7 +1409,7 @@ class display_stuff():
     def display_help_box(self, screen, message_list):
         font_size = font_size_dict["small"]
 
-        window_size = 525
+        window_size = 545
         pygame.draw.rect(screen, (0,0,0),
                        ((screen.get_width() / 2) - window_size/2,
                         (screen.get_height() / 2) - window_size/3,
@@ -1402,7 +1432,7 @@ class display_stuff():
             hugefont.render_to(screen, pos, message, color)
 
 
-    def s_meter_draw(self, rssi_smooth, agc_threshold, agc_decay):
+    def s_meter_draw(self, rssi_smooth, rssi_smooth_slow, agc_threshold, agc_decay):
         s_meter_radius = 50.
         SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
         smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
@@ -1429,10 +1459,10 @@ class display_stuff():
                        (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 3)
         
         angle_list = np.linspace(0.2, math.pi-0.2, 9)
-        text_list = ["1", "3", "5", "7", "9", "+10", "+20", "+30", "+40"]
+        text_list = ["1", "3", "5", " 7", " 9", "+12", "+24", "+36", "+48"]
         for alpha_seg, msg in zip(angle_list, text_list[::-1]):
             text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
-            nanofont.render_to(smeter_surface, (text_x-6, text_y-2), msg, D_GREY)
+            nanofont.render_to(smeter_surface, (text_x-8, text_y-2), msg, D_GREY)
 
             seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
             color_ =  BLACK
@@ -1445,14 +1475,14 @@ class display_stuff():
 
         pygame.draw.line(smeter_surface, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
         pygame.draw.line(smeter_surface, BLUE, s_meter_center, (agc_meter_x, agc_meter_y), 2)
-        str_rssi = "%ddBm"%rssi_smooth
+        str_rssi = "%ddBm"%rssi_smooth_slow
         str_len = len(str_rssi)
-        pos = (s_meter_center[0]+13, s_meter_center[1])
+        pos = (s_meter_center[0]+13, s_meter_center[1]-2)
         microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
         
         str_decay = "%.1fs" % (agc_decay/1000)
         str_len = len(str_decay)
-        pos = (s_meter_center[0]-40, s_meter_center[1])
+        pos = (s_meter_center[0]-40, s_meter_center[1]-2)
         microfont.render_to(smeter_surface, pos, str_decay, BLACK)
         
         return smeter_surface
@@ -1499,7 +1529,7 @@ class display_stuff():
                 ts = (WHITE, station_record[3], (f_bin,self.WF_Y+20), "small")
             except:
                 continue
-            render_ = midfont.render_to
+            render_ = smallfont.render_to
             str_len = len(ts[1])
             x, y = ts[2]
             if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
@@ -1532,7 +1562,7 @@ class display_stuff():
                 color = dxclust.color_dict[duration_normal]
                 ts = (color, call, (f_bin,self.WF_Y+20), "small")
 
-                render_ = midfont.render_to
+                render_ = smallfont.render_to
                 str_len = len(ts[1])
                 x, y = ts[2]
                 if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
@@ -1565,7 +1595,8 @@ class display_stuff():
                     pygame.draw.line(surface_, (0, 100, 0, 20), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y-60), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, y), 1)
 
     def splash_screen(self, sdrdisplay):
-        font = pygame.font.Font(None, 50)
+        font = pygame.font.Font("TerminusTTF-Bold-4.49.1.ttf", 40)
+        
         sdrdisplay.fill((0, 0, 0))
         block = font.render(" - SUPERSDR - ", True, GREEN)
         rect = block.get_rect()
@@ -1575,12 +1606,16 @@ class display_stuff():
         rect = block.get_rect()
         rect = block.get_rect(center=(self.DISPLAY_WIDTH/2, self.DISPLAY_HEIGHT/2))
         sdrdisplay.blit(block, rect)
-        block = font.render("marco cogoni - IS0KYB", True, BLUE)
+        block = font.render("marco cogoni - IS0KYB - 2022", True, BLUE)
         rect = block.get_rect()
         rect = block.get_rect(center=(self.DISPLAY_WIDTH/2, self.DISPLAY_HEIGHT/2+90))
         sdrdisplay.blit(block, rect)
+        flag_pic = pygame.image.load('flag.png')
+        flag_pic = pygame.transform.scale(flag_pic, (160, 100))
+        sdrdisplay.blit(flag_pic, (self.DISPLAY_WIDTH/2-80, self.DISPLAY_HEIGHT/2-240))
+
         pygame.display.flip()
-        time.sleep(1)
+        time.sleep(3)
 
 
 class logger():

@@ -210,6 +210,7 @@ print("WF<>CAT", fl.wf_cat_link_flag, "WF<>RX", fl.wf_snd_link_flag, "CAT<>RX", 
 rssi_maxlen = 10 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
+rssi_smooth_slow = rssi_smooth
 run_index = 0
 run_index_bigmsg = 0
 
@@ -978,11 +979,14 @@ while not wf_quit:
     else:
         rssi_smooth = (rssi_smooth + rssi_last)/2 # attack rate
 
+    if not run_index%20:
+        rssi_smooth_slow = rssi_smooth
+
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,disp.DISPLAY_WIDTH,disp.TOPBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,0), (0,disp.BOTTOMBAR_Y,disp.DISPLAY_WIDTH,disp.DISPLAY_HEIGHT), 0)
     disp.draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio)
-    disp.update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
+    disp.update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, rssi_smooth_slow, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
         disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
@@ -1065,7 +1069,7 @@ while not wf_quit:
         disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
     if fl.s_meter_show_flag:
-        smeter_surface = disp.s_meter_draw(rssi_smooth, kiwi_snd.thresh, kiwi_snd.decay)
+        smeter_surface = disp.s_meter_draw(rssi_smooth, rssi_smooth_slow, kiwi_snd.thresh, kiwi_snd.decay)
         sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-80))
 
     mouse = pygame.mouse.get_pos()
