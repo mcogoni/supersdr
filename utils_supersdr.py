@@ -444,14 +444,14 @@ class kiwi_sdr():
             key, value = decoded_line.split("=")[0], decoded_line.split("=")[1]
             self.kiwi_status_dict[key] = value
         
-        users = int(self.kiwi_status_dict["users"])
-        users_max = int(self.kiwi_status_dict["users_max"])
-        antenna = self.kiwi_status_dict["antenna"]
-        kiwi_name = self.kiwi_status_dict["name"]
-        qth = self.kiwi_status_dict["loc"]
-        active = True if self.kiwi_status_dict["status"]=="active" else False
-        offline = False if self.kiwi_status_dict["offline"]=="no" else True
-        gps = (float(self.kiwi_status_dict["gps"].split(", ")[0][1:]),
+        self.users = int(self.kiwi_status_dict["users"])
+        self.users_max = int(self.kiwi_status_dict["users_max"])
+        self.antenna = self.kiwi_status_dict["antenna"]
+        self.kiwi_name = self.kiwi_status_dict["name"]
+        self.qth = self.kiwi_status_dict["loc"]
+        self.active = True if self.kiwi_status_dict["status"]=="active" else False
+        self.offline = False if self.kiwi_status_dict["offline"]=="no" else True
+        self.gps = (float(self.kiwi_status_dict["gps"].split(", ")[0][1:]),
             float(self.kiwi_status_dict["gps"].split(", ")[1][:-1] ))
         self.min_freq, self.max_freq = float(self.kiwi_status_dict["bands"].split("-")[0]), float(self.kiwi_status_dict["bands"].split("-")[1])
         try:
@@ -459,7 +459,8 @@ class kiwi_sdr():
         except:
             if verbose_flag:
                 print("Some status parameters not found! Old firmware?")
-            self.freq_offset = self.min_freq
+            # self.freq_offset = self.min_freq
+            self.freq_offset = 0
         if verbose_flag:
             print (self.kiwi_status_dict)
 
@@ -518,7 +519,8 @@ class kiwi_waterfall():
         self.freq_offset = 0
 
         kiwi_sdr_status = kiwi_sdr(host_, port_, True)
-        if kiwi_sdr_status.users >= kiwi_sdr_status.users_max:
+        print(kiwi_sdr_status.users, kiwi_sdr_status.users_max)
+        if kiwi_sdr_status.users == kiwi_sdr_status.users_max:
             print ("Too many users! Failed to connect!")
             raise Exception()
         elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
@@ -804,7 +806,7 @@ class kiwi_sound():
         self.freq_offset = 0
 
         kiwi_sdr_status = kiwi_sdr(self.host, self.port)
-        if kiwi_sdr_status.users >= kiwi_sdr_status.users_max:
+        if kiwi_sdr_status.users > kiwi_sdr_status.users_max:
             print ("Too many users! Failed to connect!")
             raise Exception()
         elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
