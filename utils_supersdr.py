@@ -1556,10 +1556,10 @@ class display_stuff():
 
         s_meter_center = (s_meter_radius+10,s_meter_radius+8)
         alpha_rssi = rssi_smooth + 127
-        alpha_rssi = -math.radians(alpha_rssi * (180+double_deg_offset)/(115.)) - math.pi
+        alpha_rssi = -math.radians(alpha_rssi * (180+double_deg_offset)/(110.)) - math.pi
 
         alpha_agc = agc_threshold + 127
-        alpha_agc = -math.radians(alpha_agc * (180+double_deg_offset)/(115.)) - math.pi
+        alpha_agc = -math.radians(alpha_agc * (180+double_deg_offset)/(110.)) - math.pi
 
         def _coords_from_angle(angle, s_meter_radius_):
             x_ = s_meter_radius_ * math.cos(angle)
