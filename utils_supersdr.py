@@ -136,6 +136,10 @@ class flags():
 
     main_sub_switch_flag = False
 
+    tk_log_new_flag = False
+    tk_log_search_flag = False
+    tk_kiwi_flag = False
+
         
 class audio_recording():
     CHANNELS = 1
@@ -389,37 +393,146 @@ class memory():
 
 class kiwi_list():
     def __init__(self):
-        self.mem_list = deque([], 10)
-        self.index = 0
+        self.kiwi_list_filename = "kiwi.list"
+        self.kiwi_host = ""
+        self.kiwi_port = ""
+        self.kiwi_password = ""
+        self.default_port = 8073
+        self.default_password = ""
+        self.connect_new_flag = False
+
         try:
             self.load_from_disk()
         except:
             pass
-        self.index = len(self.mem_list)
-
-    def write_mem(self, host_, port_, pass_):
-        self.mem_list.append((host_, port_, pass_))
-
-    def delete_mem(self, index):
-        try:
-            del self.mem_list[index]
-            return True
-        except:
-            return None
 
     def save_to_disk(self):
         try:
-            with open("kiwi.list", "wb") as fd:
-                pickle.dump(self.mem_list, fd)
+            with open(self.kiwi_list_filename, "a") as fd:
+                col_count = self.kiwi_data.count(":")
+                print(col_count)
+                fd.write(self.kiwi_data.replace(":", ";")+";"*(3-col_count)+"\n")
+            self.load_from_disk()
         except:
             print("Cannot save kiwi list to disk!")
 
     def load_from_disk(self):
+        self.kiwi_list = []
         try:
-            with open("kiwi.list", "rb") as fd:
-                self.mem_list = pickle.load(fd)
+            with open(self.kiwi_list_filename, encoding="latin") as fd:
+                data = fd.readlines()
+
+            col_count = data.count(":")
+            label_list = data[0].rstrip().split(";")
+            for row in data[1:]:
+                if row[0] == "#":
+                    continue
+                fields = row.rstrip().split(";")
+                host = fields[0]
+                port = int(fields[1]) if col_count>0 else self.default_port
+                password = fields[2] if col_count>1 else self.default_password
+                comments = fields[3] if col_count>2 else ""
+                self.kiwi_list.append((host, port, password, comments))
         except:
             print("No kiwi list file found!")
+            return
+
+    def choose_kiwi_dialog(self):
+        self.root = tkinter.Tk()
+        self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
+        self.root.geometry("400x400+960+450")
+        self.root.resizable(False,False)
+        self.root.title("Choose a KiwiSDR")
+        self.root.bind('<Escape>', lambda event: self.root.destroy())
+        self.root.bind('<Return>', lambda event: self.connect_new_kiwi())
+        # self.root.bind('<Tab>', lambda event: self.prev_qso_callback())
+        self.main_dialog = tkinter.Frame(self.root)
+        self.main_dialog.pack()
+
+        l = tkinter.Label(self.root, text = "Choose KiwiSDR")
+        l.config(font =("Mono", 14))
+
+        label_kiwi = tkinter.Label(text="Host:Port:Password")
+        self.entry_kiwi = tkinter.Entry()
+        self.entry_kiwi.focus()
+
+        l.pack()
+        label_kiwi.pack()
+        self.entry_kiwi.pack()
+
+        frame_text = tkinter.Frame(self.root, borderwidth=1)
+        frame_text.pack(fill=BOTH, expand=True)
+        scrollbar = Scrollbar(frame_text)
+        self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
+        scrollbar.config(command=self.t.yview)         
+        scrollbar.pack(side=RIGHT, fill=Y)
+        self.t.pack(side="left")
+
+        frame_bottom = tkinter.Frame(self.root, borderwidth=5)
+        frame_bottom.pack(fill=BOTH, expand=True)
+        self.b_connect = tkinter.Button(master=frame_bottom, text = "Connect", command = self.connect_new_kiwi)
+        self.b_connect_save = tkinter.Button(master=frame_bottom, text = "Save and Connect", command = lambda: self.connect_new_kiwi(True))
+        self.b_reload = tkinter.Button(master=frame_bottom, text = "Reload", command = self.reload_and_refresh)
+        self.b_cancel = tkinter.Button(master=frame_bottom, text = "Cancel", command = self.root.destroy)
+        
+        self.b_connect.pack(side=LEFT)
+        self.b_connect_save.pack(side=LEFT)
+        self.b_cancel.pack(side=RIGHT)
+        self.b_reload.pack(side=RIGHT)
+        frame_bottom.pack()
+
+        self.refresh_list()
+
+
+    def refresh_list(self):
+        self.t.configure(state='normal')
+        self.t.delete(1.0, END)
+        for idx, kiwi_record in enumerate(self.kiwi_list):
+            kiwi_record = [str(el) for el in kiwi_record]
+            kiwi_string = ":".join(kiwi_record)+"\n"
+            kiwi_string = "%d. "%idx + kiwi_string
+            self.t.insert(END, kiwi_string)
+        self.t.configure(state='disabled')
+
+    def reload_and_refresh(self):
+        self.load_from_disk()
+        self.refresh_list()
+
+        
+    def connect_new_kiwi(self, save_flag=False):
+        self.kiwi_host = None
+        self.kiwi_port = None
+        self.kiwi_password = None
+        self.kiwi_data = self.entry_kiwi.get()
+        if len(self.kiwi_data)<3: # user has chosen a number
+            try:
+                idx = int(self.kiwi_data)
+                self.kiwi_host = self.kiwi_list[idx][0]
+                self.kiwi_port = self.kiwi_list[idx][1]
+                self.kiwi_password = self.kiwi_list[idx][2]
+                print (">>>", self.kiwi_list[idx], self.kiwi_host, self.kiwi_port, self.kiwi_password)
+                self.connect_new_flag = True
+                self.root.destroy()
+            except:
+                print("Kiwi index number not found in list!")
+        else:
+            kiwi_data_list = self.kiwi_data.rstrip().split(":")
+            if len(kiwi_data_list) > 0:
+                if kiwi_data_list[0] == '':
+                    return
+                self.kiwi_host = kiwi_data_list[0]
+                if len(kiwi_data_list) >= 2:
+                    try:
+                        self.kiwi_port = int(kiwi_data_list[1])
+                    except:
+                        self.kiwi_port = None
+                if len(kiwi_data_list) >= 3:
+                    self.kiwi_password = kiwi_data_list[2]
+                self.connect_new_flag = True
+                self.root.destroy()
+                self.save_to_disk()
+
+
 
 
 class kiwi_sdr():
@@ -522,7 +635,7 @@ class kiwi_waterfall():
         print(kiwi_sdr_status.users, kiwi_sdr_status.users_max)
         if kiwi_sdr_status.users == kiwi_sdr_status.users_max:
             print ("Too many users! Failed to connect!")
-            raise Exception()
+            # raise Exception()
         elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
             print ("KiwiSDR offline or under maintenance! Failed to connect!")
             raise Exception()
@@ -806,9 +919,9 @@ class kiwi_sound():
         self.freq_offset = 0
 
         kiwi_sdr_status = kiwi_sdr(self.host, self.port)
-        if kiwi_sdr_status.users > kiwi_sdr_status.users_max:
+        if kiwi_sdr_status.users == kiwi_sdr_status.users_max:
             print ("Too many users! Failed to connect!")
-            raise Exception()
+            # raise Exception()
         elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
             print ("KiwiSDR offline or under maintenance! Failed to connect!")
             raise Exception()
@@ -1389,7 +1502,7 @@ class display_stuff():
         smallfont.render_to(screen, pos, message, WHITE)
         message = "Choose stored Kiwi number or enter new one (port and password are optional)"
         smallfont.render_to(screen, (pos[0], pos[1]-20), message, WHITE)
-        for i, kiwi in enumerate(kiwilist.mem_list):
+        for i, kiwi in enumerate(kiwilist.kiwi_list):
             pos = (rec_pos[0]+2, rec_pos[1]+5+i*20)
             msg = "Kiwi server: %d -> %s:%d:%s"%(i, kiwi[0], kiwi[1], kiwi[2])
             smallfont.render_to(screen, pos, msg, GREY)
@@ -1436,15 +1549,17 @@ class display_stuff():
 
     def s_meter_draw(self, rssi_smooth, rssi_smooth_slow, agc_threshold, agc_decay):
         s_meter_radius = 50.
+        rad_offset = 0.2 # radians from minimum and maximum (difference from 0 and 190 deg)
+        double_deg_offset = math.radians(rad_offset * 2)
         SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
         smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
 
         s_meter_center = (s_meter_radius+10,s_meter_radius+8)
         alpha_rssi = rssi_smooth + 127
-        alpha_rssi = -math.radians(alpha_rssi * 180/127.)-math.pi*1.02
+        alpha_rssi = -math.radians(alpha_rssi * (180+double_deg_offset)/(115.)) - math.pi
 
         alpha_agc = agc_threshold + 127
-        alpha_agc = -math.radians(alpha_agc * 180/127.)-math.pi*1.02
+        alpha_agc = -math.radians(alpha_agc * (180+double_deg_offset)/(115.)) - math.pi
 
         def _coords_from_angle(angle, s_meter_radius_):
             x_ = s_meter_radius_ * math.cos(angle)
@@ -1460,7 +1575,7 @@ class display_stuff():
         pygame.draw.rect(smeter_surface, BLACK,
                        (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 3)
         
-        angle_list = np.linspace(0.2, math.pi-0.2, 9)
+        angle_list = np.linspace(rad_offset, math.pi-rad_offset, 9)
         text_list = ["1", "3", "5", " 7", " 9", "+12", "+24", "+36", "+48"]
         for alpha_seg, msg in zip(angle_list, text_list[::-1]):
             text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)

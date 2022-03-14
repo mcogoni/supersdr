@@ -68,6 +68,8 @@ eibi = eibi_db()
 mylogger = logger(CALLSIGN)
 mylogger.read_file()
 
+kiwilist = kiwi_list()
+
 palRGB = disp.create_cm(options["colormap"])
 
 kiwi_host = options['kiwiserver']
@@ -81,17 +83,6 @@ radioport = options['radioport']
 if not freq:
     freq = 14200
 radio_mode = get_auto_mode(freq)
-
-input_new_server = ""
-if not kiwi_host:
-    input_new_server = input("***\nNo KIWI specified!\nPlease enter: hostname [port] [password]\n")
-    input_text_list = input_new_server.rstrip().split(" ")
-    if len(input_text_list) >= 1:
-        kiwi_host = input_text_list[0]
-    if len(input_text_list) >= 2:
-        kiwi_port = int(input_text_list[1])
-    if len(input_text_list) == 3:
-        kiwi_password = input_text_list[2]
 
 if radiohost:
     try:
@@ -122,35 +113,14 @@ while not kiwi_wf:
     except:
         kiwi_address = ""
         complete = False
+        kiwilist.choose_kiwi_dialog()
         while True:
-            for evt in pygame.event.get():
-                if evt.type == KEYDOWN:
-                    if evt.unicode.isprintable():
-                        kiwi_address += evt.unicode
-                    elif evt.key == K_BACKSPACE:
-                        kiwi_address = kiwi_address[:-1]
-                    elif evt.key == K_RETURN:
-                        complete = True
-                        break
-                elif evt.type == QUIT:
-                    break
-            sdrdisplay.fill((0, 0, 0))
-            block = font.render("Enter KIWI address:port ->" + kiwi_address, True, (255, 255, 255))
-            rect = block.get_rect()
-            rect = block.get_rect(center=(disp.DISPLAY_WIDTH/2, disp.DISPLAY_HEIGHT/2))
-            sdrdisplay.blit(block, rect)
-            pygame.display.flip()
-            if complete:
-                print(kiwi_address)
-                if ":" in kiwi_address:
-                    kiwi_host, kiwi_port = kiwi_address.split(":")
-                    kiwi_port = int(kiwi_port)
-                else:
-                    if len(kiwi_address)>0:
-                        kiwi_host = kiwi_address
-
-                print(kiwi_host, kiwi_port)
+            kiwilist.main_dialog.update()
+            if kiwilist.connect_new_flag:
+                kiwi_host = kiwilist.kiwi_host
+                kiwi_port, kiwi_password  = kiwilist.kiwi_port if kiwilist.kiwi_port!=None else kiwi_port, kiwilist.kiwi_password if kiwilist.kiwi_password!=None else kiwi_password
                 break
+
 
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
@@ -188,8 +158,6 @@ current_string = []
 old_spot_dict = None
 
 kiwi_memory = memory()
-kiwilist = kiwi_list()
-kiwilist.load_from_disk()
 
 kiwi_wf.set_freq_zoom(freq, zoom)
 kiwi_snd.freq = freq
@@ -254,11 +222,15 @@ while not wf_quit:
 
                 # Show logger popup
                 if keys[pygame.K_0]:
-                    mylogger.log_popup(kiwi_snd)
+                    if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
+                        mylogger.log_popup(kiwi_snd)
+                        fl.tk_log_new_flag = True
 
                 # Show logger popup
                 if keys[pygame.K_9]:
-                    mylogger.search_popup(kiwi_snd)
+                    if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
+                        mylogger.search_popup(kiwi_snd)
+                        fl.tk_log_search_flag = True
 
                 # Show EIBI labels
                 if keys[pygame.K_i]:
@@ -650,14 +622,16 @@ while not wf_quit:
                     wf_quit = True
 
                 elif keys[pygame.K_q]:
-                    fl.input_server_flag = True
-                    current_string = []
+                    if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
+                        fl.input_server_flag = True
+                        current_string = []
+                        fl.tk_kiwi_flag = True
 
             # manual frequency input
             else:
                 pygame.key.set_repeat(0) # disabe key repeat
                 inkey = event.key
-                if inkey in ALLOWED_KEYS or fl.input_server_flag or fl.input_callsign_flag:
+                if inkey in ALLOWED_KEYS or fl.input_callsign_flag:
                     if inkey == pygame.K_BACKSPACE:
                         current_string = current_string[0:-1]
                     elif inkey == pygame.K_RETURN:
@@ -667,8 +641,6 @@ while not wf_quit:
                                 manual_snd_freq = int(current_string)
                                 if kiwi_snd.radio_mode == "CW":
                                     manual_snd_freq -= CW_PITCH # tune CW signal taking into account cw offset
-                            elif fl.input_server_flag:
-                                input_new_server = current_string
                             elif fl.input_callsign_flag:
                                 CALLSIGN = current_string
                                 fl.input_callsign_flag = False
@@ -678,13 +650,12 @@ while not wf_quit:
                         pygame.key.set_repeat(200, 50)
                     elif inkey == pygame.K_ESCAPE:
                         fl.input_freq_flag = False if fl.input_freq_flag else False
-                        fl.input_server_flag = False if fl.input_server_flag else False
                         fl.input_callsign_flag = False if fl.input_callsign_flag else False
 
                         pygame.key.set_repeat(200, 50)
                         print("ESCAPE!")
                     else:
-                        if len(current_string)<10 or fl.input_server_flag:
+                        if len(current_string)<10:
                             try:
                                 current_string.append(chr(inkey).upper())
                             except:
@@ -748,33 +719,7 @@ while not wf_quit:
             dxclust = None
         fl.connect_dxcluster_flag = False
 
-    if fl.input_server_flag and input_new_server:
-        pygame.event.clear()
-        if len(input_new_server) == 1:
-            try:
-                input_text_list = list(kiwilist.mem_list[int(input_new_server)])
-            except:
-                fl.input_server_flag = False
-                input_new_server = None
-                continue
-        elif len(input_new_server) == 2:
-            if input_new_server[0] == "d":
-                try:
-                    mem_index = int(input_new_server[1])
-                    kiwilist.delete_mem(mem_index)
-                    kiwilist.save_to_disk()
-                except:
-                    pass
-            elif input_new_server[0] == "r":
-                if not kiwi_snd2:
-                    kiwi_host2, kiwi_port2, kiwi_password2 = list(kiwilist.mem_list[int(input_new_server[1])])
-
-            fl.input_server_flag = False
-            input_new_server = None
-            continue
-        else:
-            input_text_list = input_new_server.rstrip().split(" ")
-
+    if kiwilist.connect_new_flag:
         # close audio stream
         kiwi_audio_stream.stop()
         if kiwi_snd2:
@@ -792,21 +737,15 @@ while not wf_quit:
         kiwi_snd.close_connection()
         if kiwi_snd2:
             kiwi_snd2.close_connection()
-
-        if len(input_text_list) >= 1:
-            new_host = input_text_list[0]
-            new_port = default_kiwi_port
-            new_password = default_kiwi_password
-        if len(input_text_list) >= 2:
-            new_port = int(input_text_list[1])
-        if len(input_text_list) == 3:
-            new_password = input_text_list[2]
         
         kiwi_snd.terminate = False
         if kiwi_snd2:
             kiwi_snd2.terminate = False
             fl.dualrx_flag = False
         kiwi_wf.terminate = False
+
+        new_host = kiwilist.kiwi_host
+        new_port, new_password  = kiwilist.kiwi_port if kiwilist.kiwi_port!=None else kiwi_port, kiwilist.kiwi_password if kiwilist.kiwi_password!=None else kiwi_password
 
         try:
             kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi, disp)
@@ -825,16 +764,13 @@ while not wf_quit:
                 exit("Old kiwi server not available anymore!")
         else:
             kiwi_host, kiwi_port, kiwi_password = new_host, new_port, new_password
-            kiwilist.write_mem(kiwi_host, kiwi_port, kiwi_password)
-            kiwilist.save_to_disk()
 
         kiwi_snd2 = None
 
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
         wf_t.start()
             
-        fl.input_server_flag = False
-        input_new_server = None
+        kiwilist.connect_new_flag = False
 
     # Change KIWI RX PB: this can only affect the SND stream
     if change_passband_flag:
@@ -1011,7 +947,9 @@ while not wf_quit:
         question = "CALL"
         disp.display_box(sdrdisplay, question + ": " + "".join(current_string), 300)
     elif fl.input_server_flag:
-        disp.display_kiwi_box(sdrdisplay, current_string, kiwilist)
+        kiwilist.choose_kiwi_dialog()
+        fl.input_server_flag = False
+        # disp.display_kiwi_box(sdrdisplay, current_string, kiwilist)
     elif fl.show_help_flag:
         disp.display_help_box(sdrdisplay, HELP_MESSAGE_LIST)
     elif show_bigmsg:
@@ -1090,6 +1028,25 @@ while not wf_quit:
     except:
         pass
 
+    try:
+        if mylogger.root.state() != 'normal':
+            fl.tk_log_new_flag = False
+    except:
+        fl.tk_log_new_flag = False
+        
+    try:
+        if mylogger.root_search.state() != 'normal':
+            fl.tk_log_search_flag = False
+    except:
+        fl.tk_log_search_flag = False
+
+    try:
+        kiwilist.main_dialog.update()
+        if kiwilist.root.state() != 'normal':
+            fl.tk_kiwi_flag = False
+    except:
+        fl.tk_kiwi_flag = False
+    
 # close audio stream
 try:
     kiwi_audio_stream.stop()
