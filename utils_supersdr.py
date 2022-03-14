@@ -410,7 +410,6 @@ class kiwi_list():
         try:
             with open(self.kiwi_list_filename, "a") as fd:
                 col_count = self.kiwi_data.count(":")
-                print(col_count)
                 fd.write(self.kiwi_data.replace(":", ";")+";"*(3-col_count)+"\n")
             self.load_from_disk()
         except:
@@ -445,7 +444,6 @@ class kiwi_list():
         self.root.title("Choose a KiwiSDR")
         self.root.bind('<Escape>', lambda event: self.root.destroy())
         self.root.bind('<Return>', lambda event: self.connect_new_kiwi())
-        # self.root.bind('<Tab>', lambda event: self.prev_qso_callback())
         self.main_dialog = tkinter.Frame(self.root)
         self.main_dialog.pack()
 
@@ -510,7 +508,6 @@ class kiwi_list():
                 self.kiwi_host = self.kiwi_list[idx][0]
                 self.kiwi_port = self.kiwi_list[idx][1]
                 self.kiwi_password = self.kiwi_list[idx][2]
-                print (">>>", self.kiwi_list[idx], self.kiwi_host, self.kiwi_port, self.kiwi_password)
                 self.connect_new_flag = True
                 self.root.destroy()
             except:
@@ -530,7 +527,8 @@ class kiwi_list():
                     self.kiwi_password = kiwi_data_list[2]
                 self.connect_new_flag = True
                 self.root.destroy()
-                self.save_to_disk()
+                if save_flag:
+                    self.save_to_disk()
 
 
 
@@ -634,7 +632,7 @@ class kiwi_waterfall():
         kiwi_sdr_status = kiwi_sdr(host_, port_, True)
         print(kiwi_sdr_status.users, kiwi_sdr_status.users_max)
         if kiwi_sdr_status.users == kiwi_sdr_status.users_max:
-            print ("Too many users! Failed to connect!")
+            print ("Too many users!")
             # raise Exception()
         elif kiwi_sdr_status.offline or not kiwi_sdr_status.active:
             print ("KiwiSDR offline or under maintenance! Failed to connect!")

@@ -107,7 +107,6 @@ kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
 #init KIWI WF and RX audio
 kiwi_wf = None
 while not kiwi_wf:
-    print(kiwi_wf)
     try:
         kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi, disp)
     except:
@@ -119,8 +118,9 @@ while not kiwi_wf:
             if kiwilist.connect_new_flag:
                 kiwi_host = kiwilist.kiwi_host
                 kiwi_port, kiwi_password  = kiwilist.kiwi_port if kiwilist.kiwi_port!=None else kiwi_port, kiwilist.kiwi_password if kiwilist.kiwi_password!=None else kiwi_password
+                kiwilist.connect_new_flag = False
                 break
-
+        kiwi_wf = None
 
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
