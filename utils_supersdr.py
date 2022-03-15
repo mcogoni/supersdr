@@ -1294,6 +1294,8 @@ class eibi_db():
 
 class display_stuff():
     wf_bottom, wf_top = 0, 0
+    s_meter_radius = 100
+    s_meter_border = 20
 
     def __init__(self, DISPLAY_WIDTH):
         # SuperSDR constants
@@ -1484,28 +1486,6 @@ class display_stuff():
             pygame.draw.line(surface_, YELLOW, (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), (x*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+12), 3)
 
 
-    def display_kiwi_box(self, screen, current_string_, kiwilist):
-        size = 550
-        y_size = size * 0.6
-        rec_pos = ((screen.get_width() / 2) - size/2, (screen.get_height() / 2) - size/4)
-        question = "Enter hostname [port] [password]"
-        message = question + ": " + "".join(current_string_)
-        pygame.draw.rect(screen, BLACK,
-                       (rec_pos[0], rec_pos[1],
-                        size,y_size), 0)
-        pygame.draw.rect(screen, WHITE,
-                       (rec_pos[0]-1, rec_pos[1]-1,
-                        size+2,y_size+2), 1)
-        pos = (rec_pos[0]+2, rec_pos[1]+y_size-20)
-        smallfont.render_to(screen, pos, message, WHITE)
-        message = "Choose stored Kiwi number or enter new one (port and password are optional)"
-        smallfont.render_to(screen, (pos[0], pos[1]-20), message, WHITE)
-        for i, kiwi in enumerate(kiwilist.kiwi_list):
-            pos = (rec_pos[0]+2, rec_pos[1]+5+i*20)
-            msg = "Kiwi server: %d -> %s:%d:%s"%(i, kiwi[0], kiwi[1], kiwi[2])
-            smallfont.render_to(screen, pos, msg, GREY)
-
-
     def display_box(self, screen, message, size):
         pygame.draw.rect(screen, BLACK,
                        ((screen.get_width() / 2) - size/2,
@@ -1545,19 +1525,20 @@ class display_stuff():
             hugefont.render_to(screen, pos, message, color)
 
 
-    def s_meter_draw(self, rssi_smooth, rssi_smooth_slow, agc_threshold, agc_decay):
-        s_meter_radius = 50.
+    def s_meter_draw(self, rssi_smooth, rssi_smooth_slow, agc_threshold, agc_decay):        
         rad_offset = 0.2 # radians from minimum and maximum (difference from 0 and 190 deg)
         double_deg_offset = math.radians(rad_offset * 2)
-        SMETER_XSIZE, SMETER_YSIZE = 2*s_meter_radius+20, s_meter_radius+20
-        smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
 
-        s_meter_center = (s_meter_radius+10,s_meter_radius+8)
+        SMETER_XSIZE, SMETER_YSIZE = 2*self.s_meter_radius+self.s_meter_border, self.s_meter_radius+self.s_meter_border
+        smeter_surface = pygame.Surface((SMETER_XSIZE, SMETER_YSIZE))
+        s_meter_center = (self.s_meter_radius+self.s_meter_border/2, self.s_meter_radius+self.s_meter_border/2-2)
+
         alpha_rssi = rssi_smooth + 127
         alpha_rssi = -math.radians(alpha_rssi * (180+double_deg_offset)/(110.)) - math.pi
-
+        alpha_rssi = min(-math.pi, alpha_rssi)
         alpha_agc = agc_threshold + 127
         alpha_agc = -math.radians(alpha_agc * (180+double_deg_offset)/(110.)) - math.pi
+        alpha_agc = min(-math.pi, alpha_agc)
 
         def _coords_from_angle(angle, s_meter_radius_):
             x_ = s_meter_radius_ * math.cos(angle)
@@ -1566,39 +1547,43 @@ class display_stuff():
             s_meter_y = s_meter_center[1] - y_
             return s_meter_x, s_meter_y
         
-        s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, s_meter_radius * 0.95)
-        agc_meter_x, agc_meter_y = _coords_from_angle(alpha_agc, s_meter_radius * 0.7)
+        s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, self.s_meter_radius * 0.95)
+        agc_meter_x, agc_meter_y = _coords_from_angle(alpha_agc, self.s_meter_radius * 0.7)
         pygame.draw.rect(smeter_surface, YELLOW,
-                       (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 0)
+                       (s_meter_center[0]-(self.s_meter_radius+self.s_meter_border/2), s_meter_center[1]-(self.s_meter_radius+self.s_meter_border/2-2), SMETER_XSIZE, SMETER_YSIZE), 0)
         pygame.draw.rect(smeter_surface, BLACK,
-                       (s_meter_center[0]-60, s_meter_center[1]-58, SMETER_XSIZE, SMETER_YSIZE), 3)
+                       (s_meter_center[0]-(self.s_meter_radius+self.s_meter_border/2), s_meter_center[1]-(self.s_meter_radius+self.s_meter_border/2-2), SMETER_XSIZE, SMETER_YSIZE), 3)
         
         angle_list = np.linspace(rad_offset, math.pi-rad_offset, 9)
         text_list = ["1", "3", "5", " 7", " 9", "+12", "+24", "+36", "+48"]
         for alpha_seg, msg in zip(angle_list, text_list[::-1]):
-            text_x, text_y = _coords_from_angle(alpha_seg, s_meter_radius*0.8)
-            nanofont.render_to(smeter_surface, (text_x-8, text_y-2), msg, D_GREY)
+            text_x, text_y = _coords_from_angle(alpha_seg, self.s_meter_radius*0.86)
+            microfont.render_to(smeter_surface, (text_x-8, text_y-2), msg, D_GREY)
 
-            seg_x, seg_y = _coords_from_angle(alpha_seg, s_meter_radius)
+            seg_x, seg_y = _coords_from_angle(alpha_seg, self.s_meter_radius)
             color_ =  BLACK
-            tick_rad = 2
+            tick_rad = 3
             if alpha_seg < 1.4:
                 color_ = RED
-                tick_rad = 3
+                tick_rad = 4
             pygame.draw.circle(smeter_surface, color_, (seg_x, seg_y), tick_rad)
-        pygame.draw.circle(smeter_surface, D_GREY, s_meter_center, 4)
+        pygame.draw.circle(smeter_surface, BLACK, s_meter_center, 5)
 
         pygame.draw.line(smeter_surface, BLACK, s_meter_center, (s_meter_x, s_meter_y), 2)
         pygame.draw.line(smeter_surface, BLUE, s_meter_center, (agc_meter_x, agc_meter_y), 2)
+
         str_rssi = "%ddBm"%rssi_smooth_slow
         str_len = len(str_rssi)
-        pos = (s_meter_center[0]+13, s_meter_center[1]-2)
+        pos = (s_meter_center[0]+(self.s_meter_radius-self.s_meter_border/2-40), s_meter_center[1]-2)
         microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
         
         str_decay = "%.1fs" % (agc_decay/1000)
         str_len = len(str_decay)
-        pos = (s_meter_center[0]-40, s_meter_center[1]-2)
+        pos = (s_meter_center[0]-(self.s_meter_radius-self.s_meter_border/2), s_meter_center[1]-2)
         microfont.render_to(smeter_surface, pos, str_decay, BLACK)
+
+        pos = (s_meter_center[0]-5, s_meter_center[1]-self.s_meter_radius/2)
+        bigfont.render_to(smeter_surface, pos, "S", BLACK)
         
         return smeter_surface
 

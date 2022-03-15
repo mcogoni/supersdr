@@ -24,7 +24,7 @@ parser.add_option("-z", "--zoom", type=int,
 parser.add_option("-f", "--freq", type=float,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=23)
+                  help="screen refresh rate", dest="refresh", default=30)
 parser.add_option("-l", "--large", type=int,
                   help="screen horiz size in pixels (default 1024)", dest="winsize", default=1024)
 parser.add_option("-b", "--buffer", type=int,
@@ -102,7 +102,6 @@ else:
     cat_radio = None
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
-kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
 
 #init KIWI WF and RX audio
 kiwi_wf = None
@@ -129,6 +128,8 @@ kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, option
 if not kiwi_snd:
     print("Server not ready")
     # sys.exit()
+
+kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
 
 kiwi_snd2 = None
 if fl.dualrx_flag:
@@ -594,7 +595,7 @@ while not wf_quit:
                         if not cat_radio:
                             force_sync_flag = True
                         elif fl.cat_snd_link_flag:
-                            cat_radio.set_freq(kiwi_snd.freq)
+                            cat_radio.set_freq(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.))
                             cat_radio.set_mode(kiwi_snd.radio_mode)
                         show_bigmsg = "switchab"
                         run_index_bigmsg = run_index
@@ -910,10 +911,13 @@ while not wf_quit:
         sdrdisplay.blit(wf_surface, (0, disp.WF_Y))
 
     rssi_last = rssi_hist[-1]
-    if math.fabs(rssi_last)>math.fabs(rssi_smooth):
-        rssi_smooth -= (1000/kiwi_snd.decay) # s-meter decay rate
+    if math.fabs(rssi_last) > math.fabs(rssi_smooth):
+        # rssi_smooth -= (1000/kiwi_snd.decay) # s-meter decay rate
+        v0 = -20+135# max signal value dBm
+        t = math.log(v0/(rssi_smooth+135))
+        rssi_smooth += -v0/(kiwi_snd.decay/(1000/(2*FPS))) * math.exp(-t)
     else:
-        rssi_smooth = (rssi_smooth + rssi_last)/2 # attack rate
+        rssi_smooth += min((rssi_last - rssi_smooth)/5, 3) # attack rate
 
     if not run_index%20:
         rssi_smooth_slow = rssi_smooth
@@ -1008,7 +1012,7 @@ while not wf_quit:
 
     if fl.s_meter_show_flag:
         smeter_surface = disp.s_meter_draw(rssi_smooth, rssi_smooth_slow, kiwi_snd.thresh, kiwi_snd.decay)
-        sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-80))
+        sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-(disp.s_meter_radius+disp.BOTTOMBAR_HEIGHT)))
 
     mouse = pygame.mouse.get_pos()
     pygame.display.flip()
