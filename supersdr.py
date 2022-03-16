@@ -420,11 +420,11 @@ while not wf_quit:
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:
                     if kiwi_wf.zoom > 0:
-                        kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom - 1)
+                        kiwi_wf.set_freq_zoom(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.), kiwi_wf.zoom - 1)
                         kiwi_wf.set_white_flag()
                 elif keys[pygame.K_UP]:
                     if kiwi_wf.zoom < kiwi_wf.MAX_ZOOM:
-                        kiwi_wf.set_freq_zoom(kiwi_snd.freq, kiwi_wf.zoom + 1)
+                        kiwi_wf.set_freq_zoom(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.), kiwi_wf.zoom + 1)
                         kiwi_wf.set_white_flag()
 
                 # KIWI WF arrow step tune
