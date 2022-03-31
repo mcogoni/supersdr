@@ -421,15 +421,20 @@ class kiwi_list():
             with open(self.kiwi_list_filename, encoding="latin") as fd:
                 data = fd.readlines()
 
-            col_count = data.count(":")
+            col_count = data.count(";")
             label_list = data[0].rstrip().split(";")
             for row in data[1:]:
                 if row[0] == "#":
                     continue
                 fields = row.rstrip().split(";")
                 host = fields[0]
-                port = int(fields[1]) if col_count>0 else self.default_port
-                password = fields[2] if col_count>1 else self.default_password
+                if len(host)==0:
+                    continue 
+                try:
+                    port = int(fields[1])
+                except:
+                    self.default_port
+                password = fields[2] if col_count>1 else ""
                 comments = fields[3] if col_count>2 else ""
                 self.kiwi_list.append((host, port, password, comments))
         except:
@@ -478,7 +483,7 @@ class kiwi_list():
         self.b_cancel.pack(side=RIGHT)
         self.b_reload.pack(side=RIGHT)
         frame_bottom.pack()
-
+        print(self.kiwi_list)
         self.refresh_list()
 
 
@@ -654,6 +659,7 @@ class kiwi_waterfall():
         
         while True:
             msg = self.wf_stream.receive_message()
+            # print(msg)
             if msg:
                 if bytearray2str(msg[0:3]) == "W/F":
                     break
@@ -661,6 +667,10 @@ class kiwi_waterfall():
                     els = bytearray2str(msg[4:]).split()                
                     self.MAX_FREQ = int(int(els[1].split("=")[1])/1000)
                     self.CENTER_FREQ = int(int(self.MAX_FREQ)/2)
+                    self.span_khz = self.zoom_to_span()
+                    self.start_f_khz = self.start_freq()
+                    self.end_f_khz = self.end_freq()
+                    self.counter, self.actual_freq = self.start_frequency_to_counter(self.start_f_khz)
                 elif "MSG wf_fft_size" in bytearray2str(msg):
                     els = bytearray2str(msg[4:]).split()
                     self.MAX_ZOOM = int(els[3].split("=")[1])
@@ -931,7 +941,7 @@ class kiwi_sound():
             self.socket = socket.socket()
             self.socket.connect((self.host, self.port)) # future: allow different kiwiserver for audio stream
             new_timestamp = int(time.time())
-            if new_timestamp - kiwi_wf.kiwi_wf_timestamp > 2:
+            if new_timestamp - kiwi_wf.kiwi_wf_timestamp > 5:
                 kiwi_wf.kiwi_wf_timestamp = new_timestamp
             uri = '/%d/%s' % (kiwi_wf.kiwi_wf_timestamp, 'SND')
             handshake_snd = wsclient.ClientHandshakeProcessor(self.socket, self.host, self.port)
@@ -1113,8 +1123,8 @@ class kiwi_sound():
         while not self.terminate:
             time_prev = time.time_ns() / 1000000 # time in ms
             snd_buf = self.get_audio_chunk()
-            #if not self.run_index % 10:
-            #    print(delta_time_ms, self.total_delay_ms, ms_per_frame)
+            # if not self.run_index % 10:
+            #    print("DELTA: %.0f TOTAL_DELAY: %.0f PER_FRAME: %.0f"%(delta_time_ms, self.total_delay_ms, ms_per_frame))
             if snd_buf is not None and not late_flag: # drop the audio frame if we're late!
                 self.audio_buffer.put(snd_buf)
                 self.run_index += 1
@@ -1125,7 +1135,7 @@ class kiwi_sound():
             time_now = time.time_ns() / 1000000 # time in ms
             delta_time_ms = time_now - time_prev
             self.total_delay_ms += delta_time_ms
-            if not late_flag and self.total_delay_ms > max(self.FULL_BUFF_LEN, 5) * ms_per_frame:
+            if not late_flag and self.total_delay_ms > max(self.FULL_BUFF_LEN, 20) * ms_per_frame:
                 late_flag = True
                 print("AUDIO STREAM NOT IN SYNC: DROPPING!")
             if late_flag and self.total_delay_ms < ms_per_frame:
@@ -1354,7 +1364,7 @@ class display_stuff():
             self.wf_bottom = kiwi_wf.wf_min_db
             self.wf_top = kiwi_wf.wf_max_db
 
-        audio_balance_string_list = ["<<", "<", "^", ">", ">>"]
+        audio_balance_string_list = ["<<", "<", "=", ">", ">>"]
         audio_balance_string_main = audio_balance_string_list[int((kiwi_snd.audio_balance+1)*2)]
         if fl.dualrx_flag and kiwi_snd2:
             audio_balance_string_sub = audio_balance_string_list[int((kiwi_snd2.audio_balance+1)*2)]

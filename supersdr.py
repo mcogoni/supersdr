@@ -749,16 +749,16 @@ while not wf_quit:
         new_port, new_password  = kiwilist.kiwi_port if kiwilist.kiwi_port!=None else kiwi_port, kiwilist.kiwi_password if kiwilist.kiwi_password!=None else kiwi_password
 
         try:
-            kiwi_wf.__init__(new_host, new_port, new_password, zoom, freq, eibi, disp)
-            kiwi_snd.__init__(freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
+            kiwi_wf.__init__(new_host, new_port, new_password, kiwi_wf.zoom, kiwi_wf.freq, eibi, disp)
+            kiwi_snd.__init__(kiwi_snd.freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
             print("Changed server to: %s:%d" % (new_host,new_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
             print ("something went wrong...")
             play = None
         if not play:
-            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi, disp)
-            kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
+            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, kiwi_wf.zoom, kiwi_wf.freq, eibi, disp)
+            kiwi_snd = kiwi_sound(kiwi_snd.freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
             if not play:
