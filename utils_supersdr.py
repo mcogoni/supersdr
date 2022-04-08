@@ -1193,6 +1193,7 @@ class cat:
         if not self.freq:
             return None
         self.radio_mode = self.get_mode()
+        self.vfo = "A"
         self.reply = None
         self.cat_ok = True
         self.cat_tx = False
@@ -1200,7 +1201,7 @@ class cat:
     def send_msg(self, msg):
         self.socket.send((msg+"\n").encode())
         try:
-            out = self.socket.recv(512).decode() # tbi implement verification of reply
+            out = self.socket.recv(64).decode() # tbi implement verification of reply
         except:
             out = ""
         if len(out)==0 or "RPRT -5" in out:
@@ -1212,7 +1213,10 @@ class cat:
     def get_ptt(self):
         self.send_msg("\\get_ptt")
         if self.reply:
-            self.cat_tx = True if self.reply=="1\n" else False
+            try:
+                self.cat_tx = True if self.reply=="1\n" else False
+            except:
+                self.cat_tx = False
 
     def set_freq(self, freq_):
         if freq_ >= self.CAT_MIN_FREQ and freq_ <= self.CAT_MAX_FREQ:
@@ -1224,7 +1228,16 @@ class cat:
         if self.reply:
             self.radio_mode = radio_mode_
 
+    def get_vfo(self):
+        self.send_msg("\\get_vfo")
+        if self.reply:
+            try:
+                self.vfo = "A" if "VFOA" in self.reply else "B"
+            except:
+                self.cat_ok = False
+
     def get_freq(self):
+        self.get_vfo()
         self.send_msg("\\get_freq")
         if self.reply:
             try:
@@ -1787,8 +1800,8 @@ class logger():
             qso_row_string = ";".join(qso_row_list)+"\n"
             fd.write(qso_row_string)
 
-        # self.root.destroy()
-        self.entry_callsign.focus()
+        self.root.destroy()
+        # self.entry_callsign.focus()
 
     def log_popup(self, kiwi_snd):
         def assign_qrzcom_bool():
@@ -1811,16 +1824,6 @@ class logger():
             self.entry_mode.delete(0, END)
             self.entry_mode.insert(END, kiwi_snd.radio_mode)
 
-        try:
-            if 'normal' == self.root.state():
-                self.root.focus_force()
-                return
-        except:
-            try:
-                if 'normal' == self.root_search.state():
-                    return
-            except:
-                pass
         self.root = tkinter.Tk()
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
         self.root.geometry("400x280+1500+400")
@@ -1964,17 +1967,6 @@ class logger():
         self.t.configure(state='disabled')
 
     def search_popup(self, kiwi_snd):
-        try:
-            if 'normal' == self.root_search.state():
-                self.root_search.focus_force()
-                return
-        except:
-            try:
-                if 'normal' == self.root.state():
-                    return
-            except:
-                pass
-
         self.root_search = tkinter.Tk()
         self.root_search.protocol("WM_DELETE_WINDOW", self.root_search.destroy)
         self.root_search.geometry("400x400+1500+900")
