@@ -173,8 +173,8 @@ beacon_project = beacons()
 fl.wf_cat_link_flag = True if cat_radio else False
 fl.wf_snd_link_flag = False
 fl.cat_snd_link_flag = True if cat_radio else False
-print("SYNC OPTIONS:")
-print("WF<>CAT", fl.wf_cat_link_flag, "WF<>RX", fl.wf_snd_link_flag, "CAT<>RX", fl.cat_snd_link_flag)
+# print("SYNC OPTIONS:")
+# print("WF<>CAT", fl.wf_cat_link_flag, "WF<>RX", fl.wf_snd_link_flag, "CAT<>RX", fl.cat_snd_link_flag)
 
 rssi_maxlen = 10 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
@@ -527,7 +527,7 @@ while not wf_quit:
                             cat_radio.set_mode(kiwi_snd.radio_mode)
 
                 # Change AGC threshold for the current KIWI receiver
-                if keys[pygame.K_1]:
+                if keys[pygame.K_1] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
                     if not (mods & pygame.KMOD_SHIFT):
                         if kiwi_snd.thresh>-135:
                             kiwi_snd.thresh -= 1
@@ -553,9 +553,9 @@ while not wf_quit:
                         kiwi_snd.set_agc_params()
 
                 # Tune audio balance for current receiver
-                if keys[pygame.K_6]:
+                if keys[pygame.K_6] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
                     kiwi_snd.audio_balance += 0.5 if kiwi_snd.audio_balance < 1 else 0.0
-                if keys[pygame.K_5]:
+                if keys[pygame.K_5] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
                     kiwi_snd.audio_balance -= 0.5 if kiwi_snd.audio_balance > -1 else 0.0
 
                 # Tune SUB RX on same freq on WF center
@@ -622,7 +622,7 @@ while not wf_quit:
                 if keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
 
-                elif keys[pygame.K_q]:
+                elif keys[pygame.K_q] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
                     if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
                         fl.input_server_flag = True
                         current_string = []

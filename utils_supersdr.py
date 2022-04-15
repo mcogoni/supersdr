@@ -37,7 +37,7 @@ from mod_pywebsocket.stream import Stream
 from mod_pywebsocket.stream import StreamOptions
 from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
-VERSION = "v3.12"
+VERSION = "v3.13"
 
 TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
 CW_PITCH = 0.6 # CW offset from carrier in kHz
@@ -1648,20 +1648,20 @@ class display_stuff():
                 hour_start, hour_stop = int(station_record[0][:2]), int(station_record[0][5:7])
                 minute_start, minute_stop = int(station_record[0][2:4]), int(station_record[0][7:9])
                 time_start, time_stop = hour_start + minute_start/60, hour_stop + minute_stop/60
-                if not (time_start<=now_time<=time_stop): # or station_record[3] in shown_list:
+                if not (time_start <= now_time <= time_stop): # or station_record[3] in shown_list:
                     continue
                 f_khz_float = float(string_f_khz)
-                f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
+                f_bin = int(kiwi_wf.offset_to_bin(f_khz_float - kiwi_wf.start_f_khz))
                 # shown_list.append(station_record[3])
                 try:
-                    ts = (WHITE, station_record[3], (f_bin,self.WF_Y+20), "small")
+                    ts = (WHITE, station_record[3], (f_bin,self.WF_Y + 20), "small")
                 except:
                     continue
                 render_ = smallfont.render_to
                 str_len = len(ts[1])
                 x, y = ts[2]
-                if x>fontsize*str_len/2 and x<self.DISPLAY_WIDTH-10:
-                    if f_bin-old_fbin <= fontsize*str_len/2+5:
+                if x > fontsize * str_len/2 and x < self.DISPLAY_WIDTH - 10:
+                    if f_bin - old_fbin <= fontsize * str_len/2 + 5:
                         y_offset += fontsize
                     else:
                         y_offset = 0
