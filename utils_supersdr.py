@@ -1295,6 +1295,7 @@ class eibi_db():
             with open("./eibi.csv", encoding="latin") as fd:
                 data = fd.readlines()
         except:
+            print("No eibi.csv database file found!")
             return None
         label_list = data[0].rstrip().split(";")
         self.station_dict = defaultdict(list)
@@ -1303,11 +1304,14 @@ class eibi_db():
         self.visible_stations = []
 
         for el in data[1:]:
-            els = el.rstrip().split(";")
-            freq_float = float(els[0])
-            self.int_freq_dict[int(round(freq_float))].append(freq_float) # store or each integer freqeuncy key all float freq in kHz
-            self.station_dict[freq_float].append(els[1:]) # store all stations' data using the float freq in kHz as key (multiple)
-            self.station_freq_dict[freq_float] = els[1:]
+            try:
+                els = el.rstrip().split(";")
+                freq_float = float(els[0])
+                self.int_freq_dict[int(round(freq_float))].append(freq_float) # store or each integer freqeuncy key all float freq in kHz
+                self.station_dict[freq_float].append(els[1:]) # store all stations' data using the float freq in kHz as key (multiple)
+                self.station_freq_dict[freq_float] = els[1:]
+            except:
+                print("EIBI db contains errors, plase check!")
 
         self.freq_set = set(self.int_freq_dict.keys())
 
