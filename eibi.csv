@@ -12633,7 +12633,7 @@ kHz:75;Time(UTC):93;Days:59;ITU:49;Station:201;Lng:49;Target:62;Remarks:135;P:35
 17865;0400-0500;Tu,Th;CHN;CNR1 Jammer/Firedrake;M;FE;;0;;
 17865;0130-0330;;USA;Voice of America;BR;SEA;/PHL-t;0;;
 17865;0400-0500;Tu,Th;USA;Voice of America;TB;FE;/PHL-t;0;;
-17870b;1500-1600;;ETH;Dimtse Woyane;TIG;EAf;/F-i;5;;
+17870;1500-1600;;ETH;Dimtse Woyane;TIG;EAf;/F-i;5;;
 17880;1600-1700;;CHN;China Radio Int.;A;NAf;/MLI;0;;
 17880;0330-0430;;USA;Radio Liberty;PS;IRN;/THA-u;0;;
 17880;0430-0530;;USA;Radio Liberty;DR;IRN;/THA-u;0;;

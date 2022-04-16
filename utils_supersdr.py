@@ -407,9 +407,20 @@ class kiwi_list():
             pass
 
     def save_to_disk(self):
+        no_file_flag = False
+        try:
+            with open(self.kiwi_list_filename, encoding="latin") as fd:
+                data = fd.readlines()
+            if len(data) == 0:
+                no_file_flag = True
+        except:
+            no_file_flag = True
+
         try:
             with open(self.kiwi_list_filename, "a") as fd:
                 col_count = self.kiwi_data.count(":")
+                if no_file_flag:
+                    fd.write("KIWIHOST;KIWIPORT;KIWIPASSWORD;COMMENTS\n")
                 fd.write(self.kiwi_data.replace(":", ";")+";"*(3-col_count)+"\n")
             self.load_from_disk()
         except:
@@ -439,7 +450,7 @@ class kiwi_list():
                 self.kiwi_list.append((host, port, password, comments))
         except:
             print("No kiwi list file found!")
-            return
+            return None
 
     def choose_kiwi_dialog(self):
         self.root = tkinter.Tk()
