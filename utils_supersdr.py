@@ -1336,15 +1336,18 @@ class display_stuff():
     s_meter_radius = 100
     s_meter_border = 20
 
-    def __init__(self, DISPLAY_WIDTH):
+    def __init__(self, WIDTH, HEIGHT=None):
         # SuperSDR constants
-        self.DISPLAY_WIDTH = DISPLAY_WIDTH
-        DISPLAY_HEIGHT = DISPLAY_WIDTH//2
-        self.WF_HEIGHT = DISPLAY_HEIGHT*60//100
-        self.SPECTRUM_HEIGHT = DISPLAY_HEIGHT*40//100
+        self.DISPLAY_WIDTH = WIDTH
+        if HEIGHT==None:
+            self.DISPLAY_HEIGHT = self.DISPLAY_WIDTH//2
+        else:
+            self.DISPLAY_HEIGHT = HEIGHT
         self.TOPBAR_HEIGHT = 23
         self.BOTTOMBAR_HEIGHT = 20
         self.TUNEBAR_HEIGHT = 23
+        self.WF_HEIGHT = self.DISPLAY_HEIGHT*60//100 - self.BOTTOMBAR_HEIGHT - self.TUNEBAR_HEIGHT
+        self.SPECTRUM_HEIGHT = self.DISPLAY_HEIGHT*40//100 - self.TOPBAR_HEIGHT
         self.DISPLAY_HEIGHT = self.WF_HEIGHT + self.SPECTRUM_HEIGHT + self.TOPBAR_HEIGHT + self.BOTTOMBAR_HEIGHT + self.TUNEBAR_HEIGHT
         self.TOPBAR_Y = 0
         self.SPECTRUM_Y = self.TOPBAR_HEIGHT
@@ -1377,7 +1380,7 @@ class display_stuff():
         #     colormap = cm.jet(range(256))[:,:3]*255
         return colormap
 
-    def update_textsurfaces(self, surface_, radio_mode, rssi_smooth, rssi_smooth_slow, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
+    def update_textsurfaces(self, surface_, radio_mode, rssi_smooth, rssi_smooth_slow, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
         mousex_pos = mouse[0]
         if mousex_pos < 25:
             mousex_pos = 25
@@ -1403,28 +1406,28 @@ class display_stuff():
         if cat_radio:
             tx_on_flag = cat_radio.cat_tx
         #           Label   Color   Freq/Mode                       Screen position
-        ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq+kiwi_wf.freq_offset if fl.cat_snd_link_flag else kiwi_wf.freq+kiwi_wf.freq_offset), (wf_width/2-48,self.TUNEBAR_Y+1), "small", False),
+        ts_dict = {"wf_freq": (YELLOW, "%.1f"%(kiwi_wf.freq+kiwi_wf.freq_offset if fl.cat_snd_link_flag else kiwi_wf.freq+kiwi_wf.freq_offset), (self.DISPLAY_WIDTH/2-48,self.TUNEBAR_Y+1), "small", False),
                 "left": (GREEN, "%.1f"%(kiwi_wf.start_f_khz+kiwi_wf.freq_offset) ,(0,self.TUNEBAR_Y+1), "small", False),
-                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz+kiwi_wf.freq_offset), (wf_width-65,self.TUNEBAR_Y+1), "small", False),
-                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s %s"%(kiwi_snd.freq+kiwi_snd.freq_offset+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%% %s"%(kiwi_snd.volume, audio_balance_string_main)), (wf_width/2-130,self.V_POS_TEXT-1), "big", False),
+                "right": (GREEN, "%.1f"%(kiwi_wf.end_f_khz+kiwi_wf.freq_offset), (self.DISPLAY_WIDTH-65,self.TUNEBAR_Y+1), "small", False),
+                "rx_freq": (main_rx_color, "MAIN:%.3fkHz %s %s"%(kiwi_snd.freq+kiwi_snd.freq_offset+(CW_PITCH if kiwi_snd.radio_mode=="CW" else 0), kiwi_snd.radio_mode, "MUTE" if kiwi_snd.volume==0 else "%d%% %s"%(kiwi_snd.volume, audio_balance_string_main)), (self.DISPLAY_WIDTH/2-130,self.V_POS_TEXT-1), "big", False),
                 "kiwi": (ORANGE, kiwi_wf.host[:40]+":%d"%kiwi_wf.port ,(95,self.BOTTOMBAR_Y+6), "small", False),
-                "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (wf_width-105,self.SPECTRUM_Y+1), "small", False),
-                "filter": (GREY, "FILT:%.0f Hz"%((kiwi_snd.hc-kiwi_snd.lc)), (wf_width/2+230, self.V_POS_TEXT), "small", False),
+                "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (self.DISPLAY_WIDTH-105,self.SPECTRUM_Y+1), "small", False),
+                "filter": (GREY, "FILT:%.0f Hz"%((kiwi_snd.hc-kiwi_snd.lc)), (self.DISPLAY_WIDTH/2+230, self.V_POS_TEXT), "small", False),
                 "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
-                "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (wf_width/2+170, self.V_POS_TEXT), "small", False),
+                "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (self.DISPLAY_WIDTH/2+170, self.V_POS_TEXT), "small", False),
                 #"center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, self.SPECTRUM_Y+2), "small", False),
                 "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, self.BOTTOMBAR_Y+3), "big", False),
                 "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+3), "big", False), 
-                "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (wf_width-90, self.BOTTOMBAR_Y+3), "big", False),
-                "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (wf_width-200, self.BOTTOMBAR_Y+3), "big", False),
-                "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (wf_width-180, self.V_POS_TEXT), "small", False),
+                "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (self.DISPLAY_WIDTH-90, self.BOTTOMBAR_Y+3), "big", False),
+                "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (self.DISPLAY_WIDTH-200, self.BOTTOMBAR_Y+3), "big", False),
+                "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (self.DISPLAY_WIDTH-180, self.V_POS_TEXT), "small", False),
                 "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
                 "wf_param": (WHITE, "%ddB AUTO %s"%(self.wf_top, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
-                "help": (BLUE, "HELP", (wf_width-50, self.BOTTOMBAR_Y+3), "big", False)
+                "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False)
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
-            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s %s"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%% %s"%(kiwi_snd2.volume, audio_balance_string_sub)), (wf_width/2-430,self.V_POS_TEXT-1), "big", False)
+            ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s %s"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%% %s"%(kiwi_snd2.volume, audio_balance_string_sub)), (self.DISPLAY_WIDTH/2-430,self.V_POS_TEXT-1), "big", False)
                 
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth_slow)+127)//6 # signal in S units of 6dB
@@ -1435,13 +1438,13 @@ class display_stuff():
             ts_dict["smeter"] = (ORANGE if not tx_on_flag else "RED", s_value if not tx_on_flag else "TX", (5,self.V_POS_TEXT-1), "big", False)
         if fl.click_drag_flag:
             delta_khz = kiwi_wf.deltabins_to_khz(fl.start_drag_x*kiwi_wf.BINS2PIXEL_RATIO - mousex_pos)
-            ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (wf_width/2,self.SPECTRUM_Y+20), "big", False)
+            ts_dict["deltaf"] = (RED, ("+" if delta_khz>0 else "")+"%.1fkHz"%delta_khz, (self.DISPLAY_WIDTH/2,self.SPECTRUM_Y+20), "big", False)
         if kiwi_wf.averaging_n>1:
             ts_dict["avg"] = (RED, "AVG %dX"%kiwi_wf.averaging_n, (10,self.SPECTRUM_Y+13), "small", False)
         if len(kiwi_wf.div_list)>1:
-            ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (wf_width-105,self.SPECTRUM_Y+13), "small", False)
+            ts_dict["div"] = (YELLOW, "DIV :%.0fkHz"%(kiwi_wf.space_khz/10), (self.DISPLAY_WIDTH-105,self.SPECTRUM_Y+13), "small", False)
         else:
-            ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (wf_width-105,self.SPECTRUM_Y+13), "small", False)
+            ts_dict["div"] = (WHITE, "DIV :%.0fkHz"%(kiwi_wf.space_khz/100), (self.DISPLAY_WIDTH-105,self.SPECTRUM_Y+13), "small", False)
 
         draw_dict = {}
         for k in ts_dict:

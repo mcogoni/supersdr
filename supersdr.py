@@ -45,7 +45,7 @@ else:
     # sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
     # pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
-        pygame.DOUBLEBUF,vsync=1)
+        pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
@@ -207,6 +207,12 @@ while not wf_quit:
 
     for event in pygame.event.get():
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
+
+        if event.type == pygame.VIDEORESIZE:
+            scrsize = event.size
+            width = event.w
+            height = event.h
+            disp.__init__(width, HEIGHT=height)
 
         if event.type == pygame.KEYDOWN:
             before_help_flag = fl.show_help_flag
@@ -527,7 +533,7 @@ while not wf_quit:
                             cat_radio.set_mode(kiwi_snd.radio_mode)
 
                 # Change AGC threshold for the current KIWI receiver
-                if keys[pygame.K_1] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
+                if keys[pygame.K_1] and not (mods & pygame.KMOD_ALT):
                     if not (mods & pygame.KMOD_SHIFT):
                         if kiwi_snd.thresh>-135:
                             kiwi_snd.thresh -= 1
@@ -698,7 +704,7 @@ while not wf_quit:
                 manual_wf_freq = kiwi_wf.freq - delta_freq
                 fl.click_drag_flag = False
     
-    if mouse[0] > wf_width-50 and mouse[1] > disp.BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
+    if mouse[0] > disp.DISPLAY_WIDTH-50 and mouse[1] > disp.BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
         fl.show_help_flag = True
     else:
         fl.show_help_flag = False
@@ -926,7 +932,7 @@ while not wf_quit:
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,0), (0,disp.BOTTOMBAR_Y,disp.DISPLAY_WIDTH,disp.DISPLAY_HEIGHT), 0)
     disp.draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio)
-    disp.update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, rssi_smooth_slow, mouse, wf_width, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
+    disp.update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, rssi_smooth_slow, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
         disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
