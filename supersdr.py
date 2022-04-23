@@ -42,8 +42,6 @@ if disp.DISPLAY_WIDTH == 1920:
     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
         pygame.DOUBLEBUF | pygame.FULLSCREEN,vsync=1)
 else:
-    # sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
-    # pygame.SCALED | pygame.RESIZABLE | pygame.DOUBLEBUF,vsync=1)
     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
         pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
 wf_width = sdrdisplay.get_width()
@@ -298,10 +296,13 @@ while not wf_quit:
                             show_bigmsg = "emptymemory"
 
                 # KIWI RX passband change
-                if keys[pygame.K_o]:
+                if keys[pygame.K_o] and not (mods & pygame.KMOD_CTRL):
                     change_passband_flag = True
                     delta_low = 0
                     delta_high = 0
+                elif keys[pygame.K_o] and (mods & pygame.KMOD_CTRL):
+                    disp.__init__(kiwi_wf.WF_BINS)
+                    sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
 
                 elif keys[pygame.K_j]:
                     old_delta_low, old_delta_high = delta_low, delta_high
@@ -1027,11 +1028,6 @@ while not wf_quit:
     if cat_radio and not cat_radio.cat_ok:
         cat_radio = None
         print("CAT radio unreachable!")
-
-    # if cat_radio and not run_index%10:
-    #     cat_radio.get_ptt()
-    #     if cat_radio.cat_tx:
-    #         kiwi_snd.rssi = 0
 
     try:
         mylogger.main_dialog.update()

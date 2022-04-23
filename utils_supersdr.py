@@ -75,15 +75,16 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- LEFT/RIGHT: move KIWI RX freq +/- 1kHz (+SHIFT: x10)",
         "- PAGE UP/DOWN: move WF freq +/- SPAN/4",
         "- UP/DOWN: zoom in/out by a factor 2X",
-        "- U/L/C/A: switches to USB, LSB, CW, AM",
+        "- U/L/C/A: switch to USB, LSB, CW, AM",
         "- J/K/O: tune RX low/high cut (SHIFT inverts, try CTRL!), O resets",
+        "- CTRL+O: reset window size to native 1024 bins",
         "- G/H: inc/dec spectrum and WF averaging to improve SNR",
         "- ,/.(+SHIFT) change high(low) clip level for spectrum and WF",
         "- E: start/stop audio recording",
         "- F: enter frequency with keyboard",
         "- W/R: Write/Restore quick cyclic memory (up to 10)",
-        "- SHIFT+W: Saves all memories to disk",
-        "- SHIFT+R: Deletes all stored memories",
+        "- SHIFT+W: Save all memories to disk",
+        "- SHIFT+R: Delete all stored memories",
         "- V/B: up/down volume 10%, SHIFT+V mute/unmute",
         "- M: S-METER show/hide",
         "- Y: activate SUB RX or switch MAIN/SUB RX (+SHIFT kills it)",
@@ -98,9 +99,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- 0/9: [LOGGER] add QSO to log / open search QSO dialog",
         "- 4: enable/disable spectrum filling",
         "- 5/6: pan audio left/right for active RX",
-        "- SHIFT+ESC: quits",
-        "",
-        "  --- 73 de marco/IS0KYB cogoni AT gmail DOT com ---  "]
+        "- SHIFT+ESC: quits"]
 
 font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
@@ -1336,6 +1335,7 @@ class display_stuff():
     s_meter_radius = 100
     s_meter_border = 20
 
+
     def __init__(self, WIDTH, HEIGHT=None):
         # SuperSDR constants
         self.DISPLAY_WIDTH = WIDTH
@@ -1544,7 +1544,7 @@ class display_stuff():
     def display_help_box(self, screen, message_list):
         font_size = font_size_dict["small"]
 
-        window_size = 545
+        window_size = 565
         pygame.draw.rect(screen, (0,0,0),
                        ((screen.get_width() / 2) - window_size/2,
                         (screen.get_height() / 2) - window_size/3,
