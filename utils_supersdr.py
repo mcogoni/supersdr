@@ -82,7 +82,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- ,/.(+SHIFT) change high(low) clip level for spectrum and WF",
         "- E: start/stop audio recording",
         "- F: enter frequency with keyboard",
-        "- W/R: Write/Restore quick cyclic memory (up to 10)",
+        "- W/R: Write/Recall quick cyclic memory (up to 10)",
         "- SHIFT+W: Save all memories to disk",
         "- SHIFT+R: Delete all stored memories",
         "- V/B: up/down volume 10%, SHIFT+V mute/unmute",
@@ -351,16 +351,16 @@ class memory():
     def __init__(self):
         self.mem_list = deque([], 10)
         self.index = 0
-        try:
-            self.load_from_disk()
-        except:
-            pass
-        self.index = len(self.mem_list)
+        # try:
+        #     self.load_from_disk()
+        # except:
+        #     pass
+        # self.index = len(self.mem_list)
 
     def write_mem(self, freq, radio_mode, delta_low, delta_high):
         self.mem_list.append((round(freq, 3), radio_mode, delta_low, delta_high))
     
-    def restore_mem(self):
+    def recall_mem(self):
         if len(self.mem_list)>0:
             self.index += 1
             self.index %= len(self.mem_list)
@@ -914,6 +914,7 @@ class kiwi_sound():
         self.max_rssi_before_mute = -20
         self.mute_counter = 0
         self.muting_delay = 15
+        self.adc_overflow_flag = False
 
         self.run_index = 0
         self.delta_t = 0.0
@@ -1053,13 +1054,16 @@ class kiwi_sound():
             print('server closed the connection unexpectedly')
             raise
 
-        #flags,seq, = struct.unpack('<BI', buffer(data[0:5]))
+
         if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
+            flags,seq, = struct.unpack('<BI', buffer(data[3:8]))
+            self.adc_overflow_flag = True if (flags & 2) else False
             s_meter, = struct.unpack('>H',  buffer(data[8:10]))
             self.rssi = (0.1 * s_meter - 127)
             data = data[10:]
             count = len(data) // 2
             samples = np.ndarray(count, dtype='>h', buffer=data).astype(np.int16)
+
             return samples
         else:
             return None
@@ -1423,7 +1427,8 @@ class display_stuff():
                 "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (self.DISPLAY_WIDTH-180, self.V_POS_TEXT), "small", False),
                 "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
                 "wf_param": (WHITE, "%ddB AUTO %s"%(self.wf_top, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
-                "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False)
+                "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False),
+                "adc_overflow": (RED if kiwi_snd.adc_overflow_flag else D_GREY, "OVF", (self.DISPLAY_WIDTH-270, self.BOTTOMBAR_Y+3), "big", False)
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
@@ -1562,7 +1567,7 @@ class display_stuff():
 
     def display_msg_box(self, screen, message, pos=None, color=WHITE):
         if not pos:
-            pos = (screen.get_width() / 2 - 100, screen.get_height() / 2 - 10)
+            pos = (screen.get_width() / 2 - 100, screen.get_height() / 4 - 10)
         if len(message) != 0:
             hugefont.render_to(screen, pos, message, color)
 
@@ -1689,6 +1694,31 @@ class display_stuff():
                         pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
                     except:
                         pass
+
+    def plot_memories(self, surface_, mem, kiwi_wf):
+        # self.mem_list.append((round(freq, 3), radio_mode, delta_low, delta_high))
+        y_offset = 0
+        old_fbin = -100
+        fontsize = font_size_dict["medium"]
+        sorted_freq_list = sorted([(i, m[0]) for i, m in enumerate(mem.mem_list)], key=lambda x: x[1])
+        for i, f_khz in sorted_freq_list:
+            f_bin = int(kiwi_wf.offset_to_bin(f_khz - kiwi_wf.start_f_khz))
+            ts = (ORANGE, "M%d"%i, (f_bin,self.WF_Y + 20), "small")
+            render_ = smallfont.render_to
+            str_len = len(ts[1])
+            x, y = ts[2]
+            if x > fontsize * str_len/2 and x < self.DISPLAY_WIDTH - 10:
+                if f_bin - old_fbin <= fontsize * str_len/2 + 5:
+                    y_offset += fontsize
+                else:
+                    y_offset = 0
+                old_fbin = f_bin
+                try:
+                    render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2), y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
+                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
+                except:
+                    pass
+
 
     def plot_dxcluster(self, surface_, dxclust, kiwi_wf):
         now  = datetime.utcnow()        

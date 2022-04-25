@@ -24,7 +24,7 @@ parser.add_option("-z", "--zoom", type=int,
 parser.add_option("-f", "--freq", type=float,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=30)
+                  help="screen refresh rate", dest="refresh", default=25)
 parser.add_option("-l", "--large", type=int,
                   help="screen horiz size in pixels (default 1024)", dest="winsize", default=1024)
 parser.add_option("-b", "--buffer", type=int,
@@ -204,13 +204,14 @@ while not wf_quit:
     mouse = pygame.mouse.get_pos()
 
     for event in pygame.event.get():
-        mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
-
         if event.type == pygame.VIDEORESIZE:
             scrsize = event.size
             width = event.w
             height = event.h
             disp.__init__(width, HEIGHT=height)
+            kiwi_wf.BINS2PIXEL_RATIO = disp.DISPLAY_WIDTH / kiwi_wf.WF_BINS
+
+        mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
 
         if event.type == pygame.KEYDOWN:
             before_help_flag = fl.show_help_flag
@@ -268,14 +269,16 @@ while not wf_quit:
 
                 # Memory read/write, reset, save to/load from disk
                 if keys[pygame.K_t]:
-                        kiwi_memory.load_from_disk()
-                        show_bigmsg = "loadmemorydisk"
-                        run_index_bigmsg = run_index
+                    pass
+                        # kiwi_memory.load_from_disk()
+                        # show_bigmsg = "loadmemorydisk"
+                        # run_index_bigmsg = run_index
                 if keys[pygame.K_w]:
                     if event.mod & pygame.KMOD_SHIFT:
-                        kiwi_memory.save_to_disk()
-                        show_bigmsg = "savememorydisk"
-                        run_index_bigmsg = run_index
+                        pass
+                        # kiwi_memory.save_to_disk()
+                        # show_bigmsg = "savememorydisk"
+                        # run_index_bigmsg = run_index
                     else:
                         kiwi_memory.write_mem(kiwi_snd.freq, kiwi_snd.radio_mode, delta_low, delta_high)
                         show_bigmsg = "writememory"
@@ -287,11 +290,11 @@ while not wf_quit:
                         run_index_bigmsg = run_index
                     else:
                         run_index_bigmsg = run_index
-                        mem_tmp = kiwi_memory.restore_mem()
+                        mem_tmp = kiwi_memory.recall_mem()
                         if mem_tmp:
                             click_freq, kiwi_snd.radio_mode, delta_low, delta_high = mem_tmp
-                            print(click_freq, kiwi_snd.radio_mode, delta_low, delta_high)
-                            show_bigmsg = "restorememory"
+                            # print(click_freq, kiwi_snd.radio_mode, delta_low, delta_high)
+                            show_bigmsg = "recallmemory"
                         else:
                             show_bigmsg = "emptymemory"
 
@@ -302,6 +305,9 @@ while not wf_quit:
                     delta_high = 0
                 elif keys[pygame.K_o] and (mods & pygame.KMOD_CTRL):
                     disp.__init__(kiwi_wf.WF_BINS)
+                    print(disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT)
+                    pygame.display.quit()
+                    pygame.display.init()
                     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
 
                 elif keys[pygame.K_j]:
@@ -908,6 +914,7 @@ while not wf_quit:
     if not cat_radio:
         fl.cat_snd_link_flag = False
 
+    # Plot top spectrum and bottom waterfall
     if not run_index%min(5, kiwi_wf.averaging_n):
         disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=YELLOW)
         wf_surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
@@ -937,6 +944,7 @@ while not wf_quit:
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
         disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
+        disp.plot_memories(sdrdisplay, kiwi_memory, kiwi_wf)
     elif fl.show_dxcluster_flag and kiwi_wf.zoom > 3:
         disp.plot_dxcluster(sdrdisplay, dxclust, kiwi_wf)
 
@@ -990,18 +998,18 @@ while not wf_quit:
             msg_text = kiwi_snd.radio_mode
         elif "writememory" == show_bigmsg:
             msg_text = "Stored Memory %d"% (len(kiwi_memory.mem_list)-1)
-        elif "restorememory" == show_bigmsg:
+        elif "recallmemory" == show_bigmsg:
             msg_text = "Recall memory:%d -> %s"% (kiwi_memory.index, 
                 str(kiwi_memory.mem_list[kiwi_memory.index][0])+" kHz "+kiwi_memory.mem_list[kiwi_memory.index][1]) 
-            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 2 - 10)
+            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 4 - 10)
         elif "resetmemory" == show_bigmsg:
             msg_text = "Reset All Memories!"
         elif "loadmemorydisk" == show_bigmsg:
             msg_text = "Load Memories from Disk"
-            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 2 - 10)
+            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 4 - 10)
         elif "savememorydisk" == show_bigmsg:
             msg_text = "Save All Memories to Disk"
-            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 2 - 10)
+            pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 4 - 10)
         elif "emptymemory" == show_bigmsg:
             msg_text = "No Memories!"
         elif "start_rec" == show_bigmsg:
