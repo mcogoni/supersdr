@@ -420,7 +420,7 @@ class kiwi_list():
                 col_count = self.kiwi_data.count(":")
                 if no_file_flag:
                     fd.write("KIWIHOST;KIWIPORT;KIWIPASSWORD;COMMENTS\n")
-                fd.write(self.kiwi_data.replace(":", ";")+";"*(3-col_count)+"\n")
+                fd.write(self.kiwi_data.replace(":", ";") + ";"*(3-col_count) + "\n")
             self.load_from_disk()
         except:
             print("Cannot save kiwi list to disk!")
@@ -431,9 +431,9 @@ class kiwi_list():
             with open(self.kiwi_list_filename, encoding="latin") as fd:
                 data = fd.readlines()
 
-            col_count = data.count(";")
             label_list = data[0].rstrip().split(";")
             for row in data[1:]:
+                col_count = row.count(";")
                 if row[0] == "#":
                     continue
                 fields = row.rstrip().split(";")
@@ -907,8 +907,8 @@ class kiwi_sound():
         self.kiwi_wf = kiwi_wf
         self.host = host_ if host_ else kiwi_wf.host
         self.port = port_ if port_ else kiwi_wf.port
-        self.FULL_BUFF_LEN = buffer_len
-        self.audio_buffer = queue.Queue(maxsize = max(1, self.FULL_BUFF_LEN))
+        self.FULL_BUFF_LEN = max(2, buffer_len)
+        self.audio_buffer = queue.Queue(maxsize = self.FULL_BUFF_LEN)
         self.terminate = False
         self.volume = volume_
         self.max_rssi_before_mute = -20
@@ -1054,7 +1054,6 @@ class kiwi_sound():
             print('server closed the connection unexpectedly')
             raise
 
-
         if bytearray2str(data[0:3]) == "SND": # this is one waterfall line
             flags,seq, = struct.unpack('<BI', buffer(data[3:8]))
             self.adc_overflow_flag = True if (flags & 2) else False
@@ -1097,6 +1096,11 @@ class kiwi_sound():
             print ("exception: %s" % e)
     
     def play_buffer(self, outdata, frame_count, time_info, status):
+        # play silence immediately after buffer underrun
+        # go on as usual if very short buffer chosen (local kiwis only!)
+        if self.late_flag and self.FULL_BUFF_LEN >= 5:
+            return
+
         popped = []
         for _ in range(self.CHUNKS):
             popped.append( self.audio_buffer.get() )
@@ -1128,18 +1132,21 @@ class kiwi_sound():
             self.mute_counter -= 1
         if self.mute_counter > 0:
             outdata *= 0
+
         
     def run(self):
         self.total_delay_ms = 0.0
         delta_time_ms = 0.0
         ms_per_frame = (self.KIWI_SAMPLES_PER_FRAME / self.KIWI_RATE_TRUE) * 1000
-        late_flag = False
+        self.late_flag = False
         while not self.terminate:
+            # if not self.run_index % 10:
+            #     print(self.audio_buffer.qsize(), self.total_delay_ms, self.FULL_BUFF_LEN * ms_per_frame)
             time_prev = time.time_ns() / 1000000 # time in ms
             snd_buf = self.get_audio_chunk()
             # if not self.run_index % 10:
             #    print("DELTA: %.0f TOTAL_DELAY: %.0f PER_FRAME: %.0f"%(delta_time_ms, self.total_delay_ms, ms_per_frame))
-            if snd_buf is not None and not late_flag: # drop the audio frame if we're late!
+            if snd_buf is not None and not self.late_flag: # drop the audio frame if we're late!
                 self.audio_buffer.put(snd_buf)
                 self.run_index += 1
                 self.total_delay_ms -= delta_time_ms # subtract the frame time from the total delay whether we play it or drop it...
@@ -1149,14 +1156,20 @@ class kiwi_sound():
             time_now = time.time_ns() / 1000000 # time in ms
             delta_time_ms = time_now - time_prev
             self.total_delay_ms += delta_time_ms
-            if not late_flag and self.total_delay_ms > max(self.FULL_BUFF_LEN, 20) * ms_per_frame:
-                late_flag = True
+            if not self.late_flag and self.total_delay_ms >= self.FULL_BUFF_LEN * ms_per_frame and self.run_index>100:
+                self.late_flag = True
                 print("AUDIO STREAM NOT IN SYNC: DROPPING!")
-            if late_flag and self.total_delay_ms < ms_per_frame:
-                late_flag = False
+
+            elif self.late_flag and self.total_delay_ms < ms_per_frame:
                 print("AUDIO STREAM SYNCED")
-            
-        return
+                # refill the buffer after underrun
+                # do this only for very short buffers (local kiwis only!)
+                if self.FULL_BUFF_LEN >= 5:
+                    while self.audio_buffer.qsize() < self.FULL_BUFF_LEN:
+                        snd_buf = self.get_audio_chunk()
+                        if snd_buf is not None:
+                            self.audio_buffer.put(snd_buf)
+                self.late_flag = False
 
 
 def start_audio_stream(kiwi_snd):
@@ -1338,7 +1351,8 @@ class display_stuff():
     wf_bottom, wf_top = 0, 0
     s_meter_radius = 100
     s_meter_border = 20
-
+    audio_buff_len = 0
+    audio_buff_len2 = 0
 
     def __init__(self, WIDTH, HEIGHT=None):
         # SuperSDR constants
@@ -1399,6 +1413,11 @@ class display_stuff():
         if not run_index%20:
             self.wf_bottom = kiwi_wf.wf_min_db
             self.wf_top = kiwi_wf.wf_max_db
+            self.audio_buff_len = kiwi_snd.audio_buffer.qsize()
+            try:
+                self.audio_buff_len2 = kiwi_snd2.audio_buffer.qsize()
+            except:
+                pass
 
         audio_balance_string_list = ["<<", "<", "=", ">", ">>"]
         audio_balance_string_main = audio_balance_string_list[int((kiwi_snd.audio_balance+1)*2)]
@@ -1428,12 +1447,14 @@ class display_stuff():
                 "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
                 "wf_param": (WHITE, "%ddB AUTO %s"%(self.wf_top, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
                 "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False),
-                "adc_overflow": (RED if kiwi_snd.adc_overflow_flag else D_GREY, "OVF", (self.DISPLAY_WIDTH-270, self.BOTTOMBAR_Y+3), "big", False)
+                "adc_overflow": (RED if kiwi_snd.adc_overflow_flag else D_GREY, "OVF", (self.DISPLAY_WIDTH-270, self.BOTTOMBAR_Y+3), "big", False),
+                "audio_buffer": (GREEN if self.audio_buff_len>kiwi_snd.FULL_BUFF_LEN/3 else RED, str(self.audio_buff_len), (self.DISPLAY_WIDTH-330, self.BOTTOMBAR_Y+5), "small", False)
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
             ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s %s"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%% %s"%(kiwi_snd2.volume, audio_balance_string_sub)), (self.DISPLAY_WIDTH/2-430,self.V_POS_TEXT-1), "big", False)
-                
+            ts_dict["audio_buffer2"] = (GREEN if self.audio_buff_len2>kiwi_snd2.FULL_BUFF_LEN/3 else RED, str(self.audio_buff_len2), (self.DISPLAY_WIDTH-310, self.BOTTOMBAR_Y+5), "small", False)
+                                
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth_slow)+127)//6 # signal in S units of 6dB
             if s_value<=9:
