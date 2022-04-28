@@ -907,8 +907,8 @@ class kiwi_sound():
         self.kiwi_wf = kiwi_wf
         self.host = host_ if host_ else kiwi_wf.host
         self.port = port_ if port_ else kiwi_wf.port
-        self.FULL_BUFF_LEN = max(2, buffer_len)
-        self.audio_buffer = queue.Queue(maxsize = self.FULL_BUFF_LEN)
+        self.FULL_BUFF_LEN = buffer_len
+        self.audio_buffer = queue.Queue(maxsize = max(1, self.FULL_BUFF_LEN))
         self.terminate = False
         self.volume = volume_
         self.max_rssi_before_mute = -20
@@ -936,6 +936,7 @@ class kiwi_sound():
         self.decay = self.decay_other
         self.audio_balance = 0.0
         self.freq_offset = 0
+        self.outdata = None
 
         kiwi_sdr_status = kiwi_sdr(self.host, self.port)
         if kiwi_sdr_status.users == kiwi_sdr_status.users_max:
@@ -1098,7 +1099,8 @@ class kiwi_sound():
     def play_buffer(self, outdata, frame_count, time_info, status):
         # play silence immediately after buffer underrun
         # go on as usual if very short buffer chosen (local kiwis only!)
-        if self.late_flag and self.FULL_BUFF_LEN >= 5:
+        if self.late_flag:
+            outdata[:] = self.old_outdata[:]*0 # insert silence with empty buffer
             return
 
         popped = []
@@ -1132,6 +1134,7 @@ class kiwi_sound():
             self.mute_counter -= 1
         if self.mute_counter > 0:
             outdata *= 0
+        self.old_outdata = outdata[:]
 
         
     def run(self):
@@ -1140,12 +1143,8 @@ class kiwi_sound():
         ms_per_frame = (self.KIWI_SAMPLES_PER_FRAME / self.KIWI_RATE_TRUE) * 1000
         self.late_flag = False
         while not self.terminate:
-            # if not self.run_index % 10:
-            #     print(self.audio_buffer.qsize(), self.total_delay_ms, self.FULL_BUFF_LEN * ms_per_frame)
             time_prev = time.time_ns() / 1000000 # time in ms
             snd_buf = self.get_audio_chunk()
-            # if not self.run_index % 10:
-            #    print("DELTA: %.0f TOTAL_DELAY: %.0f PER_FRAME: %.0f"%(delta_time_ms, self.total_delay_ms, ms_per_frame))
             if snd_buf is not None and not self.late_flag: # drop the audio frame if we're late!
                 self.audio_buffer.put(snd_buf)
                 self.run_index += 1
@@ -1156,19 +1155,19 @@ class kiwi_sound():
             time_now = time.time_ns() / 1000000 # time in ms
             delta_time_ms = time_now - time_prev
             self.total_delay_ms += delta_time_ms
-            if not self.late_flag and self.total_delay_ms >= self.FULL_BUFF_LEN * ms_per_frame and self.run_index>100:
+            if not self.late_flag and self.total_delay_ms > (self.FULL_BUFF_LEN+2) * ms_per_frame:
                 self.late_flag = True
                 print("AUDIO STREAM NOT IN SYNC: DROPPING!")
 
-            elif self.late_flag and self.total_delay_ms < ms_per_frame:
+            if self.late_flag and self.total_delay_ms < ms_per_frame:
                 print("AUDIO STREAM SYNCED")
                 # refill the buffer after underrun
                 # do this only for very short buffers (local kiwis only!)
-                if self.FULL_BUFF_LEN >= 5:
-                    while self.audio_buffer.qsize() < self.FULL_BUFF_LEN:
-                        snd_buf = self.get_audio_chunk()
-                        if snd_buf is not None:
-                            self.audio_buffer.put(snd_buf)
+                while self.audio_buffer.qsize() < self.FULL_BUFF_LEN:
+                    snd_buf = self.get_audio_chunk()
+                    if snd_buf is not None:
+                        # print(self.audio_buffer.qsize())
+                        self.audio_buffer.put(snd_buf)
                 self.late_flag = False
 
 

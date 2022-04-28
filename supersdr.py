@@ -29,8 +29,8 @@ parser.add_option("-l", "--large", type=int,
                   help="screen horiz size in pixels (default 1024)", dest="winsize", default=1024)
 parser.add_option("-b", "--buffer", type=int,
                   help="buffer size", dest="audio_buffer", default=10)
-parser.add_option("-d", "--dual",
-                  help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
+# parser.add_option("-d", "--dual",
+#                   help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
 parser.add_option("-c", "--callsign", type=str,
                   help="DX CLUSTER Callsign", dest="callsign", default="")
 parser.add_option("-m", "--colormap", type=str,
@@ -57,7 +57,6 @@ disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
 
 FPS = options['refresh']
-fl.dualrx_flag = options['dualrx']
 
 CALLSIGN = options['callsign'].upper()
 dxclust = None
@@ -130,23 +129,11 @@ if not kiwi_snd:
 kiwi_host2, kiwi_port2, kiwi_password2 = kiwi_host, kiwi_port, kiwi_password
 
 kiwi_snd2 = None
-if fl.dualrx_flag:
-    time.sleep(2)
-    try:
-        kiwi_snd2 = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
-    except:
-        fl.dualrx_flag = False
-        print("Kiwi audio server not ready")
 
 play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
 # if not play:
 #     del kiwi_snd
 #     sys.exit("Chosen KIWI receiver is not ready!")
-
-if fl.dualrx_flag:
-    play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
-    if not play2:
-        kiwi_snd2 = None
 
 old_volume = kiwi_snd.volume
 
