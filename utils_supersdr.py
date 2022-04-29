@@ -936,7 +936,6 @@ class kiwi_sound():
         self.decay = self.decay_other
         self.audio_balance = 0.0
         self.freq_offset = 0
-        self.outdata = None
 
         kiwi_sdr_status = kiwi_sdr(self.host, self.port)
         if kiwi_sdr_status.users == kiwi_sdr_status.users_max:
@@ -1123,8 +1122,8 @@ class kiwi_sound():
             pyaudio_buffer = self.kiwi_filter.lowpass(pyaudio_buffer) * int(self.SAMPLE_RATIO)
 
         left_volume, right_volume = min(1-self.audio_balance, 1.0), min(1+self.audio_balance, 1.0)
-        outdata[:,0] = (pyaudio_buffer*left_volume**2).astype(np.int16)   # LEFT  CHANNEL
-        outdata[:,1] = (pyaudio_buffer*right_volume**2).astype(np.int16)     # RIGHT CHANNEL
+        outdata[:,0] = (pyaudio_buffer*left_volume**2).astype(np.int16)     # LEFT  CHANNEL
+        outdata[:,1] = (pyaudio_buffer*right_volume**2).astype(np.int16)    # RIGHT CHANNEL
         if self.audio_rec.recording_flag:
             self.audio_rec.audio_buffer.append(pyaudio_buffer.astype(np.int16))
         # mute on TX (over some rssi threshold)
@@ -1136,7 +1135,6 @@ class kiwi_sound():
             outdata *= 0
         self.old_outdata = outdata[:]
 
-        
     def run(self):
         self.total_delay_ms = 0.0
         delta_time_ms = 0.0
@@ -1157,10 +1155,11 @@ class kiwi_sound():
             self.total_delay_ms += delta_time_ms
             if not self.late_flag and self.total_delay_ms > (self.FULL_BUFF_LEN+2) * ms_per_frame:
                 self.late_flag = True
-                print("AUDIO STREAM NOT IN SYNC: DROPPING!")
+                # print("AUDIO STREAM NOT IN SYNC: DROPPING!")
+                print("!")
 
             if self.late_flag and self.total_delay_ms < ms_per_frame:
-                print("AUDIO STREAM SYNCED")
+                # print("AUDIO STREAM SYNCED")
                 # refill the buffer after underrun
                 # do this only for very short buffers (local kiwis only!)
                 while self.audio_buffer.qsize() < self.FULL_BUFF_LEN:
@@ -1413,10 +1412,8 @@ class display_stuff():
             self.wf_bottom = kiwi_wf.wf_min_db
             self.wf_top = kiwi_wf.wf_max_db
             self.audio_buff_len = kiwi_snd.audio_buffer.qsize()
-            try:
+            if fl.dualrx_flag and kiwi_snd2:
                 self.audio_buff_len2 = kiwi_snd2.audio_buffer.qsize()
-            except:
-                pass
 
         audio_balance_string_list = ["<<", "<", "=", ">", ">>"]
         audio_balance_string_main = audio_balance_string_list[int((kiwi_snd.audio_balance+1)*2)]
@@ -1447,12 +1444,12 @@ class display_stuff():
                 "wf_param": (WHITE, "%ddB AUTO %s"%(self.wf_top, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
                 "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False),
                 "adc_overflow": (RED if kiwi_snd.adc_overflow_flag else D_GREY, "OVF", (self.DISPLAY_WIDTH-270, self.BOTTOMBAR_Y+3), "big", False),
-                "audio_buffer": (GREEN if self.audio_buff_len>kiwi_snd.FULL_BUFF_LEN/3 else RED, str(self.audio_buff_len), (self.DISPLAY_WIDTH-330, self.BOTTOMBAR_Y+5), "small", False)
+                "audio_buffer": (GREEN if self.audio_buff_len>kiwi_snd.FULL_BUFF_LEN/3 else RED, "M:"+str(self.audio_buff_len), (self.DISPLAY_WIDTH-350, self.BOTTOMBAR_Y+6), "small", False)
                 }
 
         if fl.dualrx_flag and kiwi_snd2:
             ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s %s"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%% %s"%(kiwi_snd2.volume, audio_balance_string_sub)), (self.DISPLAY_WIDTH/2-430,self.V_POS_TEXT-1), "big", False)
-            ts_dict["audio_buffer2"] = (GREEN if self.audio_buff_len2>kiwi_snd2.FULL_BUFF_LEN/3 else RED, str(self.audio_buff_len2), (self.DISPLAY_WIDTH-310, self.BOTTOMBAR_Y+5), "small", False)
+            ts_dict["audio_buffer2"] = (GREEN if self.audio_buff_len2>kiwi_snd2.FULL_BUFF_LEN/3 else RED, "S:"+str(self.audio_buff_len2), (self.DISPLAY_WIDTH-310, self.BOTTOMBAR_Y+6), "small", False)
                                 
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth_slow)+127)//6 # signal in S units of 6dB

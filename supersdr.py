@@ -165,6 +165,7 @@ rssi_maxlen = 10 # buffer length used to smoothen the s-meter
 rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
 rssi_smooth_slow = rssi_smooth
+rssi_smooth_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
 run_index = 0
 run_index_bigmsg = 0
 
@@ -292,10 +293,12 @@ while not wf_quit:
                     delta_high = 0
                 elif keys[pygame.K_o] and (mods & pygame.KMOD_CTRL):
                     disp.__init__(kiwi_wf.WF_BINS)
-                    print(disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT)
                     pygame.display.quit()
                     pygame.display.init()
                     sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
+                    pygame.display.set_icon(icon)
+                    pygame.display.set_caption("SuperSDR %s"%VERSION)
+                    kiwi_wf.BINS2PIXEL_RATIO = disp.DISPLAY_WIDTH / kiwi_wf.WF_BINS
 
                 elif keys[pygame.K_j]:
                     old_delta_low, old_delta_high = delta_low, delta_high
@@ -921,7 +924,8 @@ while not wf_quit:
         rssi_smooth += min((rssi_last - rssi_smooth)/5, 3) # attack rate
 
     if not run_index%20:
-        rssi_smooth_slow = rssi_smooth
+        # rssi_smooth_slow = rssi_smooth
+        rssi_smooth_slow = max(rssi_hist)
 
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,disp.DISPLAY_WIDTH,disp.TOPBAR_HEIGHT), 0)
     pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
