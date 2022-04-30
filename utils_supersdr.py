@@ -88,7 +88,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- V/B: up/down volume 10%, SHIFT+V mute/unmute",
         "- M: S-METER show/hide",
         "- Y: activate SUB RX or switch MAIN/SUB RX (+SHIFT kills it)",
-        "- S: SYNC CAT and KIWI RX ON/OFF",
+        "- S: SYNC CAT and KIWI RX ON/OFF -> SPLIT mode for RTX",
         "- Z: Center KIWI RX, shift WF instead",
         "- SPACE: FORCE SYNC of WF to RX if no CAT, else sync to CAT",
         "- X: AUTO MODE ON/OFF depending on amateur/broadcast band",
@@ -575,7 +575,7 @@ class kiwi_sdr():
         self.antenna = self.kiwi_status_dict["antenna"]
         self.kiwi_name = self.kiwi_status_dict["name"]
         self.qth = self.kiwi_status_dict["loc"]
-        self.active = True if self.kiwi_status_dict["status"]=="active" else False
+        self.active = True if self.kiwi_status_dict["status"] in ["active", "private"] else False
         self.offline = False if self.kiwi_status_dict["offline"]=="no" else True
         self.gps = (float(self.kiwi_status_dict["gps"].split(", ")[0][1:]),
             float(self.kiwi_status_dict["gps"].split(", ")[1][:-1] ))
@@ -1138,7 +1138,7 @@ class kiwi_sound():
     def run(self):
         self.total_delay_ms = 0.0
         delta_time_ms = 0.0
-        ms_per_frame = (self.KIWI_SAMPLES_PER_FRAME / self.KIWI_RATE_TRUE) * 1000
+        self.ms_per_frame = (self.KIWI_SAMPLES_PER_FRAME / self.KIWI_RATE_TRUE) * 1000
         self.late_flag = False
         while not self.terminate:
             time_prev = time.time_ns() / 1000000 # time in ms
@@ -1148,17 +1148,17 @@ class kiwi_sound():
                 self.run_index += 1
                 self.total_delay_ms -= delta_time_ms # subtract the frame time from the total delay whether we play it or drop it...
             else:
-                self.total_delay_ms -= ms_per_frame # subtract the frame time from the total delay whether we play it or drop it...
+                self.total_delay_ms -= self.ms_per_frame # subtract the frame time from the total delay whether we play it or drop it...
 
             time_now = time.time_ns() / 1000000 # time in ms
             delta_time_ms = time_now - time_prev
             self.total_delay_ms += delta_time_ms
-            if not self.late_flag and self.total_delay_ms > (self.FULL_BUFF_LEN+2) * ms_per_frame:
+            if not self.late_flag and self.total_delay_ms > (self.FULL_BUFF_LEN+2) * self.ms_per_frame:
                 self.late_flag = True
                 # print("AUDIO STREAM NOT IN SYNC: DROPPING!")
                 print("!")
 
-            if self.late_flag and self.total_delay_ms < ms_per_frame:
+            if self.late_flag and self.total_delay_ms < self.ms_per_frame:
                 # print("AUDIO STREAM SYNCED")
                 # refill the buffer after underrun
                 # do this only for very short buffers (local kiwis only!)

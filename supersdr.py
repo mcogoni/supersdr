@@ -466,12 +466,24 @@ while not wf_quit:
                 # KIWI RX mode change
                 if keys[pygame.K_u]:
                     fl.auto_mode = False
+                    if kiwi_snd.radio_mode=="AM":
+                        change_passband_flag = True
+                        delta_low = 0
+                        delta_high = 0
                     manual_mode = "USB"
                 elif keys[pygame.K_l]:
                     fl.auto_mode = False
+                    if kiwi_snd.radio_mode=="AM":
+                        change_passband_flag = True
+                        delta_low = 0
+                        delta_high = 0
                     manual_mode = "LSB"
                 elif keys[pygame.K_c]:
                     fl.auto_mode = False
+                    if kiwi_snd.radio_mode=="AM":
+                        change_passband_flag = True
+                        delta_low = 0
+                        delta_high = 0
                     manual_mode = "CW"
                 elif keys[pygame.K_a]:
                     fl.auto_mode = False
