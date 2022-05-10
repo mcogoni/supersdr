@@ -230,6 +230,10 @@ while not wf_quit:
                 if keys[pygame.K_i]:
                     fl.show_eibi_flag = False if fl.show_eibi_flag else True
 
+                # Show user memory labels
+                if keys[pygame.K_m] and (mods & pygame.KMOD_SHIFT):
+                    fl.show_mem_flag = False if fl.show_mem_flag else True
+
                 # Show realtime DX-CLUSTER labels, if DXCLUSTER disabled, enable it first
                 elif keys[pygame.K_d]:
                     if dxclust:
@@ -510,7 +514,7 @@ while not wf_quit:
                         run_index_bigmsg = run_index
 
                 # S-meter show/hide
-                if keys[pygame.K_m]:
+                if keys[pygame.K_m] and not (mods & pygame.KMOD_SHIFT):
                     fl.s_meter_show_flag = False if fl.s_meter_show_flag else True
                 
                 if keys[pygame.K_s]:
@@ -947,6 +951,7 @@ while not wf_quit:
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
         disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
+    if fl.show_mem_flag:
         disp.plot_memories(sdrdisplay, kiwi_memory, kiwi_wf)
     elif fl.show_dxcluster_flag and kiwi_wf.zoom > 3:
         disp.plot_dxcluster(sdrdisplay, dxclust, kiwi_wf)

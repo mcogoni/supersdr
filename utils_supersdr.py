@@ -121,6 +121,7 @@ class flags():
     show_help_flag =  False
     s_meter_show_flag = False
     show_eibi_flag = False
+    show_mem_flag = True
     show_dxcluster_flag = False
     connect_dxcluster_flag = False
     input_callsign_flag = False
@@ -1720,19 +1721,19 @@ class display_stuff():
         sorted_freq_list = sorted([(i, m[0]) for i, m in enumerate(mem.mem_list)], key=lambda x: x[1])
         for i, f_khz in sorted_freq_list:
             f_bin = int(kiwi_wf.offset_to_bin(f_khz - kiwi_wf.start_f_khz))
-            ts = (ORANGE, "M%d"%i, (f_bin,self.WF_Y + 20), "small")
+            ts = (GREEN, "%d"%i, (f_bin,self.TUNEBAR_Y - 20), "small")
             render_ = smallfont.render_to
             str_len = len(ts[1])
             x, y = ts[2]
             if x > fontsize * str_len/2 and x < self.DISPLAY_WIDTH - 10:
                 if f_bin - old_fbin <= fontsize * str_len/2 + 5:
-                    y_offset += fontsize
+                    y_offset -= fontsize
                 else:
                     y_offset = 0
                 old_fbin = f_bin
                 try:
                     render_(surface_, ((x*kiwi_wf.BINS2PIXEL_RATIO-str_len*fontsize/2-2), y+y_offset), ts[1],  rotation=0, fgcolor=ts[0], bgcolor=(20,20,20))
-                    pygame.draw.line(surface_, WHITE, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.WF_Y+20+y_offset), 1)
+                    pygame.draw.line(surface_, GREEN, (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y), (f_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y-20+y_offset), 1)
                 except:
                     pass
 
