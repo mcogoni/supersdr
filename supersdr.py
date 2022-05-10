@@ -24,7 +24,7 @@ parser.add_option("-z", "--zoom", type=int,
 parser.add_option("-f", "--freq", type=float,
                   help="center frequency in kHz", dest="freq", default=None)
 parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=25)
+                  help="screen refresh rate", dest="refresh", default=20)
 parser.add_option("-l", "--large", type=int,
                   help="screen horiz size in pixels (default 1024)", dest="winsize", default=1024)
 parser.add_option("-b", "--buffer", type=int,

@@ -603,6 +603,7 @@ class kiwi_waterfall():
     low_clip_db, high_clip_db = -120, -60 # tentative initial values for wf db limits
     wf_min_db, wf_max_db = low_clip_db, low_clip_db+MIN_DYN_RANGE
     kiwi_wf_timestamp = None
+    wf_buffer_len = 3
     
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi, disp):
         self.eibi = eibi
@@ -622,6 +623,7 @@ class kiwi_waterfall():
         
         self.wf_white_flag = False
         self.terminate = False
+        self.run_index = 0
 
         if not self.freq:
             self.freq = 14200
@@ -690,6 +692,8 @@ class kiwi_waterfall():
                 
         self.bins_per_khz = self.WF_BINS / self.span_khz
         self.wf_data = np.zeros((disp.WF_HEIGHT, self.WF_BINS))
+        self.wf_data_tmp = deque([], self.wf_buffer_len)
+
         self.avg_spectrum_deque = deque([], self.averaging_n)
 
     def gen_div(self):
@@ -884,11 +888,15 @@ class kiwi_waterfall():
                 self.spectrum = np.mean(self.avg_spectrum_deque, axis=0)
             else:
                 self.receive_spectrum()
+            self.run_index += 1
 
             self.spectrum_db2col()
+            # print(len(self.wf_data_tmp))
+            self.wf_data_tmp.appendleft(self.wf_color)
 
-            self.wf_data[1:,:] = self.wf_data[0:-1,:] # scroll wf array 1 line down
-            self.wf_data[0,:] = self.wf_color # overwrite top line with new data
+            if len(self.wf_data_tmp) > 0 and self.run_index > self.wf_buffer_len:
+                self.wf_data[1:,:] = self.wf_data[0:-1,:] # scroll wf array 1 line down
+                self.wf_data[0,:] = self.wf_data_tmp.pop() # overwrite top line with new data
         return
 
 
