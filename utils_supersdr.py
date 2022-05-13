@@ -916,14 +916,15 @@ class kiwi_sound():
         self.kiwi_wf = kiwi_wf
         self.host = host_ if host_ else kiwi_wf.host
         self.port = port_ if port_ else kiwi_wf.port
-        self.FULL_BUFF_LEN = buffer_len
-        self.audio_buffer = queue.Queue(maxsize = max(1, self.FULL_BUFF_LEN))
+        self.FULL_BUFF_LEN = max(1, buffer_len)
+        self.audio_buffer = queue.Queue(maxsize = self.FULL_BUFF_LEN)
         self.terminate = False
         self.volume = volume_
         self.max_rssi_before_mute = -20
         self.mute_counter = 0
         self.muting_delay = 15
         self.adc_overflow_flag = False
+        self.status = None
 
         self.run_index = 0
         self.delta_t = 0.0
@@ -1105,6 +1106,7 @@ class kiwi_sound():
             print ("exception: %s" % e)
     
     def play_buffer(self, outdata, frame_count, time_info, status):
+        self.status = status
         # play silence immediately after buffer underrun
         # go on as usual if very short buffer chosen (local kiwis only!)
         if self.late_flag:
@@ -1162,10 +1164,13 @@ class kiwi_sound():
             time_now = time.time_ns() / 1000000 # time in ms
             delta_time_ms = time_now - time_prev
             self.total_delay_ms += delta_time_ms
+            # if self.status:
+            #     print(self.status)
+
             if not self.late_flag and self.total_delay_ms > (self.FULL_BUFF_LEN+2) * self.ms_per_frame:
                 self.late_flag = True
                 # print("AUDIO STREAM NOT IN SYNC: DROPPING!")
-                print("!")
+                print("!", end='')
 
             if self.late_flag and self.total_delay_ms < self.ms_per_frame:
                 # print("AUDIO STREAM SYNCED")
@@ -1174,10 +1179,10 @@ class kiwi_sound():
                 while self.audio_buffer.qsize() < self.FULL_BUFF_LEN:
                     snd_buf = self.get_audio_chunk()
                     if snd_buf is not None:
-                        # print(self.audio_buffer.qsize())
                         self.audio_buffer.put(snd_buf)
                 self.late_flag = False
-
+                self.total_delay_ms = 0.0
+                delta_time_ms = 0.0
 
 def start_audio_stream(kiwi_snd):
     def _get_std_input_dev():
@@ -1828,7 +1833,7 @@ class logger():
             self.qrz = QRZ("qrz_settings.cfg")
         except:
             pass
-        self.check_qrzcom_flag = False
+        self.check_qrzcom_flag = True
         self.check_previous_flag = True
 
     def qrzcom_lookup(self):
