@@ -1455,7 +1455,7 @@ class display_stuff():
                 "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (self.DISPLAY_WIDTH-200, self.BOTTOMBAR_Y+3), "big", False),
                 "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (self.DISPLAY_WIDTH-180, self.V_POS_TEXT), "small", False),
                 "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
-                "wf_param": (WHITE, "%ddB AUTO %s"%(self.wf_top, "ON" if kiwi_wf.wf_auto_scaling else "OFF"), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
+                "wf_param": (WHITE, "%ddB %s"%(self.wf_top, "AUTO" if kiwi_wf.wf_auto_scaling else ""), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
                 "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False),
                 "adc_overflow": (RED if kiwi_snd.adc_overflow_flag else D_GREY, "OVF", (self.DISPLAY_WIDTH-270, self.BOTTOMBAR_Y+3), "big", False),
                 "audio_buffer": (GREEN if self.audio_buff_len>kiwi_snd.FULL_BUFF_LEN/3 else RED, "M:"+str(self.audio_buff_len), (self.DISPLAY_WIDTH-350, self.BOTTOMBAR_Y+6), "small", False)

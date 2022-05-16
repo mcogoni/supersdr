@@ -922,7 +922,7 @@ while not wf_quit:
 
     # Plot top spectrum and bottom waterfall
     if not run_index%min(5, kiwi_wf.averaging_n):
-        disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=ORANGE)
+        disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=YELLOW)
         wf_surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
         wf_surface.set_palette(palRGB)
         if disp.DISPLAY_WIDTH != kiwi_wf.WF_BINS:
