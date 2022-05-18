@@ -743,8 +743,10 @@ while not wf_quit:
     if kiwilist.connect_new_flag:
         # close audio stream
         kiwi_audio_stream.stop()
+        kiwi_audio_stream.close()
         if kiwi_snd2:
             kiwi_audio_stream2.stop()
+            kiwi_audio_stream2.close()
 
         old_volume = kiwi_snd.volume
         kiwi_snd.terminate = True
@@ -1073,12 +1075,14 @@ while not wf_quit:
 # close audio stream
 try:
     kiwi_audio_stream.stop()
+    kiwi_audio_stream.close()
 except:
     pass
 
 if kiwi_snd2:
     try:
         kiwi_audio_stream2.stop()
+        kiwi_audio_stream2.close()
     except:
         pass
 

@@ -1110,7 +1110,10 @@ class kiwi_sound():
         # play silence immediately after buffer underrun
         # go on as usual if very short buffer chosen (local kiwis only!)
         if self.late_flag:
-            outdata[:] = self.old_outdata[:]*0 # insert silence with empty buffer
+            try:
+                outdata[:] = self.old_outdata[:]*0 # insert silence with empty buffer
+            except:
+                pass
             return
 
         popped = []
