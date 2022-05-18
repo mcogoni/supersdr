@@ -597,6 +597,7 @@ while not wf_quit:
 
                         kiwi_snd2.terminate = True
                         kiwi_audio_stream2.stop()
+                        kiwi_audio_stream2.close()
                         time.sleep(1)
                         kiwi_snd2.close_connection()
                         kiwi_snd2.terminate = False
