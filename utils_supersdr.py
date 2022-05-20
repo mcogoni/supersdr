@@ -107,7 +107,7 @@ pygame.init()
 
 nanofont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 10)
 microfont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 12)
-smallfont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 14)
+smallfont = pygame.freetype.Font("TerminusTTF-Bold-4.49.1.ttf", 16)
 midfont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 16)
 bigfont = pygame.freetype.Font("TerminusTTF-Bold-4.49.1.ttf", 20)
 hugefont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 35)
@@ -545,8 +545,6 @@ class kiwi_list():
                 self.root.destroy()
                 if save_flag:
                     self.save_to_disk()
-
-
 
 
 class kiwi_sdr():
@@ -1457,7 +1455,7 @@ class display_stuff():
                 "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (self.DISPLAY_WIDTH-90, self.BOTTOMBAR_Y+3), "big", False),
                 "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (self.DISPLAY_WIDTH-200, self.BOTTOMBAR_Y+3), "big", False),
                 "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (self.DISPLAY_WIDTH-180, self.V_POS_TEXT), "small", False),
-                "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-12), "small", False, "BLACK"),
+                "wf_bottom": (WHITE, "%ddB"%(self.wf_bottom), (0,self.TUNEBAR_Y-14), "small", False, "BLACK"),
                 "wf_param": (WHITE, "%ddB %s"%(self.wf_top, "AUTO" if kiwi_wf.wf_auto_scaling else ""), (0,self.SPECTRUM_Y+1), "small", False, "BLACK"),
                 "help": (BLUE, "HELP", (self.DISPLAY_WIDTH-50, self.BOTTOMBAR_Y+3), "big", False),
                 "adc_overflow": (RED if kiwi_snd.adc_overflow_flag else D_GREY, "OVF", (self.DISPLAY_WIDTH-270, self.BOTTOMBAR_Y+3), "big", False),
@@ -1531,7 +1529,7 @@ class display_stuff():
         if pygame.mouse.get_focused() and self.WF_Y <= mouse[1] <= self.BOTTOMBAR_Y:
             pygame.draw.line(surface_, RED, (mouse[0], self.TUNEBAR_Y), (mouse[0], self.BOTTOMBAR_Y), 1)
         elif pygame.mouse.get_focused() and self.TOPBAR_HEIGHT <= mouse[1] <= self.TUNEBAR_Y:
-            pygame.draw.line(surface_, GREEN, (mouse[0], self.TOPBAR_HEIGHT+self.TUNEBAR_HEIGHT/2), (mouse[0], self.TUNEBAR_Y+self.TUNEBAR_HEIGHT+self.TUNEBAR_HEIGHT/2), 1)
+            pygame.draw.line(surface_, GREEN, (mouse[0], self.TOPBAR_HEIGHT), (mouse[0], self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
 
         # SUB RX
         if fl.dualrx_flag and kiwi_snd2:
