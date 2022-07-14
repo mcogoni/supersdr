@@ -956,7 +956,7 @@ while not wf_quit:
         disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
     if fl.show_mem_flag:
         disp.plot_memories(sdrdisplay, kiwi_memory, kiwi_wf)
-    elif fl.show_dxcluster_flag and kiwi_wf.zoom > 3:
+    if fl.show_dxcluster_flag and kiwi_wf.zoom > 3:
         disp.plot_dxcluster(sdrdisplay, dxclust, kiwi_wf)
 
     time_now = datetime.utcnow()
