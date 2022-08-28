@@ -13,7 +13,7 @@ There are three main items that may be independently controlled:
  - the (dual) KIWI RECEIVER, that may be tuned everywhere on the HF bands;
  - the CAT radio that serves as the main tuning method.
  
- All three may be strictly intelinked, or set up separately depending on the operating convenience:
+ All three may be strictly interlinked, or set up separately depending on the operating convenience:
  - the WF is usually tuned by the VFO on the CAT radio to serve as a panadapter and the KIWI RX may be turned off if not necessary;
  - the KIWI RX may be tuned on a secondary frequency with keyboard and mouse or with the VFO, then the CAT radio is unlinked from the RX and is free to explore other frequencies;
  - the RX and the CAT radio are both active on different frequencies while you can explore the bands moving around the WF window (left/right keys) and its span (up/down).
