@@ -1,13 +1,13 @@
 # SuperSDR
 
 ![SuperSDR in action](https://github.com/mcogoni/supersdr/blob/main/SuperSDR_screenshot.png)
+SuperSDR integrates a realtime spectrum waterfall and (dual) audio receive from any KiwiSDR around the world, together with a local (or remote) controlled CAT transceiver.
 
 There are three main scenarios in which you'd like to use SuperSDR:
  - you've got a *radio without a panadapter* (I have a Kenwood TS-590SG) or you're simply *not happy with it*, in this case this application can help you to use your (or someone else's!) KiwiSDR as a powerful panadapter and multiple receiver and to have all seamlessly synchronized: you may control your Kiwi by tuning the radio or vice versa; you may also transmit with the radio and have your Kiwi RX muted automatically;
  - you've got a KiwiSDR and you're sick of using its stock web interface, you'd like to have near-zero latency, waterfall immunity from thunderstorms, powerful keyboard shortcuts, VERY low CPU usage (you may run dozens of instances on a powerful PC), much improved waterfall averaging to detect even the faintest signals (à la LINRAD), ability to receive from multiple remote KiwiSDRs, you want a low resources app able to run from a Raspberry Pi to a Windows PC to a Macbook Pro, you want a very compact code that you can tweak to your needs even not being a Python programmer; 
  - your HF radio is connected to a very directional antenna and you don't want to lose those faint signals from every direction: in this case you may connect your Kiwi RX to a good omnidirectional wide band receive antenna and explore the bands with it, then, when you find something interesting, you turn to your directional antenna on the CAT radio and you make the contact.
 
-SuperSDR integrates a realtime spectrum waterfall and (dual) audio receive from any KiwiSDR around the world, together with a local (or remote) controlled CAT transceiver.
 There are three main items that may be independently controlled:
  - the KIWI WATERFALL, that may be linked to the CAT radio or to the mouse/keyboard tuning;
  - the (dual) KIWI RECEIVER, that may be tuned everywhere on the HF bands;
