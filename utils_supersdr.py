@@ -1224,31 +1224,55 @@ class cat:
         print ("RTX rigctld server: %s:%d" % (self.radiohost, self.radioport))
         # create a socket to communicate with rigctld
         self.socket = socket.socket()
-        self.socket.settimeout(3.0)
+        # self.socket.settimeout(3.0)
         try: # if rigctld is running but the radio is off this will seem OK... TBF!
             self.socket.connect((self.radiohost, self.radioport))
         except:
             return None
-        self.freq = self.get_freq()
-        if not self.freq:
-            return None
-        self.radio_mode = self.get_mode()
+        self.socket.setblocking(0)
+
+        self.freq = 14200
+        self.radio_mode = "USB"
+
         self.vfo = "A"
         self.reply = None
         self.cat_ok = True
         self.cat_tx = False
+        self.terminate = False
+        self.noreply_counter = 0
+        self.noreply_max = 100
+        self.changed_freq_flag = False
+        self.changed_mode_flag = False
+
+        cat_t = threading.Thread(target=self.run_loop, daemon=True)
+        cat_t.start()
+
+    def run_loop(self):
+        while not self.terminate:
+            self.get_vfo()
+            self.get_freq()
+            self.get_mode()
+            # print(self.radio_mode, self.freq, self.vfo)
 
     def send_msg(self, msg):
         self.socket.send((msg+"\n").encode())
+        time.sleep(0.1)
         try:
-            out = self.socket.recv(64).decode() # tbi implement verification of reply
+            out = self.socket.recv(16).decode() # tbi implement verification of reply
         except:
             out = ""
-        if len(out)==0 or "RPRT -5" in out:
-             self.cat_ok = False
-             self.reply = None
+        if len(out)==0 or "RPRT" in out:
+            self.noreply_counter += 1
+            self.reply = None
+            # print("!", end="")
         else:
-            self.reply = out        
+            self.noreply_counter = 0
+            self.reply = out
+
+        if self.noreply_counter > self.noreply_max:
+            self.cat_ok = False
+            self.reply = None
+            self.terminate = True
 
     def get_ptt(self):
         self.send_msg("\\get_ptt")
@@ -1274,28 +1298,41 @@ class cat:
             try:
                 self.vfo = "A" if "VFOA" in self.reply else "B"
             except:
-                self.cat_ok = False
+                pass
+                # self.cat_ok = False
 
     def get_freq(self):
         self.get_vfo()
         self.send_msg("\\get_freq")
+        old_cat_freq = self.freq
         if self.reply:
             try:
                 self.freq = int(self.reply)/1000.
             except:
-                self.cat_ok = False
+                pass
+            if self.freq != old_cat_freq:
+                self.changed_freq_flag = True
+            else:
+                self.changed_freq_flag = False
 
         return self.freq
 
     def get_mode(self):
         self.send_msg("\\get_mode")
+        old_cat_mode = self.radio_mode
         if self.reply:
             self.radio_mode = self.reply.split("\n")[0]
             if self.radio_mode not in self.KNOWN_MODES:
-                self.radio_mode = "USB" # defaults to USB if radio selects RTTY, FSK, etc
+                self.radio_mode = old_cat_mode #"USB" # defaults to USB if radio selects RTTY, FSK, etc
+            if self.radio_mode != old_cat_mode:
+                self.changed_mode_flag = True
+            else:
+                self.changed_mode_flag = False
+
             return self.radio_mode
         else:
-            return "USB"
+            self.changed_mode_flag = False
+            return old_cat_mode
 
 
 # Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
@@ -1757,7 +1794,6 @@ class display_stuff():
         y_offset = 0
         old_fbin = -100
         fontsize = font_size_dict["medium"]
-
         for spot_id in dxclust.visible_stations:
             try:
                 f_khz_float = float(dxclust.spot_dict[spot_id][1])

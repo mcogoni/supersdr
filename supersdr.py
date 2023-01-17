@@ -521,7 +521,6 @@ while not wf_quit:
                     if not cat_radio:
                         try:
                             cat_radio = cat(radiohost, radioport)
-                            cat_radio.get_freq()
                             print("CAT radio detected and enabled!")
                             fl.wf_cat_link_flag = True
                         except:
@@ -880,15 +879,12 @@ while not wf_quit:
             if (cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and fl.auto_mode) or show_bigmsg == "restorememory":
                 cat_radio.set_mode(kiwi_snd.radio_mode)
         else:
-            old_cat_mode = cat_radio.radio_mode
-            new_cat_mode = cat_radio.get_mode()
-            if old_cat_mode != new_cat_mode:
-                kiwi_snd.radio_mode = new_cat_mode
+            if cat_radio.changed_mode_flag:
+                kiwi_snd.radio_mode = cat_radio.radio_mode #new_cat_mode
                 lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
+                cat_radio.changed_mode_flag = False
             kiwi_snd.set_mode_freq_pb()
-            old_cat_freq = cat_radio.freq
-            cat_radio.get_freq()
-            if cat_radio.freq != old_cat_freq:
+            if cat_radio.changed_freq_flag:
                 kiwi_snd.freq = cat_radio.freq - (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.)
                 if fl.wf_cat_link_flag: # shift WF by half span when RX outside WF
                     delta_f = (kiwi_snd.freq - kiwi_wf.freq)
@@ -903,12 +899,9 @@ while not wf_quit:
                         kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
     if cat_radio and fl.wf_cat_link_flag and not fl.cat_snd_link_flag: # shift WF by half span when CAT outside WF
-        cat_radio.get_mode()
         kiwi_wf.radio_mode = cat_radio.radio_mode
 
-        old_cat_freq = cat_radio.freq
-        cat_radio.get_freq()
-        if cat_radio.freq != old_cat_freq:
+        if cat_radio.changed_freq_flag:
             kiwi_wf.tune = cat_radio.freq - (CW_PITCH if kiwi_wf.radio_mode=="CW" else 0.)
 
             delta_f = (cat_radio.freq - kiwi_wf.freq)
@@ -1044,9 +1037,10 @@ while not wf_quit:
     pygame.display.flip()
     clock.tick(FPS)
 
-    if cat_radio and not cat_radio.cat_ok:
-        cat_radio = None
-        print("CAT radio unreachable!")
+    if cat_radio:
+        if not cat_radio.cat_ok:
+            cat_radio = None
+            print("CAT radio unreachable!")
 
     try:
         mylogger.main_dialog.update()
