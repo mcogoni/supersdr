@@ -589,6 +589,7 @@ class kiwi_sdr():
         if verbose_flag:
             print (self.kiwi_status_dict)
 
+
 class kiwi_waterfall():
     MAX_FREQ = 30000
     CENTER_FREQ = int(MAX_FREQ/2)
@@ -1450,10 +1451,10 @@ class display_stuff():
 
     def update_textsurfaces(self, surface_, radio_mode, rssi_smooth, rssi_smooth_slow, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index):
         mousex_pos = mouse[0]
-        if mousex_pos < 25:
-            mousex_pos = 25
-        elif mousex_pos >= self.DISPLAY_WIDTH - 80:
-            mousex_pos = self.DISPLAY_WIDTH - 80
+        if mousex_pos < 10:
+            mousex_pos = 10
+        elif mousex_pos >= self.DISPLAY_WIDTH - 84:
+            mousex_pos = self.DISPLAY_WIDTH - 84
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
         buff_level = kiwi_snd.audio_buffer.qsize()
         main_rx_color = RED
@@ -1484,7 +1485,7 @@ class display_stuff():
                 "kiwi": (ORANGE, kiwi_wf.host[:40]+":%d"%kiwi_wf.port ,(95,self.BOTTOMBAR_Y+6), "small", False),
                 "span": (GREEN, "SPAN:%.0fkHz"%((kiwi_wf.span_khz)), (self.DISPLAY_WIDTH-105,self.SPECTRUM_Y+1), "small", False),
                 "filter": (GREY, "FILT:%.0f Hz"%((kiwi_snd.hc-kiwi_snd.lc)), (self.DISPLAY_WIDTH/2+230, self.V_POS_TEXT), "small", False),
-                "p_freq": (WHITE, "%dkHz"%mouse_khz, (mousex_pos+4, self.TUNEBAR_Y-50), "small", False, "BLACK"),
+                "p_freq": (WHITE, "%.1fkHz"%mouse_khz, (mousex_pos+4, self.TOPBAR_HEIGHT+30), "small", False, "BLACK"),
                 "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (self.DISPLAY_WIDTH/2+170, self.V_POS_TEXT), "small", False),
                 #"center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, self.SPECTRUM_Y+2), "small", False),
                 "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, self.BOTTOMBAR_Y+3), "big", False),
