@@ -39,8 +39,8 @@ from mod_pywebsocket._stream_base import ConnectionTerminatedException
 
 VERSION = "v3.14"
 
-TENMHZ = 10000 # frequency threshold for auto mode (USB/LSB) switch
-CW_PITCH = 0.6 # CW offset from carrier in kHz
+TENMHZ = 7451 # frequency threshold for auto mode (USB/LSB) switch
+CW_PITCH = 0.750 # CW offset from carrier in kHz
 
 # Initial KIWI receiver parameters
 LOW_CUT_SSB = 30 # Bandpass low end SSB
@@ -48,6 +48,9 @@ HIGH_CUT_SSB = 3000 # Bandpass high end
 LOW_CUT_CW = int(CW_PITCH*1000-200) # Bandpass for CW
 HIGH_CUT_CW = int(CW_PITCH*1000+200) # High end CW
 HIGHLOW_CUT_AM = 6000 # Bandpass AM
+HIGHLOW_CUT_SAM = 6000 # Bandpass SAM
+LOW_CUT_SAUL = -30 # Bandpass low end SAL or SAU (other side of carrier)
+HIGH_CUT_SAUL = 6000 # Bandpass high end SAL or SAU
 delta_low, delta_high = 0., 0. # bandpass tuning
 default_kiwi_port = 8073
 default_kiwi_password = ""
@@ -57,14 +60,17 @@ GREY = (200,200,200)
 WHITE = (255,255,255)
 BLACK = (0,0,0)
 D_GREY = (50,50,50)
+L_GREY = (224,224,224)
 D_RED = (200,0,0)
 D_BLUE = (0,0,200)
 D_GREEN = (0,120,0)
 RED = (255,0,0)
+L_RED = (255,56,56)
 BLUE = (0,0,255)
 GREEN = (0,255,0)
 YELLOW = (200,180,0)
 ORANGE = (255,140,0)
+CYAN = (0,188,227)
 
 ALLOWED_KEYS = [K_0, K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9]
 ALLOWED_KEYS += [K_KP0, K_KP1, K_KP2, K_KP3, K_KP4, K_KP5, K_KP6, K_KP7, K_KP8, K_KP9]
@@ -75,7 +81,10 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
         "- LEFT/RIGHT: move KIWI RX freq +/- 1kHz (+SHIFT: x10)",
         "- PAGE UP/DOWN: move WF freq +/- SPAN/4",
         "- UP/DOWN: zoom in/out by a factor 2X",
-        "- U/L/C/A: switch to USB, LSB, CW, AM",
+        "- C: switches to CW",
+        "- U: switches to USB; SHIFT+U switches to SAU",
+        "- L: switches to LSB; SHIFT+L switches to SAL",
+        "- A: switches to AM; SHIFT+A switches to SAM",
         "- J/K/O: tune RX low/high cut (SHIFT inverts, try CTRL!), O resets",
         "- CTRL+O: reset window size to native 1024 bins",
         "- G/H: inc/dec spectrum and WF averaging to improve SNR",
@@ -103,6 +112,7 @@ HELP_MESSAGE_LIST = ["SuperSDR %s HELP" % VERSION,
 
 font_size_dict = {"small": 12, "medium": 16, "big": 18}
 
+pygame.mixer.pre_init(48000, 16, 2, 4096)
 pygame.init()
 
 nanofont = pygame.freetype.Font("TerminusTTF-4.49.1.ttf", 10)
@@ -140,7 +150,7 @@ class flags():
     tk_log_search_flag = False
     tk_kiwi_flag = False
 
-        
+
 class audio_recording():
     CHANNELS = 1
     def __init__(self, kiwi_snd):
@@ -198,7 +208,7 @@ class dxcluster():
         except:
             pass
         print("DXCLuster disconnected!")
-        
+
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         connected = False
@@ -208,7 +218,7 @@ class dxcluster():
                 self.sock.connect(self.server)
             except:
                 print('Impossibile to connect')
-                sleep(5)     
+                sleep(5)
             else:
                 # self.sock.settimeout(1)
                 print('Connected!!!')
@@ -284,7 +294,7 @@ class dxcluster():
                         stored_something_flag = True
                     else:
                         continue
-            if stored_something_flag:           
+            if stored_something_flag:
                 self.update_now = True
 
             delta_t = (datetime.utcnow() - self.last_cleanup).total_seconds()
@@ -360,7 +370,7 @@ class memory():
 
     def write_mem(self, freq, radio_mode, delta_low, delta_high):
         self.mem_list.append((round(freq, 3), radio_mode, delta_low, delta_high))
-    
+
     def recall_mem(self):
         if len(self.mem_list)>0:
             self.index += 1
@@ -368,7 +378,7 @@ class memory():
             return self.mem_list[self.index]
         else:
             return None
-    
+
     def reset_all_mem(self):
         self.mem_list = deque([], 10)
 
@@ -440,7 +450,7 @@ class kiwi_list():
                 fields = row.rstrip().split(";")
                 host = fields[0]
                 if len(host)==0:
-                    continue 
+                    continue
                 try:
                     port = int(fields[1])
                 except:
@@ -478,7 +488,7 @@ class kiwi_list():
         frame_text.pack(fill=BOTH, expand=True)
         scrollbar = Scrollbar(frame_text)
         self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.t.yview)         
+        scrollbar.config(command=self.t.yview)
         scrollbar.pack(side=RIGHT, fill=Y)
         self.t.pack(side="left")
 
@@ -488,7 +498,7 @@ class kiwi_list():
         self.b_connect_save = tkinter.Button(master=frame_bottom, text = "Save and Connect", command = lambda: self.connect_new_kiwi(True))
         self.b_reload = tkinter.Button(master=frame_bottom, text = "Reload", command = self.reload_and_refresh)
         self.b_cancel = tkinter.Button(master=frame_bottom, text = "Cancel", command = self.root.destroy)
-        
+
         self.b_connect.pack(side=LEFT)
         self.b_connect_save.pack(side=LEFT)
         self.b_cancel.pack(side=RIGHT)
@@ -512,7 +522,7 @@ class kiwi_list():
         self.load_from_disk()
         self.refresh_list()
 
-        
+
     def connect_new_kiwi(self, save_flag=False):
         self.kiwi_host = None
         self.kiwi_port = None
@@ -568,7 +578,7 @@ class kiwi_sdr():
             # print(decoded_line)
             key, value = decoded_line.split("=")[0], decoded_line.split("=")[1]
             self.kiwi_status_dict[key] = value
-        
+
         self.users = int(self.kiwi_status_dict["users"])
         self.users_max = int(self.kiwi_status_dict["users_max"])
         self.antenna = self.kiwi_status_dict["antenna"]
@@ -602,7 +612,7 @@ class kiwi_waterfall():
     wf_min_db, wf_max_db = low_clip_db, low_clip_db+MIN_DYN_RANGE
     kiwi_wf_timestamp = None
     wf_buffer_len = 3
-    
+
     def __init__(self, host_, port_, pass_, zoom_, freq_, eibi, disp):
         self.eibi = eibi
         # kiwi hostname and port
@@ -618,13 +628,13 @@ class kiwi_waterfall():
 
         self.old_averaging_n = self.averaging_n
         self.dynamic_range = self.MIN_DYN_RANGE
-        
+
         self.wf_white_flag = False
         self.terminate = False
         self.run_index = 0
 
         if not self.freq:
-            self.freq = 14200
+            self.freq = 10000
         self.tune = self.freq
         self.radio_mode = "USB"
 
@@ -632,7 +642,7 @@ class kiwi_waterfall():
         self.span_khz = self.zoom_to_span()
         self.start_f_khz = self.start_freq()
         self.end_f_khz = self.end_freq()
-        
+
         self.div_list = []
         self.subdiv_list = []
         self.min_bin_spacing = 100 # minimum pixels between major ticks (/10 for minor ticks)
@@ -665,9 +675,9 @@ class kiwi_waterfall():
         except:
             print ("Failed to connect")
             raise Exception()
-        
+
         self.start_stream()
-        
+
         while True:
             msg = self.wf_stream.receive_message()
             # print(msg)
@@ -675,7 +685,7 @@ class kiwi_waterfall():
                 if bytearray2str(msg[0:3]) == "W/F":
                     break
                 elif "MSG center_freq" in bytearray2str(msg):
-                    els = bytearray2str(msg[4:]).split()                
+                    els = bytearray2str(msg[4:]).split()
                     self.MAX_FREQ = int(int(els[1].split("=")[1])/1000)
                     self.CENTER_FREQ = int(int(self.MAX_FREQ)/2)
                     self.span_khz = self.zoom_to_span()
@@ -687,7 +697,7 @@ class kiwi_waterfall():
                     self.MAX_ZOOM = int(els[3].split("=")[1])
                     self.WF_BINS = int(els[0].split("=")[1])
                     self.MAX_FPS = int(els[2].split("=")[1])
-                
+
         self.bins_per_khz = self.WF_BINS / self.span_khz
         self.wf_data = np.zeros((disp.WF_HEIGHT, self.WF_BINS))
         self.wf_data_tmp = deque([], self.wf_buffer_len)
@@ -701,7 +711,7 @@ class kiwi_waterfall():
         self.div_list = []
         f_s = int(self.start_f_khz)
         f_e = int(self.end_f_khz)
-    
+
         while self.div_list == [] and self.subdiv_list == []:
             if self.bins_per_khz*self.space_khz > self.min_bin_spacing:
                 for f in range(f_s, f_e+1):
@@ -714,7 +724,7 @@ class kiwi_waterfall():
                     if not f%(self.space_khz/10):
                         fbin = int(self.offset_to_bin(f-self.start_f_khz))
                         self.subdiv_list.append(fbin)
-            self.space_khz *= 10                
+            self.space_khz *= 10
 
     def start_stream(self):
         self.kiwi_wf_timestamp = int(time.time())
@@ -789,7 +799,7 @@ class kiwi_waterfall():
         wf = -(255 - wf)  # dBm
         wf_db = wf - 13 + (3*self.zoom) # typical Kiwi wf cal and zoom correction
         wf_db[0] = wf_db[1] # first bin is broken
-        
+
         if self.wf_auto_scaling:
             # compute min/max db of the power distribution at selected percentiles
             self.low_clip_db = np.percentile(wf_db, self.CLIP_LOWP)
@@ -831,7 +841,7 @@ class kiwi_waterfall():
                 self.end_freq()
                 self.zoom_to_span()
             elif self.end_f_khz>self.MAX_FREQ: # did we hit the right limit?
-                self.freq = self.MAX_FREQ - self.zoom_to_span()/2 
+                self.freq = self.MAX_FREQ - self.zoom_to_span()/2
                 self.start_freq()
                 self.end_freq()
                 self.zoom_to_span()
@@ -866,6 +876,15 @@ class kiwi_waterfall():
         elif self.radio_mode == "AM":
             lc_ = -HIGHLOW_CUT_AM-delta_low_
             hc_ = HIGHLOW_CUT_AM+delta_high_
+        elif self.radio_mode == "SAM":
+            lc_ = -HIGHLOW_CUT_SAM-delta_low_
+            hc_ = HIGHLOW_CUT_SAM+delta_high_
+        elif self.radio_mode == "SAU":
+            lc_ = LOW_CUT_SAUL+delta_low_
+            hc_ = HIGH_CUT_SAUL+delta_high_
+        elif self.radio_mode == "SAL":
+            lc_ = -HIGH_CUT_SAUL-delta_high_
+            hc_ = -LOW_CUT_SAUL-delta_low_
         elif self.radio_mode == "CW":
             lc_ = LOW_CUT_CW+delta_low_
             hc_ = HIGH_CUT_CW+delta_high_
@@ -926,7 +945,7 @@ class kiwi_sound():
 
         self.run_index = 0
         self.delta_t = 0.0
-        
+
         self.rssi = -127
         self.freq = freq_
         self.radio_mode = mode_
@@ -934,11 +953,11 @@ class kiwi_sound():
 
         # Kiwi parameters
         self.on = True # AGC auto mode
-        self.hang = False # AGC hang
+        self.hang = True # AGC hang
         self.thresh = -80 # AGC threshold in dBm
-        self.slope = 0 # AGC slope decay
-        self.decay_other = 4000 # AGC decay time constant
-        self.decay_cw = 1000 # AGC decay time constant
+        self.slope = 6 # AGC slope decay
+        self.decay_other = 2000 # AGC decay time constant
+        self.decay_cw = 500 # AGC decay time constant
         self.gain = 50 # AGC manual gain
         self.min_agc_delay, self.max_agc_delay = 400, 8000
         self.decay = self.decay_other
@@ -971,14 +990,14 @@ class kiwi_sound():
             stream_option_snd.mask_send = True
             stream_option_snd.unmask_receive = False
             self.stream = Stream(request_snd, stream_option_snd)
-            
+
             print ("Audio data stream active...")
             msg_list = ["SET auth t=kiwi p=%s ipl=%s"%(password_, password_),
-            "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" % (self.radio_mode.lower(), self.lc, self.hc, self.freq), 
+            "SET mod=%s low_cut=%d high_cut=%d freq=%.3f" % (self.radio_mode.lower(), self.lc, self.hc, self.freq),
             "SET compression=0", "SET ident_user=SuperSDR","SET OVERRIDE inactivity_timeout=1000",
             "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain),
             "SET AR OK in=%d out=%d" % (self.KIWI_RATE, self.AUDIO_RATE)]
-            
+
             for msg in msg_list:
                 self.stream.send_message(msg)
             while True:
@@ -987,7 +1006,7 @@ class kiwi_sound():
                     break
                 elif msg and "MSG audio_init" in bytearray2str(msg):
                     msg = bytearray2str(msg)
-                    els = msg[4:].split()                
+                    els = msg[4:].split()
                     self.KIWI_RATE = int(int(els[1].split("=")[1]))
                     self.KIWI_RATE_TRUE = float(els[2].split("=")[1])
                     self.delta_t = self.KIWI_RATE_TRUE - self.KIWI_RATE
@@ -995,7 +1014,7 @@ class kiwi_sound():
         except:
             print ("Failed to connect to Kiwi audio stream")
             raise
-        
+
         self.kiwi_filter = filtering(self.KIWI_RATE/2, self.AUDIO_RATE)
         gcd = np.gcd((self.KIWI_RATE),self.AUDIO_RATE)
         self.n_low, self.n_high = int(self.KIWI_RATE/gcd), int(self.AUDIO_RATE/gcd)
@@ -1018,7 +1037,7 @@ class kiwi_sound():
         else:
             self.decay_other = self.decay
 
-        
+
     def set_agc_params(self):
         msg = "SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d" % (self.on, self.hang, self.thresh, self.slope, self.decay, self.gain)
         self.stream.send_message(msg)
@@ -1085,6 +1104,15 @@ class kiwi_sound():
         elif self.radio_mode == "AM":
             lc_ = -HIGHLOW_CUT_AM-delta_low_
             hc_ = HIGHLOW_CUT_AM+delta_high_
+        elif self.radio_mode == "SAM":
+            lc_ = -HIGHLOW_CUT_SAM-delta_low_
+            hc_ = HIGHLOW_CUT_SAM+delta_high_
+        elif self.radio_mode == "SAU":
+            lc_ = LOW_CUT_SAUL+delta_low_
+            hc_ = HIGH_CUT_SAUL+delta_high_
+        elif self.radio_mode == "SAL":
+            lc_ = -HIGH_CUT_SAUL-delta_high_
+            hc_ = -LOW_CUT_SAUL-delta_low_
         elif self.radio_mode == "CW":
             lc_ = LOW_CUT_CW+delta_low_
             hc_ = HIGH_CUT_CW+delta_high_
@@ -1102,7 +1130,7 @@ class kiwi_sound():
             self.socket.close()
         except Exception as e:
             print ("exception: %s" % e)
-    
+
     def play_buffer(self, outdata, frame_count, time_info, status):
         self.status = status
         # play silence immediately after buffer underrun
@@ -1219,7 +1247,7 @@ class cat:
     CAT_MIN_FREQ = 100 # 100 kHz is OK for most radios
     CAT_MAX_FREQ = 30000
     def __init__(self, radiohost_, radioport_):
-        self.KNOWN_MODES = {"USB", "LSB", "CW", "AM"}
+        self.KNOWN_MODES = {"USB", "LSB", "CW", "AM", "SAM", "SAU", "SAL"}
         self.radiohost, self.radioport = radiohost_, radioport_
         print ("RTX rigctld server: %s:%d" % (self.radiohost, self.radioport))
         # create a socket to communicate with rigctld
@@ -1248,7 +1276,7 @@ class cat:
              self.cat_ok = False
              self.reply = None
         else:
-            self.reply = out        
+            self.reply = out
 
     def get_ptt(self):
         self.send_msg("\\get_ptt")
@@ -1301,13 +1329,16 @@ class cat:
 # Approximate HF band plan from https://www.itu.int/en/ITU-R/terrestrial/broadcast/Pages/Bands.aspx
 # and https://www.iaru-r1.org/reference/band-plans/hf-bandplan/
 def get_auto_mode(f):
-    automode_dict = {"USB": ((14100,14350),(18110,18168),(21150,21450),(24930,24990),(28300,29100)),
-                "LSB": ((1840,1850),(3600,3800),(7060,7200)),
-                "CW": ((1810, 1840),(3500,3600),(7000,7060),(10100, 10150),(14000,14100),
-                    (18068,18110),(21000,21150),(24890,24930),(28000,28190)),
-                "AM": ((148,283),(520,1720),(2300,2500),(3200,3400),(3900,4000),(4750,5060),
-                    (5900,6200),(7200,7450),(9400,9900),(11600,12100),(13570,13870),(15100,15800),
-                    (17480,17900),(18900,19020),(21450,21850),(25670,26100))}
+    automode_dict = {"USB": ((2001,3499),(4001,4749),(5300,5849),(6201,6999),(7451,9399),
+                             (9901,9996),(10004,10099),(10151,11599),(14100,14350),
+                             (18110,18168),(21150,21450),(24930,24990),(28300,29100)),
+                    "LSB": ((1840,1850),(3600,3800),(7060,7200)),
+                    "CW": ((1810, 1840),(3500,3600),(7000,7060),(10100, 10150),(14000,14100),
+                           (18068,18110),(21000,21150),(24890,24930),(28000,28190)),
+                    "AM": ((148,283),(520,1720),(2300,2500),(3200,3400),(3900,4000),(4750,5060),
+                           (5850,6200),(7200,7450),(9400,9900),(9997,10003),(11600,12100),
+                           (13570,13870),(14997,15003),(15100,15800),(17480,17900),(18900,19020),
+                           (21450,21850),(25670,26100))}
 
     f = round(f)
     for mode_ in automode_dict:
@@ -1419,7 +1450,7 @@ class display_stuff():
             mousex_pos = self.DISPLAY_WIDTH - 80
         mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
         buff_level = kiwi_snd.audio_buffer.qsize()
-        main_rx_color = RED
+        main_rx_color = L_RED
         sub_rx_color = GREEN
         tx_on_flag = False
 
@@ -1451,7 +1482,7 @@ class display_stuff():
                 "auto": ((GREEN if fl.auto_mode else RED), "[AUTO]" if fl.auto_mode else "[MANU]", (self.DISPLAY_WIDTH/2+170, self.V_POS_TEXT), "small", False),
                 #"center": ((GREEN if fl.wf_snd_link_flag else GREY), "CENTER", (wf_width-145, self.SPECTRUM_Y+2), "small", False),
                 "sync": ((GREEN if fl.cat_snd_link_flag else GREY), "SYNC", (40, self.BOTTOMBAR_Y+3), "big", False),
-                "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+3), "big", False), 
+                "cat": (GREEN if cat_radio else GREY, "CAT", (5,self.BOTTOMBAR_Y+3), "big", False),
                 "recording": (RED if kiwi_snd.audio_rec.recording_flag and run_index%2 else D_GREY, "REC", (self.DISPLAY_WIDTH-90, self.BOTTOMBAR_Y+3), "big", False),
                 "dxcluster": (GREEN if fl.show_dxcluster_flag else D_GREY, "DXCLUST", (self.DISPLAY_WIDTH-200, self.BOTTOMBAR_Y+3), "big", False),
                 "utc": (ORANGE, datetime.utcnow().strftime(" %d %b %Y %H:%M:%SZ"), (self.DISPLAY_WIDTH-180, self.V_POS_TEXT), "small", False),
@@ -1465,7 +1496,7 @@ class display_stuff():
         if fl.dualrx_flag and kiwi_snd2:
             ts_dict["rx_freq2"] = (sub_rx_color, "SUB:%.3fkHz %s %s"%(kiwi_snd2.freq+kiwi_snd2.freq_offset+(CW_PITCH if kiwi_snd2.radio_mode=="CW" else 0), kiwi_snd2.radio_mode, "MUTE" if kiwi_snd2.volume==0 else "%d%% %s"%(kiwi_snd2.volume, audio_balance_string_sub)), (self.DISPLAY_WIDTH/2-430,self.V_POS_TEXT-1), "big", False)
             ts_dict["audio_buffer2"] = (GREEN if self.audio_buff_len2>kiwi_snd2.FULL_BUFF_LEN/3 else RED, "S:"+str(self.audio_buff_len2), (self.DISPLAY_WIDTH-310, self.BOTTOMBAR_Y+6), "small", False)
-                                
+
         if not fl.s_meter_show_flag:
             s_value = (round(rssi_smooth_slow)+127)//6 # signal in S units of 6dB
             if s_value<=9:
@@ -1508,13 +1539,13 @@ class display_stuff():
                 tune_freq_bin = kiwi_wf.offset_to_bin(kiwi_wf.tune+kiwi_wf.span_khz/2-kiwi_wf.freq)
                 # tune wf line
                 pygame.draw.line(surface_, D_RED, (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), (tune_freq_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 3)
-                
+
             lc_bin = kiwi_wf.offset_to_bin(kiwi_.lc/1000.)
             lc_bin = snd_freq_bin + lc_bin
             if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
                 # low cut line
                 pygame.draw.line(surface_, color_, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
-            
+
             hc_bin = kiwi_wf.offset_to_bin(kiwi_.hc/1000)
             hc_bin = snd_freq_bin + hc_bin
             if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
@@ -1534,7 +1565,7 @@ class display_stuff():
         # SUB RX
         if fl.dualrx_flag and kiwi_snd2:
             _plot_bandpass(GREEN, kiwi_snd2)
-        # MAIN RX        
+        # MAIN RX
         _plot_bandpass(RED, kiwi_snd)
 
         #### CAT RADIO bandpass
@@ -1546,7 +1577,7 @@ class display_stuff():
             if lc_bin>0 and lc_bin< kiwi_wf.WF_BINS:
                 # low cut line
                 pygame.draw.line(surface_, ORANGE, (lc_bin*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT/2), ((lc_bin-5)*kiwi_wf.BINS2PIXEL_RATIO, self.TUNEBAR_Y+self.TUNEBAR_HEIGHT), 1)
-            
+
             hc_bin = kiwi_wf.offset_to_bin(hc_/1000)
             hc_bin = tune_freq_bin + hc_bin
             if hc_bin>0 and hc_bin< kiwi_wf.WF_BINS:
@@ -1581,7 +1612,7 @@ class display_stuff():
     def display_help_box(self, screen, message_list):
         font_size = font_size_dict["small"]
 
-        window_size = 565
+        window_size = 600
         pygame.draw.rect(screen, (0,0,0),
                        ((screen.get_width() / 2) - window_size/2,
                         (screen.get_height() / 2) - window_size/3,
@@ -1593,7 +1624,7 @@ class display_stuff():
 
         if len(message_list) != 0:
             for ii, msg in enumerate(message_list):
-                pos = (screen.get_width() / 2 - window_size/2 + font_size, 
+                pos = (screen.get_width() / 2 - window_size/2 + font_size,
                         screen.get_height() / 2-window_size/3 + ii*(font_size+1) + font_size)
                 smallfont.render_to(screen, pos, msg, WHITE)
 
@@ -1604,7 +1635,7 @@ class display_stuff():
             hugefont.render_to(screen, pos, message, color)
 
 
-    def s_meter_draw(self, rssi_smooth, rssi_smooth_slow, agc_threshold, agc_decay):        
+    def s_meter_draw(self, rssi_smooth, rssi_smooth_slow, agc_threshold, agc_decay):
         rad_offset = 0.2 # radians from minimum and maximum (difference from 0 and 190 deg)
         double_deg_offset = math.radians(rad_offset * 2)
 
@@ -1625,14 +1656,14 @@ class display_stuff():
             s_meter_x = s_meter_center[0] + x_
             s_meter_y = s_meter_center[1] - y_
             return s_meter_x, s_meter_y
-        
+
         s_meter_x, s_meter_y = _coords_from_angle(alpha_rssi, self.s_meter_radius * 0.95)
         agc_meter_x, agc_meter_y = _coords_from_angle(alpha_agc, self.s_meter_radius * 0.7)
         pygame.draw.rect(smeter_surface, YELLOW,
                        (s_meter_center[0]-(self.s_meter_radius+self.s_meter_border/2), s_meter_center[1]-(self.s_meter_radius+self.s_meter_border/2-2), SMETER_XSIZE, SMETER_YSIZE), 0)
         pygame.draw.rect(smeter_surface, BLACK,
                        (s_meter_center[0]-(self.s_meter_radius+self.s_meter_border/2), s_meter_center[1]-(self.s_meter_radius+self.s_meter_border/2-2), SMETER_XSIZE, SMETER_YSIZE), 3)
-        
+
         angle_list = np.linspace(rad_offset, math.pi-rad_offset, 9)
         text_list = ["1", "3", "5", " 7", " 9", "+12", "+24", "+36", "+48"]
         for alpha_seg, msg in zip(angle_list, text_list[::-1]):
@@ -1655,7 +1686,7 @@ class display_stuff():
         str_len = len(str_rssi)
         pos = (s_meter_center[0]+(self.s_meter_radius-self.s_meter_border/2-40), s_meter_center[1]-2)
         microfont.render_to(smeter_surface, pos, str_rssi, BLACK)
-        
+
         str_decay = "%.1fs" % (agc_decay/1000)
         str_len = len(str_decay)
         pos = (s_meter_center[0]-(self.s_meter_radius-self.s_meter_border/2), s_meter_center[1]-2)
@@ -1663,7 +1694,7 @@ class display_stuff():
 
         pos = (s_meter_center[0]-5, s_meter_center[1]-self.s_meter_radius/2)
         bigfont.render_to(smeter_surface, pos, "S", BLACK)
-        
+
         return smeter_surface
 
     def plot_spectrum(self, sdrdisplay, kiwi_wf, t_avg=15, col=YELLOW, filled=False):
@@ -1753,7 +1784,7 @@ class display_stuff():
 
 
     def plot_dxcluster(self, surface_, dxclust, kiwi_wf):
-        now  = datetime.utcnow()        
+        now  = datetime.utcnow()
         y_offset = 0
         old_fbin = -100
         fontsize = font_size_dict["medium"]
@@ -1788,9 +1819,9 @@ class display_stuff():
         y_offset = 0
         old_fbin = -100
         fontsize = font_size_dict["medium"]
-        
+
         for band in beacon_project.freq_dict:
-            if math.fabs(kiwi_wf.freq - beacon_project.freq_dict[band])<100:    
+            if math.fabs(kiwi_wf.freq - beacon_project.freq_dict[band])<100:
                 f_khz_float = float(beacon_project.freq_dict[band])
                 f_bin = int(kiwi_wf.offset_to_bin(f_khz_float-kiwi_wf.start_f_khz))
                 ts = (GREEN, beacon_project.beacons_dict[band], (f_bin,(self.SPECTRUM_Y+self.TUNEBAR_Y)/2), "small")
@@ -1804,7 +1835,7 @@ class display_stuff():
 
     def splash_screen(self, sdrdisplay):
         font = pygame.font.Font("TerminusTTF-Bold-4.49.1.ttf", 40)
-        
+
         sdrdisplay.fill((0, 0, 0))
         block = font.render(" - SUPERSDR - ", True, GREEN)
         rect = block.get_rect()
@@ -1844,7 +1875,7 @@ class logger():
             self.entry_comments.insert(0, comments_string)
         except:
             pass
-          
+
     def read_file(self):
         log_data = None
         try:
@@ -1865,7 +1896,7 @@ class logger():
                         qso_rst_his = els[5].strip()
                         qso_rst_mine = els[6].strip()
                         qso_comments = els[7].strip()
-                        
+
                         self.qso_dict[qso_callsign].add((qso_utc, qso_frequency, qso_mode, qso_power, qso_rst_his, qso_rst_mine, qso_comments))
                     except:
                         print("QSO entry not readable at line: %d"%idx)
@@ -1935,8 +1966,8 @@ class logger():
         self.check_previous_flag_tk = tkinter.BooleanVar()
         self.check_previous_flag_tk.set(self.check_previous_flag)
 
-        check_qrzcom = tkinter.Checkbutton(frame_top, text='QRZ.COM lookup', var=self.check_qrzcom_flag_tk, command = assign_qrzcom_bool) 
-        check_previous = tkinter.Checkbutton(frame_top, text='LOG lookup', var=self.check_previous_flag_tk, command = assign_previous_bool) 
+        check_qrzcom = tkinter.Checkbutton(frame_top, text='QRZ.COM lookup', var=self.check_qrzcom_flag_tk, command = assign_qrzcom_bool)
+        check_previous = tkinter.Checkbutton(frame_top, text='LOG lookup', var=self.check_previous_flag_tk, command = assign_previous_bool)
 
         self.main_dialog = tkinter.Frame(self.root)
         self.main_dialog.pack()
@@ -2016,7 +2047,7 @@ class logger():
         self.t.delete(1.0, END)
         self.t.insert(END, "Last QSO with %s:\n" % self.entry_callsign_search.get().upper())
         if qso_string_list == "no_qso_found":
-            self.t.insert(END, "No QSOs found!")            
+            self.t.insert(END, "No QSOs found!")
         elif qso_string_list == "call_too_short":
             self.t.insert(END, "Callsign too short!\n")
         else:
@@ -2042,7 +2073,7 @@ class logger():
         frame_text.pack(fill=BOTH, expand=True)
         scrollbar = Scrollbar(frame_text)
         self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.t.yview)         
+        scrollbar.config(command=self.t.yview)
         scrollbar.pack(side=RIGHT, fill=Y)
         self.t.pack(side="left")
         self.t.delete(1.0, END)
@@ -2078,7 +2109,7 @@ class logger():
         frame_text.pack(fill=BOTH, expand=True)
         scrollbar = Scrollbar(frame_text)
         self.t = tkinter.Text(frame_text, height=15, width=55, yscrollcommand=scrollbar.set)
-        scrollbar.config(command=self.t.yview)         
+        scrollbar.config(command=self.t.yview)
         scrollbar.pack(side=RIGHT, fill=Y)
         self.t.pack(side="left")
 
@@ -2108,7 +2139,7 @@ class beacons():
         self.beacons_dict = {}
         for i, band in enumerate(self.bands):
             self.beacons_dict[band] = self.beacon_calls[(index-i)]
-        
+
 # 4U1UN   YV5B    OA4B    LU4AA   CS3B    0:00:00 0:03:00 0:06:00 0:09:00 0:12:00 0:15:00 0:18:00 0:21:00 0:24:00 0:27:00
 # VE8AT   4U1UN   YV5B    OA4B    LU4AA   0:00:10 0:03:10 0:06:10 0:09:10 0:12:10 0:15:10 0:18:10 0:21:10 0:24:10 0:27:10
 # W6WX    VE8AT   4U1UN   YV5B    OA4B    0:00:20 0:03:20 0:06:20 0:09:20 0:12:20 0:15:20 0:18:20 0:21:20 0:24:20 0:27:20
