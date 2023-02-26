@@ -218,37 +218,38 @@ class KiwiSDRStream(KiwiSDRStreamBase):
         mod = mod.lower()
         self._modulation = mod
         if lc == None or hc == None:
-            if mod == 'am':
+            if mod == 'am' or mod == 'sam':
                 lc = -6000 if lc == None else lc
                 hc =  6000 if hc == None else hc
+            elif mod == 'sau':
+                lc = -30 if lc == None else lc
+                hc = 6000 if hc == None else hc
+            elif mod == 'sal':
+                lc = -6000 if lc == None else lc
+                hc = 30 if hc == None else hc
+            elif mod == 'lsb':
+                lc = -3000 if lc == None else lc
+                hc = -100 if hc == None else hc
+            elif mod == 'usb':
+                lc = 100 if lc == None else lc
+                hc = 3000 if hc == None else hc
+            elif mod == 'cw':
+                lc = 500 if lc == None else lc
+                hc = 1000 if hc == None else hc
+            elif mod == 'nbfm':
+                lc = -6000 if lc == None else lc
+                hc =  6000 if hc == None else hc
+            elif mod == 'iq':
+                lc = -5000 if lc == None else lc
+                hc =  5000 if hc == None else hc
             else:
-                if mod == 'lsb':
-                    lc = -2700 if lc == None else lc
-                    hc =  -300 if hc == None else hc
-                else:
-                    if mod == 'usb':
-                        lc =  300 if lc == None else lc
-                        hc = 2700 if hc == None else hc
-                    else:
-                        if mod == 'cw':
-                            lc = 300 if lc == None else lc
-                            hc = 700 if hc == None else hc
-                        else:
-                            if mod == 'nbfm':
-                                lc = -6000 if lc == None else lc
-                                hc =  6000 if hc == None else hc
-                            else:
-                                if mod == 'iq':
-                                    lc = -5000 if lc == None else lc
-                                    hc =  5000 if hc == None else hc
-                                else:
-                                    raise KiwiUnknownModulation('"%s"' % mod)
+                raise KiwiUnknownModulation('"%s"' % mod)
         self._send_message('SET mod=%s low_cut=%d high_cut=%d freq=%.3f' % (mod, lc, hc, freq))
         self._lowcut = lc
         self._highcut = hc
         self._freq = freq
 
-    def set_agc(self, on=False, hang=False, thresh=-100, slope=6, decay=1000, gain=50):
+    def set_agc(self, on=True, hang=True, thresh=-80, slope=6, decay=1000, gain=50):
         logging.debug('set_agc: on=%s hang=%s thresh=%d slope=%d decay=%d gain=%d' % (on, hang, thresh, slope, decay, gain))
         self._send_message('SET agc=%d hang=%d thresh=%d slope=%d decay=%d manGain=%d' % (on, hang, thresh, slope, decay, gain))
 
@@ -329,7 +330,7 @@ class KiwiSDRStream(KiwiSDRStreamBase):
             raise KiwiDownError('%s: server is down atm' % self._options.server_host)
         # Handle data items
         if name == 'audio_rate':
-            self._set_ar_ok(int(value), 44100)
+            self._set_ar_ok(int(value), 48000)
         elif name == 'sample_rate':
             self._sample_rate = float(value)
             self._on_sample_rate_change()
@@ -503,7 +504,7 @@ class KiwiSDRStream(KiwiSDRStreamBase):
             self._set_wf_speed(1)
             self._set_wf_interp(13)     # drop sampling + CIC compensation
         if self._type == 'SND':
-            self._set_mod('am', 100, 2800, 4625.0)
+            self._set_mod('am', 100, 2800, 10000.0)
             self._set_agc(True)
 
     def _writer_message(self):
