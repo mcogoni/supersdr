@@ -924,7 +924,7 @@ class kiwi_sound():
     AUDIO_RATE = 48000
     KIWI_RATE = 12000
     SAMPLE_RATIO = int(AUDIO_RATE/KIWI_RATE)
-    CHUNKS = 1
+    CHUNKS = 2
     KIWI_SAMPLES_PER_FRAME = 512
 
     def __init__(self, freq_, mode_, lc_, hc_, password_, kiwi_wf, buffer_len, volume_=100, host_=None, port_=None, subrx_=False):
