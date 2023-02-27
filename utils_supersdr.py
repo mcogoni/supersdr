@@ -465,7 +465,7 @@ class kiwi_list():
     def choose_kiwi_dialog(self):
         self.root = tkinter.Tk()
         self.root.protocol("WM_DELETE_WINDOW", self.root.destroy)
-        self.root.geometry("400x400+960+450")
+        self.root.geometry("700x500+610+450")
         self.root.resizable(False,False)
         self.root.title("Choose a KiwiSDR")
         self.root.bind('<Escape>', lambda event: self.root.destroy())
