@@ -1,0 +1,7 @@
+numpy
+scipy
+pygame
+sounddevice
+matplotlib
+requests
+xmltodict

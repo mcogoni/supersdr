@@ -37,7 +37,23 @@ Mouse over the HELP label on the bottom right corner will show you the main keyb
 OK, these are the main points you should be familiar with to use the software. There are several other functions but you'll discover them with the HELP menu... :)
 
 ## Prerequisites:
-Install Python 3 along with PYGAME, SOUNDDEVICE, MATPLOTLIB and NUMPY/SCIPY, or whatever it asks when breaking apart upon launch ;) If you use Linux I hope I don't have to tell you how to install librearies and Python components: I presonally use a Arch based distro and pip to keep everything updated.
+SuperSDR requires Python 3 (your distro will probably come with Python 3.9 or newer), along with a range of libraries. The required libraries are:
+* numpy
+* scipy
+* pygame
+* sounddevice
+* matplotlib
+* requests
+* xmltodict
+
+You can either try and find these via your systen package manager (e.g. on Debian/Ubuntu look for packages like `python3-numpy`), or you can use pip to install these with:
+```
+pip3 install -r requirements.txt
+```
+
+If you encounter the message `import _tkinter # If this fails your Python may not be configured for Tk` on startup, your Python build may not include the Tkinter GUI libraries (This appears to be becoming more common). On most platforms you should be able to install this by installing a package named something along the lines of `python3-tk`, or `python-tk`.
+
+
 ### On Windows:
 There is now a preliminary Windows [executable](https://github.com/mcogoni/supersdr/releases/download/v3.0beta/WinSuperSDR.zip) thanks to [Giovanni Busonera](https://github.com/Strato75).
 This version doesn't need any library nor Python environment. The Windows executable will always lag a bit during the development.
