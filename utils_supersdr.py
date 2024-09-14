@@ -989,9 +989,12 @@ class kiwi_sound():
                     msg = bytearray2str(msg)
                     els = msg[4:].split()                
                     self.KIWI_RATE = int(int(els[1].split("=")[1]))
-                    self.KIWI_RATE_TRUE = float(els[2].split("=")[1])
-                    self.delta_t = self.KIWI_RATE_TRUE - self.KIWI_RATE
                     self.SAMPLE_RATIO = self.AUDIO_RATE/self.KIWI_RATE
+                elif msg and "MSG sample_rate" in bytearray2str(msg):
+                    msg = bytearray2str(msg)
+                    els = msg[4:].split()
+                    self.KIWI_RATE_TRUE = float(els[0].split("=")[1])
+                    self.delta_t = self.KIWI_RATE_TRUE - self.KIWI_RATE
         except:
             print ("Failed to connect to Kiwi audio stream")
             raise
