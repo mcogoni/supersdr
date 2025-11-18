@@ -4,7 +4,10 @@ import collections
 import collections.abc
 import struct
 import numpy as np
-from chunk import Chunk
+try:
+    from chunk import Chunk
+except ImportError:
+    from chunkmuncher import chunk as Chunk
 
 class KiwiIQWavError(Exception):
     pass

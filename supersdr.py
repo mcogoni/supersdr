@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 from optparse import OptionParser
 from utils_supersdr import *
@@ -9,56 +10,112 @@ from utils_supersdr import *
 fl = flags()
 
 parser = OptionParser()
-parser.add_option("-w", "--password", type=str,
-                  help="KiwiSDR password", dest="kiwipassword", default=default_kiwi_password)
-parser.add_option("-s", "--kiwiserver", type=str,
-                  help="KiwiSDR server name", dest="kiwiserver", default="kiwisdr.local")
-parser.add_option("-p", "--kiwiport", type=int,
-                  help="port number", dest="kiwiport", default=default_kiwi_port)
-parser.add_option("-S", "--radioserver", type=str,
-                  help="RTX server name", dest="radioserver", default="localhost")
-parser.add_option("-P", "--radioport", type=int,
-                  help="port number", dest="radioport", default=4532)
-parser.add_option("-z", "--zoom", type=int,
-                  help="zoom factor", dest="zoom", default=8)
-parser.add_option("-f", "--freq", type=float,
-                  help="center frequency in kHz", dest="freq", default=None)
-parser.add_option("-r", "--fps", type=int,
-                  help="screen refresh rate", dest="refresh", default=30)
-parser.add_option("-l", "--large", type=int,
-                  help="screen horiz size in pixels (default 1024)", dest="winsize", default=1024)
-parser.add_option("-b", "--buffer", type=int,
-                  help="buffer size", dest="audio_buffer", default=10)
+parser.add_option(
+    "-w",
+    "--password",
+    type=str,
+    help="KiwiSDR password",
+    dest="kiwipassword",
+    default=default_kiwi_password,
+)
+parser.add_option(
+    "-s",
+    "--kiwiserver",
+    type=str,
+    help="KiwiSDR server name",
+    dest="kiwiserver",
+    default="kiwisdr.local",
+)
+parser.add_option(
+    "-p",
+    "--kiwiport",
+    type=int,
+    help="port number",
+    dest="kiwiport",
+    default=default_kiwi_port,
+)
+parser.add_option(
+    "-S",
+    "--radioserver",
+    type=str,
+    help="RTX server name",
+    dest="radioserver",
+    default="localhost",
+)
+parser.add_option(
+    "-P", "--radioport", type=int, help="port number", dest="radioport", default=4532
+)
+parser.add_option("-z", "--zoom", type=int, help="zoom factor", dest="zoom", default=8)
+parser.add_option(
+    "-f",
+    "--freq",
+    type=float,
+    help="center frequency in kHz",
+    dest="freq",
+    default=10000,
+)
+parser.add_option(
+    "-r", "--fps", type=int, help="screen refresh rate", dest="refresh", default=20
+)
+parser.add_option(
+    "-l",
+    "--large",
+    type=int,
+    help="screen horiz size in pixels (default 1024)",
+    dest="winsize",
+    default=1024,
+)
+parser.add_option(
+    "-b", "--buffer", type=int, help="buffer size", dest="audio_buffer", default=20
+)
 # parser.add_option("-d", "--dual",
 #                   help="Activate Dual RX", action="store_true", dest="dualrx", default=False)
-parser.add_option("-c", "--callsign", type=str,
-                  help="DX CLUSTER Callsign", dest="callsign", default="")
-parser.add_option("-m", "--colormap", type=str,
-                  help="colormap for waterfall", dest="colormap", default="cutesdr")
+parser.add_option(
+    "-c",
+    "--callsign",
+    type=str,
+    help="DX CLUSTER Callsign",
+    dest="callsign",
+    default="",
+)
+parser.add_option(
+    "-m",
+    "--colormap",
+    type=str,
+    help="colormap for waterfall",
+    dest="colormap",
+    default="cutesdr",
+)
 
 options = vars(parser.parse_args()[0])
 disp = display_stuff(options["winsize"])
 if disp.DISPLAY_WIDTH == 1920:
-    sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
-        pygame.DOUBLEBUF | pygame.FULLSCREEN,vsync=1)
+    sdrdisplay = pygame.display.set_mode(
+        (disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT),
+        pygame.DOUBLEBUF | pygame.FULLSCREEN,
+        vsync=1,
+    )
 else:
-    sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), 
-        pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
+    sdrdisplay = pygame.display.set_mode(
+        (disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT),
+        pygame.DOUBLEBUF | pygame.RESIZABLE,
+        vsync=1,
+    )
 wf_width = sdrdisplay.get_width()
 wf_height = sdrdisplay.get_height()
 i_icon = "icon.jpg"
 icon = pygame.image.load(i_icon)
 pygame.display.set_icon(icon)
-pygame.display.set_caption("SuperSDR %s"%VERSION)
+pygame.display.set_caption("SuperSDR %s" % VERSION)
 clock = pygame.time.Clock()
 pygame.key.set_repeat(200, 50)
 
 disp.splash_screen(sdrdisplay)
 font = pygame.font.Font(None, 50)
 
-FPS = options['refresh']
+FPS = options["refresh"]
 
-CALLSIGN = options['callsign'].upper()
+CALLSIGN = options["callsign"].upper()
 dxclust = None
 eibi = eibi_db()
 
@@ -69,23 +126,26 @@ kiwilist = kiwi_list()
 
 palRGB = disp.create_cm(options["colormap"])
 
-kiwi_host = options['kiwiserver']
-kiwi_port = options['kiwiport']
-kiwi_password = options['kiwipassword']
-freq = options['freq'] # this is the central freq in kHz
-zoom = options['zoom'] 
-radiohost = options['radioserver']
-radioport = options['radioport']
+kiwi_host = options["kiwiserver"]
+kiwi_port = options["kiwiport"]
+kiwi_password = options["kiwipassword"]
+freq = options["freq"]  # this is the central freq in kHz
+zoom = options["zoom"]
+radiohost = options["radioserver"]
+radioport = options["radioport"]
 
 if not freq:
-    freq = 14200
+    freq = 10000
 radio_mode = get_auto_mode(freq)
 
 if radiohost:
     try:
         cat_radio = cat(radiohost, radioport)
         cat_radio.get_freq()
-        if cat_radio.freq > cat_radio.CAT_MIN_FREQ and cat_radio.freq < cat_radio.CAT_MAX_FREQ:
+        if (
+            cat_radio.freq > cat_radio.CAT_MIN_FREQ
+            and cat_radio.freq < cat_radio.CAT_MAX_FREQ
+        ):
             freq = cat_radio.freq
             cat_radio.get_mode()
             radio_mode = cat_radio.radio_mode
@@ -100,11 +160,13 @@ else:
 
 print(kiwi_host, kiwi_port, kiwi_password, zoom, freq)
 
-#init KIWI WF and RX audio
+# init KIWI WF and RX audio
 kiwi_wf = None
 while not kiwi_wf:
     try:
-        kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi, disp)
+        kiwi_wf = kiwi_waterfall(
+            kiwi_host, kiwi_port, kiwi_password, zoom, freq, eibi, disp
+        )
     except:
         kiwi_address = ""
         complete = False
@@ -113,7 +175,12 @@ while not kiwi_wf:
             kiwilist.main_dialog.update()
             if kiwilist.connect_new_flag:
                 kiwi_host = kiwilist.kiwi_host
-                kiwi_port, kiwi_password  = kiwilist.kiwi_port if kiwilist.kiwi_port!=None else kiwi_port, kiwilist.kiwi_password if kiwilist.kiwi_password!=None else kiwi_password
+                kiwi_port, kiwi_password = (
+                    kiwilist.kiwi_port if kiwilist.kiwi_port != None else kiwi_port,
+                    kiwilist.kiwi_password
+                    if kiwilist.kiwi_password != None
+                    else kiwi_password,
+                )
                 kiwilist.connect_new_flag = False
                 break
         kiwi_wf = None
@@ -121,7 +188,9 @@ while not kiwi_wf:
 wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
 wf_t.start()
 
-kiwi_snd = kiwi_sound(freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, options["audio_buffer"])
+kiwi_snd = kiwi_sound(
+    freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, options["audio_buffer"]
+)
 if not kiwi_snd:
     print("Server not ready")
     # sys.exit()
@@ -148,7 +217,7 @@ kiwi_memory = memory()
 kiwi_wf.set_freq_zoom(freq, zoom)
 kiwi_snd.freq = freq
 kiwi_snd.radio_mode = radio_mode
-delta_low, delta_high = 0., 0. # bandpass tuning
+delta_low, delta_high = 0.0, 0.0  # bandpass tuning
 lc, hc = kiwi_snd.change_passband(delta_low, delta_high)
 kiwi_snd.set_mode_freq_pb()
 
@@ -161,11 +230,11 @@ fl.cat_snd_link_flag = True if cat_radio else False
 # print("SYNC OPTIONS:")
 # print("WF<>CAT", fl.wf_cat_link_flag, "WF<>RX", fl.wf_snd_link_flag, "CAT<>RX", fl.cat_snd_link_flag)
 
-rssi_maxlen = 10 # buffer length used to smoothen the s-meter
-rssi_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
+rssi_maxlen = 10  # buffer length used to smoothen the s-meter
+rssi_hist = deque(rssi_maxlen * [kiwi_snd.rssi], rssi_maxlen)
 rssi_smooth = kiwi_snd.rssi
 rssi_smooth_slow = rssi_smooth
-rssi_smooth_hist = deque(rssi_maxlen*[kiwi_snd.rssi], rssi_maxlen)
+rssi_smooth_hist = deque(rssi_maxlen * [kiwi_snd.rssi], rssi_maxlen)
 run_index = 0
 run_index_bigmsg = 0
 
@@ -177,7 +246,6 @@ fl.click_drag_flag = False
 check_time = datetime.utcnow()
 
 while not wf_quit:
-
     run_index += 1
 
     click_freq = None
@@ -199,12 +267,16 @@ while not wf_quit:
             disp.__init__(width, HEIGHT=height)
             kiwi_wf.BINS2PIXEL_RATIO = disp.DISPLAY_WIDTH / kiwi_wf.WF_BINS
 
-        mouse_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
+        mouse_khz = kiwi_wf.bins_to_khz(mouse[0] / kiwi_wf.BINS2PIXEL_RATIO)
 
         if event.type == pygame.KEYDOWN:
             before_help_flag = fl.show_help_flag
             fl.show_help_flag = False
-            if not fl.input_freq_flag and not fl.input_server_flag and not fl.input_callsign_flag:
+            if (
+                not fl.input_freq_flag
+                and not fl.input_server_flag
+                and not fl.input_callsign_flag
+            ):
                 keys = pygame.key.get_pressed()
                 mods = pygame.key.get_mods()
 
@@ -216,13 +288,21 @@ while not wf_quit:
 
                 # Show logger popup
                 if keys[pygame.K_0]:
-                    if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
+                    if (
+                        not fl.tk_log_new_flag
+                        and not fl.tk_log_search_flag
+                        and not fl.tk_kiwi_flag
+                    ):
                         mylogger.log_popup(kiwi_snd)
                         fl.tk_log_new_flag = True
 
                 # Show logger popup
                 if keys[pygame.K_9]:
-                    if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
+                    if (
+                        not fl.tk_log_new_flag
+                        and not fl.tk_log_search_flag
+                        and not fl.tk_kiwi_flag
+                    ):
                         mylogger.search_popup(kiwi_snd)
                         fl.tk_log_search_flag = True
 
@@ -237,7 +317,9 @@ while not wf_quit:
                 # Show realtime DX-CLUSTER labels, if DXCLUSTER disabled, enable it first
                 elif keys[pygame.K_d]:
                     if dxclust:
-                        fl.show_dxcluster_flag = False if fl.show_dxcluster_flag else True
+                        fl.show_dxcluster_flag = (
+                            False if fl.show_dxcluster_flag else True
+                        )
                         if fl.show_dxcluster_flag:
                             dxclust.terminate = False
                             fl.connect_dxcluster_flag = True
@@ -248,7 +330,7 @@ while not wf_quit:
                             dxclust = None
                     else:
                         fl.connect_dxcluster_flag = True
-                        if CALLSIGN=="":
+                        if CALLSIGN == "":
                             fl.input_callsign_flag = True
                         current_string = []
 
@@ -262,9 +344,9 @@ while not wf_quit:
                 # Memory read/write, reset, save to/load from disk
                 if keys[pygame.K_t]:
                     pass
-                        # kiwi_memory.load_from_disk()
-                        # show_bigmsg = "loadmemorydisk"
-                        # run_index_bigmsg = run_index
+                    # kiwi_memory.load_from_disk()
+                    # show_bigmsg = "loadmemorydisk"
+                    # run_index_bigmsg = run_index
                 if keys[pygame.K_w]:
                     if event.mod & pygame.KMOD_SHIFT:
                         pass
@@ -272,7 +354,9 @@ while not wf_quit:
                         # show_bigmsg = "savememorydisk"
                         # run_index_bigmsg = run_index
                     else:
-                        kiwi_memory.write_mem(kiwi_snd.freq, kiwi_snd.radio_mode, delta_low, delta_high)
+                        kiwi_memory.write_mem(
+                            kiwi_snd.freq, kiwi_snd.radio_mode, delta_low, delta_high
+                        )
                         show_bigmsg = "writememory"
                         run_index_bigmsg = run_index
                 if keys[pygame.K_r]:
@@ -284,7 +368,12 @@ while not wf_quit:
                         run_index_bigmsg = run_index
                         mem_tmp = kiwi_memory.recall_mem()
                         if mem_tmp:
-                            click_freq, kiwi_snd.radio_mode, delta_low, delta_high = mem_tmp
+                            (
+                                click_freq,
+                                kiwi_snd.radio_mode,
+                                delta_low,
+                                delta_high,
+                            ) = mem_tmp
                             # print(click_freq, kiwi_snd.radio_mode, delta_low, delta_high)
                             show_bigmsg = "recallmemory"
                         else:
@@ -299,9 +388,13 @@ while not wf_quit:
                     disp.__init__(kiwi_wf.WF_BINS)
                     pygame.display.quit()
                     pygame.display.init()
-                    sdrdisplay = pygame.display.set_mode((disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT), pygame.DOUBLEBUF|pygame.RESIZABLE,vsync=1)
+                    sdrdisplay = pygame.display.set_mode(
+                        (disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT),
+                        pygame.DOUBLEBUF | pygame.RESIZABLE,
+                        vsync=1,
+                    )
                     pygame.display.set_icon(icon)
-                    pygame.display.set_caption("SuperSDR %s"%VERSION)
+                    pygame.display.set_caption("SuperSDR %s" % VERSION)
                     kiwi_wf.BINS2PIXEL_RATIO = disp.DISPLAY_WIDTH / kiwi_wf.WF_BINS
 
                 elif keys[pygame.K_j]:
@@ -310,29 +403,35 @@ while not wf_quit:
                     max_pb_flag = False
                     delta = 100 if (event.mod & pygame.KMOD_SHIFT) else -100
                     if kiwi_snd.radio_mode == "CW":
-                        delta = int(delta/5)
-                    if (event.mod & pygame.KMOD_CTRL):
+                        delta = int(delta / 5)
+                    if event.mod & pygame.KMOD_CTRL:
                         delta_low += delta
                         delta_high -= delta if kiwi_snd.radio_mode != "AM" else -delta
                     else:
                         delta_low += delta
 
                     if kiwi_snd.radio_mode == "CW":
-                        old_passband = (HIGH_CUT_CW+old_delta_high) - (LOW_CUT_CW + old_delta_low)
-                        passband = (HIGH_CUT_CW+delta_high) - (LOW_CUT_CW + delta_low)
-                        if passband < 50 and passband<old_passband:
+                        old_passband = (HIGH_CUT_CW + old_delta_high) - (
+                            LOW_CUT_CW + old_delta_low
+                        )
+                        passband = (HIGH_CUT_CW + delta_high) - (LOW_CUT_CW + delta_low)
+                        if passband < 50 and passband < old_passband:
                             min_pb_flag = True
                             delta_low, delta_high = old_delta_low, old_delta_high
-                        elif passband > 1600 and passband>old_passband:
+                        elif passband > 1600 and passband > old_passband:
                             delta_low, delta_high = old_delta_low, old_delta_high
                             max_pb_flag = True
                     else:
-                        old_passband = (HIGH_CUT_SSB+old_delta_high) - (LOW_CUT_SSB + old_delta_low)
-                        passband = (HIGH_CUT_SSB+delta_high) - (LOW_CUT_SSB + delta_low)
-                        if passband < 50 and passband<old_passband:
+                        old_passband = (HIGH_CUT_SSB + old_delta_high) - (
+                            LOW_CUT_SSB + old_delta_low
+                        )
+                        passband = (HIGH_CUT_SSB + delta_high) - (
+                            LOW_CUT_SSB + delta_low
+                        )
+                        if passband < 50 and passband < old_passband:
                             delta_low, delta_high = old_delta_low, old_delta_high
                             min_pb_flag = True
-                        elif passband > 6000 and passband>old_passband:
+                        elif passband > 6000 and passband > old_passband:
                             delta_low, delta_high = old_delta_low, old_delta_high
                             max_pb_flag = True
                     if not min_pb_flag and not max_pb_flag:
@@ -344,29 +443,35 @@ while not wf_quit:
                     max_pb_flag = False
                     delta = -100 if (event.mod & pygame.KMOD_SHIFT) else 100
                     if kiwi_snd.radio_mode == "CW":
-                        delta = int(delta/5)
-                    if (event.mod & pygame.KMOD_CTRL):
+                        delta = int(delta / 5)
+                    if event.mod & pygame.KMOD_CTRL:
                         delta_low += delta
                         delta_high -= delta if kiwi_snd.radio_mode != "AM" else -delta
                     else:
                         delta_high += delta
 
                     if kiwi_snd.radio_mode == "CW":
-                        old_passband = (HIGH_CUT_CW+old_delta_high) - (LOW_CUT_CW + old_delta_low)
-                        passband = (HIGH_CUT_CW+delta_high) - (LOW_CUT_CW + delta_low)
-                        if passband < 50 and passband<old_passband:
+                        old_passband = (HIGH_CUT_CW + old_delta_high) - (
+                            LOW_CUT_CW + old_delta_low
+                        )
+                        passband = (HIGH_CUT_CW + delta_high) - (LOW_CUT_CW + delta_low)
+                        if passband < 50 and passband < old_passband:
                             min_pb_flag = True
                             delta_low, delta_high = old_delta_low, old_delta_high
-                        elif passband > 1600 and passband>old_passband:
+                        elif passband > 1600 and passband > old_passband:
                             delta_low, delta_high = old_delta_low, old_delta_high
                             max_pb_flag = True
                     else:
-                        old_passband = (HIGH_CUT_SSB+old_delta_high) - (LOW_CUT_SSB + old_delta_low)
-                        passband = (HIGH_CUT_SSB+delta_high) - (LOW_CUT_SSB + delta_low)
-                        if passband < 50 and passband<old_passband:
+                        old_passband = (HIGH_CUT_SSB + old_delta_high) - (
+                            LOW_CUT_SSB + old_delta_low
+                        )
+                        passband = (HIGH_CUT_SSB + delta_high) - (
+                            LOW_CUT_SSB + delta_low
+                        )
+                        if passband < 50 and passband < old_passband:
                             delta_low, delta_high = old_delta_low, old_delta_high
                             min_pb_flag = True
-                        elif passband > 6000 and passband>old_passband:
+                        elif passband > 6000 and passband > old_passband:
                             delta_low, delta_high = old_delta_low, old_delta_high
                             max_pb_flag = True
                     if not min_pb_flag and not max_pb_flag:
@@ -404,11 +509,11 @@ while not wf_quit:
                         kiwi_snd.volume -= 10
                     show_bigmsg = "VOLUME"
                     run_index_bigmsg = run_index
-                
+
                 if keys[pygame.K_3]:
                     kiwi_wf.wf_auto_scaling = False if kiwi_wf.wf_auto_scaling else True
                     kiwi_wf.delta_low_db, kiwi_wf.delta_high_db = 0, 0
-                    
+
                 # KIWI WF colormap dynamic range (lower limit)
                 if keys[pygame.K_PERIOD] and (mods & pygame.KMOD_SHIFT):
                     if kiwi_wf.delta_low_db < 30:
@@ -427,11 +532,19 @@ while not wf_quit:
                 # KIWI WF zoom
                 if keys[pygame.K_DOWN]:
                     if kiwi_wf.zoom > 0:
-                        kiwi_wf.set_freq_zoom(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.), kiwi_wf.zoom - 1)
+                        kiwi_wf.set_freq_zoom(
+                            kiwi_snd.freq
+                            + (CW_PITCH if kiwi_snd.radio_mode == "CW" else 0.0),
+                            kiwi_wf.zoom - 1,
+                        )
                         kiwi_wf.set_white_flag()
                 elif keys[pygame.K_UP]:
                     if kiwi_wf.zoom < kiwi_wf.MAX_ZOOM:
-                        kiwi_wf.set_freq_zoom(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.), kiwi_wf.zoom + 1)
+                        kiwi_wf.set_freq_zoom(
+                            kiwi_snd.freq
+                            + (CW_PITCH if kiwi_snd.radio_mode == "CW" else 0.0),
+                            kiwi_wf.zoom + 1,
+                        )
                         kiwi_wf.set_white_flag()
 
                 # KIWI WF arrow step tune
@@ -439,59 +552,101 @@ while not wf_quit:
                     if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
                         fast_tune = True if mods & pygame.KMOD_SHIFT else False
                         slow_tune = True if mods & pygame.KMOD_CTRL else False
-                        if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10: # AM & SSB
+                        if (
+                            kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10
+                        ):  # AM & SSB
                             if fast_tune:
-                                manual_snd_freq = kiwi_snd.freq//1 - 10
+                                manual_snd_freq = kiwi_snd.freq // 1 - 10
                             elif slow_tune:
                                 manual_snd_freq = round(kiwi_snd.freq - 0.1, 2)
                             else:
-                                manual_snd_freq = kiwi_snd.freq//1 if kiwi_snd.freq % 1 else kiwi_snd.freq//1 - 1
-                        else: # CW
-                            manual_snd_freq = round(kiwi_snd.freq - (1.0 if fast_tune else (0.01 if slow_tune else 0.1)), 2)
+                                manual_snd_freq = (
+                                    kiwi_snd.freq // 1
+                                    if kiwi_snd.freq % 1
+                                    else kiwi_snd.freq // 1 - 1
+                                )
+                        else:  # CW
+                            manual_snd_freq = round(
+                                kiwi_snd.freq
+                                - (1.0 if fast_tune else (0.01 if slow_tune else 0.1)),
+                                2,
+                            )
                 elif keys[pygame.K_RIGHT] and not (mods & pygame.KMOD_ALT):
                     if not ((mods & pygame.KMOD_SHIFT) and (mods & pygame.KMOD_CTRL)):
                         fast_tune = True if mods & pygame.KMOD_SHIFT else False
                         slow_tune = True if mods & pygame.KMOD_CTRL else False
-                        if kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10: # AM & SSB
+                        if (
+                            kiwi_snd.radio_mode != "CW" and kiwi_wf.zoom < 10
+                        ):  # AM & SSB
                             if fast_tune:
-                                manual_snd_freq = kiwi_snd.freq//1 + 10
+                                manual_snd_freq = kiwi_snd.freq // 1 + 10
                             elif slow_tune:
                                 manual_snd_freq = kiwi_snd.freq + 0.1
                             else:
-                                manual_snd_freq = kiwi_snd.freq//1 + 1
-                        else: # CW
-                            manual_snd_freq = kiwi_snd.freq + (1.0 if fast_tune else (0.01 if slow_tune else 0.1))
-                    
+                                manual_snd_freq = kiwi_snd.freq // 1 + 1
+                        else:  # CW
+                            manual_snd_freq = kiwi_snd.freq + (
+                                1.0 if fast_tune else (0.01 if slow_tune else 0.1)
+                            )
+
                 if keys[pygame.K_PAGEDOWN]:
-                    manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz/4
+                    manual_wf_freq = kiwi_wf.freq - kiwi_wf.span_khz / 4
                 elif keys[pygame.K_PAGEUP]:
-                    manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz/4
+                    manual_wf_freq = kiwi_wf.freq + kiwi_wf.span_khz / 4
 
                 # KIWI RX mode change
                 if keys[pygame.K_u]:
-                    fl.auto_mode = False
-                    if kiwi_snd.radio_mode=="AM":
-                        change_passband_flag = True
-                        delta_low = 0
-                        delta_high = 0
-                    manual_mode = "USB"
+                    if event.mod & pygame.KMOD_SHIFT:
+                        if kiwi_snd.radio_mode != "SAU":
+                            fl.auto_mode = False
+                            change_passband_flag = True
+                            delta_low = 0
+                            delta_high = 0
+                        manual_mode = "SAU"
+                    else:
+                        fl.auto_mode = False
+                        if kiwi_snd.radio_mode != "USB":
+                            change_passband_flag = True
+                            delta_low = 0
+                            delta_high = 0
+                        manual_mode = "USB"
                 elif keys[pygame.K_l]:
-                    fl.auto_mode = False
-                    if kiwi_snd.radio_mode=="AM":
-                        change_passband_flag = True
-                        delta_low = 0
-                        delta_high = 0
-                    manual_mode = "LSB"
+                    if event.mod & pygame.KMOD_SHIFT:
+                        if kiwi_snd.radio_mode != "SAL":
+                            fl.auto_mode = False
+                            change_passband_flag = True
+                            delta_low = 0
+                            delta_high = 0
+                        manual_mode = "SAL"
+                    else:
+                        fl.auto_mode = False
+                        if kiwi_snd.radio_mode != "LSB":
+                            change_passband_flag = True
+                            delta_low = 0
+                            delta_high = 0
+                        manual_mode = "LSB"
                 elif keys[pygame.K_c]:
                     fl.auto_mode = False
-                    if kiwi_snd.radio_mode=="AM":
+                    if kiwi_snd.radio_mode != "CW":
                         change_passband_flag = True
                         delta_low = 0
                         delta_high = 0
                     manual_mode = "CW"
                 elif keys[pygame.K_a]:
-                    fl.auto_mode = False
-                    manual_mode = "AM"
+                    if event.mod & pygame.KMOD_SHIFT:
+                        if kiwi_snd.radio_mode != "SAM":
+                            fl.auto_mode = False
+                            change_passband_flag = True
+                            delta_low = 0
+                            delta_high = 0
+                        manual_mode = "SAM"
+                    else:
+                        fl.auto_mode = False
+                        if kiwi_snd.radio_mode != "AM":
+                            change_passband_flag = True
+                            delta_low = 0
+                            delta_high = 0
+                        manual_mode = "AM"
 
                 # KIWI WF manual tuning
                 if keys[pygame.K_f]:
@@ -516,7 +671,7 @@ while not wf_quit:
                 # S-meter show/hide
                 if keys[pygame.K_m] and not (mods & pygame.KMOD_SHIFT):
                     fl.s_meter_show_flag = False if fl.s_meter_show_flag else True
-                
+
                 if keys[pygame.K_s]:
                     if not cat_radio:
                         try:
@@ -531,7 +686,6 @@ while not wf_quit:
                         run_index_bigmsg = run_index
                         fl.cat_snd_link_flag = False if fl.cat_snd_link_flag else True
                         force_sync_flag = True
-
 
                 # Automatic mode change ON/OFF
                 if keys[pygame.K_x]:
@@ -548,7 +702,7 @@ while not wf_quit:
                 # Change AGC threshold for the current KIWI receiver
                 if keys[pygame.K_1] and not (mods & pygame.KMOD_ALT):
                     if not (mods & pygame.KMOD_SHIFT):
-                        if kiwi_snd.thresh>-135:
+                        if kiwi_snd.thresh > -135:
                             kiwi_snd.thresh -= 1
                             show_bigmsg = "agc threshold"
                             run_index_bigmsg = run_index
@@ -560,7 +714,7 @@ while not wf_quit:
                         kiwi_snd.set_agc_params()
                 if keys[pygame.K_2]:
                     if not (mods & pygame.KMOD_SHIFT):
-                        if kiwi_snd.thresh<-20:
+                        if kiwi_snd.thresh < -20:
                             kiwi_snd.thresh += 1
                             show_bigmsg = "agc threshold"
                             run_index_bigmsg = run_index
@@ -572,10 +726,20 @@ while not wf_quit:
                         kiwi_snd.set_agc_params()
 
                 # Tune audio balance for current receiver
-                if keys[pygame.K_6] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
+                if (
+                    keys[pygame.K_6]
+                    and not (mods & pygame.KMOD_SHIFT)
+                    and not (mods & pygame.KMOD_ALT)
+                ):
                     kiwi_snd.audio_balance += 0.5 if kiwi_snd.audio_balance < 1 else 0.0
-                if keys[pygame.K_5] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
-                    kiwi_snd.audio_balance -= 0.5 if kiwi_snd.audio_balance > -1 else 0.0
+                if (
+                    keys[pygame.K_5]
+                    and not (mods & pygame.KMOD_SHIFT)
+                    and not (mods & pygame.KMOD_ALT)
+                ):
+                    kiwi_snd.audio_balance -= (
+                        0.5 if kiwi_snd.audio_balance > -1 else 0.0
+                    )
 
                 # Tune SUB RX on same freq on WF center
                 if keys[pygame.K_n]:
@@ -593,7 +757,9 @@ while not wf_quit:
                             kiwi_snd2.radio_mode = kiwi_snd.radio_mode
                             kiwi_snd2.set_mode_freq_pb()
                             kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
-                            fl.main_sub_switch_flag = True if not fl.main_sub_switch_flag else False
+                            fl.main_sub_switch_flag = (
+                                True if not fl.main_sub_switch_flag else False
+                            )
 
                         kiwi_snd2.terminate = True
                         kiwi_audio_stream2.stop()
@@ -611,17 +777,33 @@ while not wf_quit:
                 elif keys[pygame.K_y]:
                     if kiwi_snd2:
                         kiwi_snd, kiwi_snd2 = kiwi_snd2, kiwi_snd
-                        fl.main_sub_switch_flag = True if not fl.main_sub_switch_flag else False
+                        fl.main_sub_switch_flag = (
+                            True if not fl.main_sub_switch_flag else False
+                        )
                         if not cat_radio:
                             force_sync_flag = True
                         elif fl.cat_snd_link_flag:
-                            cat_radio.set_freq(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.))
+                            cat_radio.set_freq(
+                                kiwi_snd.freq
+                                + (CW_PITCH if kiwi_snd.radio_mode == "CW" else 0.0)
+                            )
                             cat_radio.set_mode(kiwi_snd.radio_mode)
                         show_bigmsg = "switchab"
                         run_index_bigmsg = run_index
                     else:
                         try:
-                            kiwi_snd2 = kiwi_sound(kiwi_snd.freq, kiwi_snd.radio_mode, 30, 3000, kiwi_password2, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, host_ = kiwi_host2, port_ = kiwi_port2, subrx_ = True)
+                            kiwi_snd2 = kiwi_sound(
+                                kiwi_snd.freq,
+                                kiwi_snd.radio_mode,
+                                30,
+                                3000,
+                                kiwi_password2,
+                                kiwi_wf,
+                                kiwi_snd.FULL_BUFF_LEN,
+                                host_=kiwi_host2,
+                                port_=kiwi_port2,
+                                subrx_=True,
+                            )
                             play2, kiwi_audio_stream2 = start_audio_stream(kiwi_snd2)
                             kiwi_snd2.radio_mode = get_auto_mode(kiwi_wf.freq)
                             lc, hc = kiwi_snd2.change_passband(delta_low, delta_high)
@@ -642,15 +824,23 @@ while not wf_quit:
                 if keys[pygame.K_ESCAPE] and keys[pygame.K_LSHIFT]:
                     wf_quit = True
 
-                elif keys[pygame.K_q] and not (mods & pygame.KMOD_SHIFT) and not (mods & pygame.KMOD_ALT):
-                    if not fl.tk_log_new_flag and not fl.tk_log_search_flag and not fl.tk_kiwi_flag:
+                elif (
+                    keys[pygame.K_q]
+                    and not (mods & pygame.KMOD_SHIFT)
+                    and not (mods & pygame.KMOD_ALT)
+                ):
+                    if (
+                        not fl.tk_log_new_flag
+                        and not fl.tk_log_search_flag
+                        and not fl.tk_kiwi_flag
+                    ):
                         fl.input_server_flag = True
                         current_string = []
                         fl.tk_kiwi_flag = True
 
             # manual frequency input
             else:
-                pygame.key.set_repeat(0) # disabe key repeat
+                pygame.key.set_repeat(0)  # disabe key repeat
                 inkey = event.key
                 if inkey in ALLOWED_KEYS or fl.input_callsign_flag:
                     if inkey == pygame.K_BACKSPACE:
@@ -661,22 +851,26 @@ while not wf_quit:
                             if fl.input_freq_flag:
                                 manual_snd_freq = int(current_string)
                                 if kiwi_snd.radio_mode == "CW":
-                                    manual_snd_freq -= CW_PITCH # tune CW signal taking into account cw offset
+                                    manual_snd_freq -= (
+                                        CW_PITCH
+                                    )  # tune CW signal taking into account cw offset
                             elif fl.input_callsign_flag:
                                 CALLSIGN = current_string
                                 fl.input_callsign_flag = False
                         except:
                             pass
-                            #click_freq = kiwi_wf.freq
+                            # click_freq = kiwi_wf.freq
                         pygame.key.set_repeat(200, 50)
                     elif inkey == pygame.K_ESCAPE:
                         fl.input_freq_flag = False if fl.input_freq_flag else False
-                        fl.input_callsign_flag = False if fl.input_callsign_flag else False
+                        fl.input_callsign_flag = (
+                            False if fl.input_callsign_flag else False
+                        )
 
                         pygame.key.set_repeat(200, 50)
                         print("ESCAPE!")
                     else:
-                        if len(current_string)<10:
+                        if len(current_string) < 10:
                             try:
                                 current_string.append(chr(inkey).upper())
                             except:
@@ -687,16 +881,16 @@ while not wf_quit:
             wf_quit = True
         # KIWI WF mouse zooming
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 4: # mouse scroll up
-                if kiwi_wf.zoom<kiwi_wf.MAX_ZOOM:
-                    t_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
-                    zoom_f = (t_khz+kiwi_wf.freq)/2
+            if event.button == 4:  # mouse scroll up
+                if kiwi_wf.zoom < kiwi_wf.MAX_ZOOM:
+                    t_khz = kiwi_wf.bins_to_khz(mouse[0] / kiwi_wf.BINS2PIXEL_RATIO)
+                    zoom_f = (t_khz + kiwi_wf.freq) / 2
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom + 1)
                     kiwi_wf.set_white_flag()
-            elif event.button == 5: # mouse scroll down
-                if kiwi_wf.zoom>0:
-                    t_khz = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
-                    zoom_f = kiwi_wf.freq + (kiwi_wf.freq-t_khz)
+            elif event.button == 5:  # mouse scroll down
+                if kiwi_wf.zoom > 0:
+                    t_khz = kiwi_wf.bins_to_khz(mouse[0] / kiwi_wf.BINS2PIXEL_RATIO)
+                    zoom_f = kiwi_wf.freq + (kiwi_wf.freq - t_khz)
                     kiwi_wf.set_freq_zoom(zoom_f, kiwi_wf.zoom - 1)
                     kiwi_wf.set_white_flag()
             elif event.button == 1:
@@ -704,21 +898,29 @@ while not wf_quit:
                     kiwi_wf.zoom_to_span()
                     kiwi_wf.start_freq()
                     kiwi_wf.end_freq()
-                    click_freq = kiwi_wf.bins_to_khz(mouse[0]/kiwi_wf.BINS2PIXEL_RATIO)
+                    click_freq = kiwi_wf.bins_to_khz(
+                        mouse[0] / kiwi_wf.BINS2PIXEL_RATIO
+                    )
                     if kiwi_snd.radio_mode == "CW":
-                        click_freq -= CW_PITCH # tune CW signal taking into account cw offset
+                        click_freq -= (
+                            CW_PITCH
+                        )  # tune CW signal taking into account cw offset
                 if disp.SPECTRUM_Y <= mouse[1] <= disp.TUNEBAR_Y:
                     pygame.mouse.get_rel()
-                    fl.start_drag_x = mouse[0]/kiwi_wf.BINS2PIXEL_RATIO
+                    fl.start_drag_x = mouse[0] / kiwi_wf.BINS2PIXEL_RATIO
                     fl.click_drag_flag = True
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1 and fl.click_drag_flag:
-                delta_x = pygame.mouse.get_rel()[0]/kiwi_wf.BINS2PIXEL_RATIO
+                delta_x = pygame.mouse.get_rel()[0] / kiwi_wf.BINS2PIXEL_RATIO
                 delta_freq = kiwi_wf.deltabins_to_khz(delta_x)
                 manual_wf_freq = kiwi_wf.freq - delta_freq
                 fl.click_drag_flag = False
-    
-    if mouse[0] > disp.DISPLAY_WIDTH-50 and mouse[1] > disp.BOTTOMBAR_Y+4 and pygame.mouse.get_focused():
+
+    if (
+        mouse[0] > disp.DISPLAY_WIDTH - 50
+        and mouse[1] > disp.BOTTOMBAR_Y + 4
+        and pygame.mouse.get_focused()
+    ):
         fl.show_help_flag = True
     else:
         fl.show_help_flag = False
@@ -727,7 +929,9 @@ while not wf_quit:
         try:
             dxclust = dxcluster(CALLSIGN)
             if dxclust:
-                dx_t = threading.Thread(target=dxclust.run, args=(kiwi_wf,), daemon=True)
+                dx_t = threading.Thread(
+                    target=dxclust.run, args=(kiwi_wf,), daemon=True
+                )
                 dx_t.start()
                 if old_spot_dict:
                     dxclust.spot_dict = old_spot_dict
@@ -760,7 +964,7 @@ while not wf_quit:
         kiwi_snd.close_connection()
         if kiwi_snd2:
             kiwi_snd2.close_connection()
-        
+
         kiwi_snd.terminate = False
         if kiwi_snd2:
             kiwi_snd2.terminate = False
@@ -768,19 +972,50 @@ while not wf_quit:
         kiwi_wf.terminate = False
 
         new_host = kiwilist.kiwi_host
-        new_port, new_password  = kiwilist.kiwi_port if kiwilist.kiwi_port!=None else kiwi_port, kiwilist.kiwi_password if kiwilist.kiwi_password!=None else kiwi_password
+        new_port, new_password = (
+            kiwilist.kiwi_port if kiwilist.kiwi_port != None else kiwi_port,
+            kiwilist.kiwi_password if kiwilist.kiwi_password != None else kiwi_password,
+        )
 
         try:
-            kiwi_wf.__init__(new_host, new_port, new_password, kiwi_wf.zoom, kiwi_wf.freq, eibi, disp)
-            kiwi_snd.__init__(kiwi_snd.freq, radio_mode, 30, 3000, new_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
-            print("Changed server to: %s:%d" % (new_host,new_port))
+            kiwi_wf.__init__(
+                new_host, new_port, new_password, kiwi_wf.zoom, kiwi_wf.freq, eibi, disp
+            )
+            kiwi_snd.__init__(
+                kiwi_snd.freq,
+                radio_mode,
+                30,
+                3000,
+                new_password,
+                kiwi_wf,
+                kiwi_snd.FULL_BUFF_LEN,
+                volume_=old_volume,
+            )
+            print("Changed server to: %s:%d" % (new_host, new_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
         except:
-            print ("something went wrong...")
+            print("something went wrong...")
             play = None
         if not play:
-            kiwi_wf = kiwi_waterfall(kiwi_host, kiwi_port, kiwi_password, kiwi_wf.zoom, kiwi_wf.freq, eibi, disp)
-            kiwi_snd = kiwi_sound(kiwi_snd.freq, radio_mode, 30, 3000, kiwi_password, kiwi_wf, kiwi_snd.FULL_BUFF_LEN, volume_ = old_volume)
+            kiwi_wf = kiwi_waterfall(
+                kiwi_host,
+                kiwi_port,
+                kiwi_password,
+                kiwi_wf.zoom,
+                kiwi_wf.freq,
+                eibi,
+                disp,
+            )
+            kiwi_snd = kiwi_sound(
+                kiwi_snd.freq,
+                radio_mode,
+                30,
+                3000,
+                kiwi_password,
+                kiwi_wf,
+                kiwi_snd.FULL_BUFF_LEN,
+                volume_=old_volume,
+            )
             print("Reverted back to server: %s:%d" % (kiwi_host, kiwi_port))
             play, kiwi_audio_stream = start_audio_stream(kiwi_snd)
             if not play:
@@ -792,7 +1027,7 @@ while not wf_quit:
 
         wf_t = threading.Thread(target=kiwi_wf.run, daemon=True)
         wf_t.start()
-            
+
         kiwilist.connect_new_flag = False
 
     # Change KIWI RX PB: this can only affect the SND stream
@@ -834,7 +1069,7 @@ while not wf_quit:
 
     # Change frequency by KB or WF zoom: numbers, arrows and pgup/down
     if manual_snd_freq:
-        #kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom) # this keeps the tuned frequency always in the middle of the WF
+        # kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom) # this keeps the tuned frequency always in the middle of the WF
         if fl.wf_snd_link_flag:
             kiwi_wf.set_freq_zoom(manual_snd_freq, kiwi_wf.zoom)
             kiwi_snd.freq = kiwi_wf.freq
@@ -876,8 +1111,12 @@ while not wf_quit:
         if manual_mode:
             cat_radio.set_mode(kiwi_snd.radio_mode)
         elif click_freq or manual_snd_freq:
-            cat_radio.set_freq(kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.))
-            if (cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and fl.auto_mode) or show_bigmsg == "restorememory":
+            cat_radio.set_freq(
+                kiwi_snd.freq + (CW_PITCH if kiwi_snd.radio_mode == "CW" else 0.0)
+            )
+            if (
+                cat_radio.radio_mode != get_auto_mode(kiwi_snd.freq) and fl.auto_mode
+            ) or show_bigmsg == "restorememory":
                 cat_radio.set_mode(kiwi_snd.radio_mode)
         else:
             old_cat_mode = cat_radio.radio_mode
@@ -889,33 +1128,39 @@ while not wf_quit:
             old_cat_freq = cat_radio.freq
             cat_radio.get_freq()
             if cat_radio.freq != old_cat_freq:
-                kiwi_snd.freq = cat_radio.freq - (CW_PITCH if kiwi_snd.radio_mode=="CW" else 0.)
-                if fl.wf_cat_link_flag: # shift WF by half span when RX outside WF
-                    delta_f = (kiwi_snd.freq - kiwi_wf.freq)
-                    if abs(delta_f) < 5*kiwi_wf.span_khz:
-                        if delta_f + kiwi_wf.span_khz/2 < 0:
+                kiwi_snd.freq = cat_radio.freq - (
+                    CW_PITCH if kiwi_snd.radio_mode == "CW" else 0.0
+                )
+                if fl.wf_cat_link_flag:  # shift WF by half span when RX outside WF
+                    delta_f = kiwi_snd.freq - kiwi_wf.freq
+                    if abs(delta_f) < 5 * kiwi_wf.span_khz:
+                        if delta_f + kiwi_wf.span_khz / 2 < 0:
                             kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
                             kiwi_wf.set_white_flag()
-                        elif delta_f - kiwi_wf.span_khz/2 > 0:
+                        elif delta_f - kiwi_wf.span_khz / 2 > 0:
                             kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
                             kiwi_wf.set_white_flag()
                     else:
                         kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
 
-    if cat_radio and fl.wf_cat_link_flag and not fl.cat_snd_link_flag: # shift WF by half span when CAT outside WF
+    if (
+        cat_radio and fl.wf_cat_link_flag and not fl.cat_snd_link_flag
+    ):  # shift WF by half span when CAT outside WF
         cat_radio.get_mode()
         kiwi_wf.radio_mode = cat_radio.radio_mode
 
         old_cat_freq = cat_radio.freq
         cat_radio.get_freq()
         if cat_radio.freq != old_cat_freq:
-            kiwi_wf.tune = cat_radio.freq - (CW_PITCH if kiwi_wf.radio_mode=="CW" else 0.)
+            kiwi_wf.tune = cat_radio.freq - (
+                CW_PITCH if kiwi_wf.radio_mode == "CW" else 0.0
+            )
 
-            delta_f = (cat_radio.freq - kiwi_wf.freq)
-            if abs(delta_f) < 5*kiwi_wf.span_khz:
-                if delta_f + kiwi_wf.span_khz/2 < 0:
+            delta_f = cat_radio.freq - kiwi_wf.freq
+            if abs(delta_f) < 5 * kiwi_wf.span_khz:
+                if delta_f + kiwi_wf.span_khz / 2 < 0:
                     kiwi_wf.set_freq_zoom(kiwi_wf.start_f_khz, kiwi_wf.zoom)
-                elif delta_f - kiwi_wf.span_khz/2 > 0:
+                elif delta_f - kiwi_wf.span_khz / 2 > 0:
                     kiwi_wf.set_freq_zoom(kiwi_wf.end_f_khz, kiwi_wf.zoom)
             else:
                 kiwi_wf.set_freq_zoom(cat_radio.freq, kiwi_wf.zoom)
@@ -924,33 +1169,70 @@ while not wf_quit:
         fl.cat_snd_link_flag = False
 
     # Plot top spectrum and bottom waterfall
-    if not run_index%min(5, kiwi_wf.averaging_n):
+    if not run_index % min(5, kiwi_wf.averaging_n):
         disp.plot_spectrum(sdrdisplay, kiwi_wf, filled=disp.SPECTRUM_FILLED, col=YELLOW)
         wf_surface = pygame.surfarray.make_surface(kiwi_wf.wf_data.T)
         wf_surface.set_palette(palRGB)
         if disp.DISPLAY_WIDTH != kiwi_wf.WF_BINS:
             wf_surface = pygame.Surface.convert(wf_surface)
-            wf_surface = pygame.transform.smoothscale(wf_surface, (disp.DISPLAY_WIDTH, disp.WF_HEIGHT))
+            wf_surface = pygame.transform.smoothscale(
+                wf_surface, (disp.DISPLAY_WIDTH, disp.WF_HEIGHT)
+            )
         sdrdisplay.blit(wf_surface, (0, disp.WF_Y))
 
     rssi_last = rssi_hist[-1]
     if math.fabs(rssi_last) > math.fabs(rssi_smooth):
         # rssi_smooth -= (1000/kiwi_snd.decay) # s-meter decay rate
-        v0 = -20+135# max signal value dBm
-        t = math.log(v0/(rssi_smooth+135))
-        rssi_smooth += -v0/(kiwi_snd.decay/(1000/(2*FPS))) * math.exp(-t)
+        v0 = -20 + 135  # max signal value dBm
+        t = math.log(v0 / (rssi_smooth + 135))
+        rssi_smooth += -v0 / (kiwi_snd.decay / (1000 / (2 * FPS))) * math.exp(-t)
     else:
-        rssi_smooth += min((rssi_last - rssi_smooth)/5, 3) # attack rate
+        rssi_smooth += min((rssi_last - rssi_smooth) / 5, 3)  # attack rate
 
-    if not run_index%20:
+    if not run_index % 20:
         # rssi_smooth_slow = rssi_smooth
         rssi_smooth_slow = max(rssi_hist)
 
-    pygame.draw.rect(sdrdisplay, (0,0,80), (0,0,disp.DISPLAY_WIDTH,disp.TOPBAR_HEIGHT), 0)
-    pygame.draw.rect(sdrdisplay, (0,0,80), (0,disp.TUNEBAR_Y,disp.DISPLAY_WIDTH,disp.TUNEBAR_HEIGHT), 0)
-    pygame.draw.rect(sdrdisplay, (0,0,0), (0,disp.BOTTOMBAR_Y,disp.DISPLAY_WIDTH,disp.DISPLAY_HEIGHT), 0)
-    disp.draw_lines(sdrdisplay, wf_height, kiwi_snd.radio_mode, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio)
-    disp.update_textsurfaces(sdrdisplay, kiwi_snd.radio_mode, rssi_smooth, rssi_smooth_slow, mouse, kiwi_wf, kiwi_snd, kiwi_snd2, fl, cat_radio, kiwi_host2, run_index)
+    pygame.draw.rect(
+        sdrdisplay, (0, 0, 80), (0, 0, disp.DISPLAY_WIDTH, disp.TOPBAR_HEIGHT), 0
+    )
+    pygame.draw.rect(
+        sdrdisplay,
+        (0, 0, 80),
+        (0, disp.TUNEBAR_Y, disp.DISPLAY_WIDTH, disp.TUNEBAR_HEIGHT),
+        0,
+    )
+    pygame.draw.rect(
+        sdrdisplay,
+        (0, 0, 0),
+        (0, disp.BOTTOMBAR_Y, disp.DISPLAY_WIDTH, disp.DISPLAY_HEIGHT),
+        0,
+    )
+    disp.draw_lines(
+        sdrdisplay,
+        wf_height,
+        kiwi_snd.radio_mode,
+        mouse,
+        kiwi_wf,
+        kiwi_snd,
+        kiwi_snd2,
+        fl,
+        cat_radio,
+    )
+    disp.update_textsurfaces(
+        sdrdisplay,
+        kiwi_snd.radio_mode,
+        rssi_smooth,
+        rssi_smooth_slow,
+        mouse,
+        kiwi_wf,
+        kiwi_snd,
+        kiwi_snd2,
+        fl,
+        cat_radio,
+        kiwi_host2,
+        run_index,
+    )
 
     if fl.show_eibi_flag and kiwi_wf.zoom > 6:
         disp.plot_eibi(sdrdisplay, eibi, kiwi_wf)
@@ -989,14 +1271,19 @@ while not wf_quit:
             show_bigmsg = None
         if "VOLUME" == show_bigmsg:
             msg_color = WHITE if kiwi_snd.volume <= 100 else RED
-            msg_text = "VOLUME: %d"%(kiwi_snd.volume)+'%'
+            msg_text = "VOLUME: %d" % (kiwi_snd.volume) + "%"
         if "WFAVG" == show_bigmsg:
             msg_color = WHITE if kiwi_wf.averaging_n == 1 else RED
-            msg_text = "WF AVG %dX -> %.2fs"%(kiwi_wf.averaging_n, kiwi_wf.averaging_n/FPS)
+            msg_text = "WF AVG %dX -> %.2fs" % (
+                kiwi_wf.averaging_n,
+                kiwi_wf.averaging_n / FPS,
+            )
         elif "cat_rx_sync" == show_bigmsg:
-            msg_text = "CAT<->RX SYNC "+("ON" if fl.cat_snd_link_flag else "OFF")
+            msg_text = "CAT<->RX SYNC " + ("ON" if fl.cat_snd_link_flag else "OFF")
         elif "forcesync" == show_bigmsg:
-            msg_text = "Center RX passband" if not cat_radio else "Force SYNC WF & RX -> CAT"
+            msg_text = (
+                "Center RX passband" if not cat_radio else "Force SYNC WF & RX -> CAT"
+            )
         elif "switchab" == show_bigmsg:
             msg_text = "Switch MAIN/SUB RXs"
         elif "enable2rx" == show_bigmsg:
@@ -1004,14 +1291,18 @@ while not wf_quit:
         elif "disable2rx" == show_bigmsg:
             msg_text = "SUB RX disabled"
         elif "automode" == show_bigmsg:
-            msg_text = "AUTO MODE "+("ON" if fl.auto_mode else "OFF")
+            msg_text = "AUTO MODE " + ("ON" if fl.auto_mode else "OFF")
         elif "changemode" == show_bigmsg:
             msg_text = kiwi_snd.radio_mode
         elif "writememory" == show_bigmsg:
-            msg_text = "Stored Memory %d"% (len(kiwi_memory.mem_list)-1)
+            msg_text = "Stored Memory %d" % (len(kiwi_memory.mem_list) - 1)
         elif "recallmemory" == show_bigmsg:
-            msg_text = "Recall memory:%d -> %s"% (kiwi_memory.index, 
-                str(kiwi_memory.mem_list[kiwi_memory.index][0])+" kHz "+kiwi_memory.mem_list[kiwi_memory.index][1]) 
+            msg_text = "Recall memory:%d -> %s" % (
+                kiwi_memory.index,
+                str(kiwi_memory.mem_list[kiwi_memory.index][0])
+                + " kHz "
+                + kiwi_memory.mem_list[kiwi_memory.index][1],
+            )
             pos = (disp.DISPLAY_WIDTH / 2 - 300, disp.DISPLAY_HEIGHT / 4 - 10)
         elif "resetmemory" == show_bigmsg:
             msg_text = "Reset All Memories!"
@@ -1032,13 +1323,18 @@ while not wf_quit:
         elif "agc threshold" == show_bigmsg:
             msg_text = "AGC threshold: %d dBm" % kiwi_snd.thresh
         elif "agc decay" == show_bigmsg:
-            msg_text = "AGC decay: %.1f s" % (kiwi_snd.decay/1000)
+            msg_text = "AGC decay: %.1f s" % (kiwi_snd.decay / 1000)
 
         disp.display_msg_box(sdrdisplay, msg_text, pos=pos, color=msg_color)
 
     if fl.s_meter_show_flag:
-        smeter_surface = disp.s_meter_draw(rssi_smooth, rssi_smooth_slow, kiwi_snd.thresh, kiwi_snd.decay)
-        sdrdisplay.blit(smeter_surface, (0, disp.BOTTOMBAR_Y-(disp.s_meter_radius+disp.BOTTOMBAR_HEIGHT)))
+        smeter_surface = disp.s_meter_draw(
+            rssi_smooth, rssi_smooth_slow, kiwi_snd.thresh, kiwi_snd.decay
+        )
+        sdrdisplay.blit(
+            smeter_surface,
+            (0, disp.BOTTOMBAR_Y - (disp.s_meter_radius + disp.BOTTOMBAR_HEIGHT)),
+        )
 
     mouse = pygame.mouse.get_pos()
     pygame.display.flip()
@@ -1054,24 +1350,24 @@ while not wf_quit:
         pass
 
     try:
-        if mylogger.root.state() != 'normal':
+        if mylogger.root.state() != "normal":
             fl.tk_log_new_flag = False
     except:
         fl.tk_log_new_flag = False
-        
+
     try:
-        if mylogger.root_search.state() != 'normal':
+        if mylogger.root_search.state() != "normal":
             fl.tk_log_search_flag = False
     except:
         fl.tk_log_search_flag = False
 
     try:
         kiwilist.main_dialog.update()
-        if kiwilist.root.state() != 'normal':
+        if kiwilist.root.state() != "normal":
             fl.tk_kiwi_flag = False
     except:
         fl.tk_kiwi_flag = False
-    
+
 # close audio stream
 try:
     kiwi_audio_stream.stop()
@@ -1096,6 +1392,6 @@ time.sleep(0.5)
 kiwi_wf.close_connection()
 kiwi_snd.close_connection()
 if kiwi_snd2:
-     kiwi_snd2.close_connection()
+    kiwi_snd2.close_connection()
 
 pygame.quit()
